@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type WheelEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -6,6 +6,7 @@ import {
   Form,
   Input,
   List,
+  Modal,
   Skeleton,
   Space,
   Spin,
@@ -220,8 +221,31 @@ function formatVideoMeta(video: VideoItem): string {
   return `${dateLabel}, ${formatViewCount(video.viewCount)}`;
 }
 
+function parseBulkHandles(raw: string): string[] {
+  const tokens = raw
+    .split(/[\s,]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  const unique = new Set<string>();
+  for (const token of tokens) {
+    try {
+      unique.add(normalizeHandle(token));
+    } catch {
+      // Ignore invalid handles in bulk mode.
+    }
+  }
+
+  return [...unique];
+}
+
 function App() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkInput, setBulkInput] = useState("");
+  const [pendingBulkFetch, setPendingBulkFetch] = useState<
+    Array<{ id: string; handle: string }>
+  >([]);
   const [columns, setColumns] = useState<ColumnState[]>(() => {
     const storedColumns = readStoredColumns();
     const storedColumnsExists = hasStoredColumnsState();
@@ -302,6 +326,17 @@ function App() {
     });
   }, [columns, viewBackfillInFlight]);
 
+  useEffect(() => {
+    if (pendingBulkFetch.length === 0) {
+      return;
+    }
+
+    pendingBulkFetch.forEach((target) => {
+      runFetch(target.id, target.handle);
+    });
+    setPendingBulkFetch([]);
+  }, [pendingBulkFetch]);
+
   const setColumn = (
     columnId: string,
     updater: (state: ColumnState) => ColumnState
@@ -346,21 +381,35 @@ function App() {
     );
   };
 
-  const handleHorizontalWheel = (event: WheelEvent<HTMLDivElement>): void => {
-    const node = scrollRef.current;
-    if (!node) {
+  const handleBulkAddConfirm = (): void => {
+    const handles = parseBulkHandles(bulkInput);
+    if (handles.length === 0) {
+      setIsBulkModalOpen(false);
+      setBulkInput("");
       return;
     }
 
-    const hasOverflow = node.scrollWidth > node.clientWidth;
-    if (!hasOverflow) {
-      return;
-    }
+    const created = handles.map((handle) =>
+      createColumnState({ handleInput: handle })
+    );
+    setColumns((previous) => [
+      ...previous,
+      ...created
+    ]);
+    setPendingBulkFetch(created.map((column) => ({ id: column.id, handle: column.handleInput })));
+    setIsBulkModalOpen(false);
+    setBulkInput("");
+  };
 
-    if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-      node.scrollLeft += event.deltaY;
-      event.preventDefault();
-    }
+  const fetchAllColumns = (): void => {
+    columns.forEach((column) => {
+      try {
+        normalizeHandle(column.handleInput);
+        runFetch(column.id, column.handleInput);
+      } catch {
+        // Skip invalid or empty handles.
+      }
+    });
   };
 
   const scrollColumns = (direction: "left" | "right"): void => {
@@ -373,14 +422,37 @@ function App() {
     node.scrollBy({ left: delta, behavior: "smooth" });
   };
 
+  const scrollToEdge = (edge: "start" | "end"): void => {
+    const node = scrollRef.current;
+    if (!node) {
+      return;
+    }
+
+    if (edge === "start") {
+      node.scrollTo({ left: 0, behavior: "smooth" });
+      return;
+    }
+
+    const maxLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+    node.scrollTo({ left: maxLeft, behavior: "smooth" });
+  };
+
   return (
     <main className="app-shell">
       <div className="columns-nav">
         <Button
           htmlType="button"
+          onClick={() => scrollToEdge("start")}
+          aria-label="Scroll columns to first"
+          className="nav-btn scroll-btn"
+        >
+          {"<<"}
+        </Button>
+        <Button
+          htmlType="button"
           onClick={() => scrollColumns("left")}
           aria-label="Scroll columns left"
-          className="scroll-btn"
+          className="nav-btn scroll-btn"
         >
           {"<"}
         </Button>
@@ -388,16 +460,54 @@ function App() {
           htmlType="button"
           onClick={() => scrollColumns("right")}
           aria-label="Scroll columns right"
-          className="scroll-btn"
+          className="nav-btn scroll-btn"
         >
           {">"}
         </Button>
+        <Button
+          htmlType="button"
+          onClick={() => scrollToEdge("end")}
+          aria-label="Scroll columns to last"
+          className="nav-btn scroll-btn"
+        >
+          {">>"}
+        </Button>
+        <Button
+          htmlType="button"
+          onClick={() => setIsBulkModalOpen(true)}
+          aria-label="Bulk add channels"
+          className="nav-btn add-channels-btn"
+        >
+          Add Channels
+        </Button>
+        <Button
+          htmlType="button"
+          onClick={fetchAllColumns}
+          aria-label="Fetch all channels"
+          className="nav-btn"
+        >
+          Fetch All
+        </Button>
       </div>
+
+      <Modal
+        title="Add Channels"
+        open={isBulkModalOpen}
+        onCancel={() => setIsBulkModalOpen(false)}
+        onOk={handleBulkAddConfirm}
+        okText="Add"
+      >
+        <Input.TextArea
+          value={bulkInput}
+          onChange={(event) => setBulkInput(event.target.value)}
+          autoSize={{ minRows: 6, maxRows: 12 }}
+          placeholder={"@channelOne\n@channelTwo\n@channelThree"}
+        />
+      </Modal>
 
       <div
         ref={scrollRef}
         className="columns-scroll"
-        onWheel={handleHorizontalWheel}
       >
         <div className="columns-layout">
           <section className="columns-grid">
