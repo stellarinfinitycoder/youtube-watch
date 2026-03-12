@@ -7,6 +7,25 @@ const DEFAULT_LIMIT = 15;
 type ChannelByHandleResponse = {
   items?: Array<{
     id?: string;
+    snippet?: {
+      thumbnails?: {
+        high?: { url?: string };
+        medium?: { url?: string };
+        default?: { url?: string };
+      };
+    };
+  }>;
+};
+
+type ChannelSnippetByIdResponse = {
+  items?: Array<{
+    snippet?: {
+      thumbnails?: {
+        high?: { url?: string };
+        medium?: { url?: string };
+        default?: { url?: string };
+      };
+    };
   }>;
 };
 
@@ -42,6 +61,16 @@ type PlaylistSnippet = {
 
 type PlaylistItem = {
   snippet?: PlaylistSnippet;
+};
+
+export type ChannelLookupResult = {
+  channelId: string;
+  channelThumbnailUrl: string;
+};
+
+export type ChannelVideosResult = {
+  channelThumbnailUrl: string;
+  videos: VideoItem[];
 };
 
 function getApiKey(): string {
@@ -97,31 +126,74 @@ function mapPlaylistItemToVideoItem(item: PlaylistItem): VideoItem | null {
     videoId,
     title: snippet.title ?? "Untitled video",
     publishedAt: snippet.publishedAt ?? "",
-    thumbnailUrl: pickThumbnailUrl(snippet),
+    thumbnailUrl: normalizeImageUrl(pickThumbnailUrl(snippet)),
     channelTitle: snippet.channelTitle ?? "",
     videoUrl: `https://www.youtube.com/watch?v=${videoId}`
   };
 }
 
+function normalizeImageUrl(url: string): string {
+  if (!url) {
+    return "";
+  }
+  if (url.startsWith("//")) {
+    return `https:${url}`;
+  }
+  if (url.startsWith("http://")) {
+    return `https://${url.slice("http://".length)}`;
+  }
+  return url;
+}
+
 export async function resolveChannelByHandle(handle: string): Promise<string> {
+  const result = await resolveChannelByHandleWithThumbnail(handle);
+  return result.channelId;
+}
+
+export async function resolveChannelByHandleWithThumbnail(
+  handle: string
+): Promise<ChannelLookupResult> {
   const apiKey = getApiKey();
   const normalized = normalizeHandle(handle);
   const cleanHandle = stripHandlePrefix(normalized);
 
   const url = buildUrl("/channels", {
-    part: "id",
+    part: "id,snippet",
     forHandle: cleanHandle,
     key: apiKey
   });
 
   const data = await fetchJson<ChannelByHandleResponse>(url);
-  const channelId = data.items?.[0]?.id;
+  const channel = data.items?.[0];
+  const channelId = channel?.id;
 
   if (!channelId) {
     throw new Error(`Channel not found for handle ${normalized}.`);
   }
 
-  return channelId;
+  let channelThumbnailUrl =
+    channel?.snippet?.thumbnails?.high?.url ??
+    channel?.snippet?.thumbnails?.medium?.url ??
+    channel?.snippet?.thumbnails?.default?.url ??
+    "";
+
+  // Some handle lookups return sparse snippet data, so fetch by channel id as fallback.
+  if (!channelThumbnailUrl) {
+    const snippetUrl = buildUrl("/channels", {
+      part: "snippet",
+      id: channelId,
+      key: apiKey
+    });
+    const snippetData = await fetchJson<ChannelSnippetByIdResponse>(snippetUrl);
+    const snippet = snippetData.items?.[0]?.snippet;
+    channelThumbnailUrl =
+      snippet?.thumbnails?.high?.url ??
+      snippet?.thumbnails?.medium?.url ??
+      snippet?.thumbnails?.default?.url ??
+      "";
+  }
+
+  return { channelId, channelThumbnailUrl: normalizeImageUrl(channelThumbnailUrl) };
 }
 
 export async function fetchLatestVideos(
@@ -164,4 +236,14 @@ export async function getLatestVideosByHandle(
 ): Promise<VideoItem[]> {
   const channelId = await resolveChannelByHandle(handle);
   return fetchLatestVideos(channelId, limit);
+}
+
+export async function getLatestVideosAndChannelByHandle(
+  handle: string,
+  limit = DEFAULT_LIMIT
+): Promise<ChannelVideosResult> {
+  const { channelId, channelThumbnailUrl } =
+    await resolveChannelByHandleWithThumbnail(handle);
+  const videos = await fetchLatestVideos(channelId, limit);
+  return { channelThumbnailUrl, videos };
 }

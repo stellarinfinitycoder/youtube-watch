@@ -20,7 +20,20 @@ describe("youtube api client", () => {
   it("resolves channel id by handle", async () => {
     global.fetch = vi
       .fn()
-      .mockResolvedValueOnce(makeResponse({ items: [{ id: "UC123" }] })) as typeof fetch;
+      .mockResolvedValueOnce(makeResponse({ items: [{ id: "UC123" }] }))
+      .mockResolvedValueOnce(
+        makeResponse({
+          items: [
+            {
+              snippet: {
+                thumbnails: {
+                  high: { url: "https://img.test/channel.jpg" }
+                }
+              }
+            }
+          ]
+        })
+      ) as typeof fetch;
 
     const channelId = await resolveChannelByHandle("@testchannel");
     expect(channelId).toBe("UC123");

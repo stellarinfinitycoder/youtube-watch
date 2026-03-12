@@ -1,7 +1,11 @@
 body {
   margin: 0;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(160deg, #f6f8fc 0%, #e7eefb 100%);
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  background:
+    linear-gradient(90deg, transparent 39px, #dcdcdc 40px, transparent 41px),
+    linear-gradient(#f5f5f5, #f5f5f5);
+  background-size: 40px 40px, auto;
+  color: #101010;
 }
 
 #root {
@@ -10,27 +14,110 @@ body {
 
 .app-shell {
   min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  padding: 32px 16px;
+  padding: 28px 16px;
 }
 
-.app-card {
+.columns-grid {
   width: 100%;
-  max-width: 900px;
+  max-width: 1240px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 320px));
+  justify-content: center;
+  gap: 14px;
 }
 
 .full-width {
   width: 100%;
 }
 
+.channel-column {
+  border: 2px solid #111;
+  background: #fff;
+  padding: 14px;
+  min-height: 640px;
+  box-shadow: 6px 6px 0 #111;
+}
+
+.column-header {
+  height: 42px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.column-label.ant-typography {
+  margin: 0;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.channel-avatar {
+  width: 34px;
+  height: 34px;
+  display: block;
+  border: 2px solid #111;
+  object-fit: cover;
+}
+
+.ant-form-item {
+  margin-bottom: 10px;
+}
+
+.ant-input,
+.ant-btn,
+.ant-alert,
+.ant-empty {
+  border-radius: 0 !important;
+}
+
+.ant-input,
+.ant-btn {
+  border: 2px solid #111 !important;
+  box-shadow: none !important;
+  font-weight: 700;
+}
+
+.ant-btn-primary {
+  background: #111 !important;
+  color: #fff !important;
+}
+
+.ant-btn-default {
+  background: #fff !important;
+  color: #111 !important;
+}
+
+.ant-list-item {
+  border-block-end: 2px solid #111 !important;
+  padding: 12px 0 !important;
+}
+
 .video-title {
   margin: 0;
+  line-height: 1.2;
 }
 
 .video-thumb {
   width: 100%;
-  max-width: 480px;
-  border-radius: 8px;
+  border: 2px solid #111;
   display: block;
+}
+
+.date-stamp.ant-typography {
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1080px) {
+  .columns-grid {
+    grid-template-columns: repeat(2, minmax(0, 320px));
+  }
+}
+
+@media (max-width: 760px) {
+  .columns-grid {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 360px;
+  }
 }
