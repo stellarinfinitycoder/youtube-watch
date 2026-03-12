@@ -1,0 +1,36 @@
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(160deg, #f6f8fc 0%, #e7eefb 100%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.app-card {
+  width: 100%;
+  max-width: 900px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.video-title {
+  margin: 0;
+}
+
+.video-thumb {
+  width: 100%;
+  max-width: 480px;
+  border-radius: 8px;
+  display: block;
+}
