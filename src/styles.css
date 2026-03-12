@@ -17,6 +17,11 @@ body {
   padding: 28px 16px;
 }
 
+.last-fetch-text.ant-typography {
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
 .columns-grid {
   width: 100%;
   max-width: 1240px;
@@ -37,6 +42,13 @@ body {
   padding: 14px;
   min-height: 640px;
   box-shadow: 6px 6px 0 #111;
+}
+
+.column-actions {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .column-header {

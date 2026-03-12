@@ -11,7 +11,6 @@ import {
   Spin,
   Typography
 } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
 import type { FetchState } from "./types/youtube";
 import {
   fetchViewCountsByVideoIds,
@@ -29,6 +28,7 @@ const COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 type ColumnState = FetchState & {
   handleInput: string;
   channelThumbnailUrl: string;
+  lastFetchAt: string | null;
 };
 
 type PersistedColumnState = {
@@ -36,12 +36,14 @@ type PersistedColumnState = {
   currentHandle: string;
   channelThumbnailUrl: string;
   videos: VideoItem[];
+  lastFetchAt: string | null;
 };
 
 function createColumnState(): ColumnState {
   return {
     handleInput: "",
     channelThumbnailUrl: "",
+    lastFetchAt: null,
     loading: false,
     error: null,
     videos: [],
@@ -84,12 +86,14 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
     currentHandle?: unknown;
     channelThumbnailUrl?: unknown;
     videos?: unknown;
+    lastFetchAt?: unknown;
   };
 
   if (
     typeof candidate.handleInput !== "string" ||
     typeof candidate.currentHandle !== "string" ||
     typeof candidate.channelThumbnailUrl !== "string" ||
+    !(typeof candidate.lastFetchAt === "string" || candidate.lastFetchAt === null) ||
     !Array.isArray(candidate.videos)
   ) {
     return null;
@@ -137,7 +141,8 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
     handleInput: candidate.handleInput,
     currentHandle: candidate.currentHandle,
     channelThumbnailUrl: candidate.channelThumbnailUrl,
-    videos
+    videos,
+    lastFetchAt: candidate.lastFetchAt
   };
 }
 
@@ -197,7 +202,8 @@ function App() {
       handleInput: storedColumns[index]?.handleInput ?? storedHandles[index] ?? "",
       currentHandle: storedColumns[index]?.currentHandle ?? "",
       channelThumbnailUrl: storedColumns[index]?.channelThumbnailUrl ?? "",
-      videos: storedColumns[index]?.videos ?? []
+      videos: storedColumns[index]?.videos ?? [],
+      lastFetchAt: storedColumns[index]?.lastFetchAt ?? null
     }));
   });
   const [viewBackfillInFlight, setViewBackfillInFlight] = useState<number[]>([]);
@@ -215,7 +221,8 @@ function App() {
         handleInput: column.handleInput,
         currentHandle: column.currentHandle,
         channelThumbnailUrl: column.channelThumbnailUrl,
-        videos: column.videos
+        videos: column.videos,
+        lastFetchAt: column.lastFetchAt
       }));
       storage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify(persistedColumns));
     } catch {
@@ -279,7 +286,8 @@ function App() {
         error: null,
         videos,
         currentHandle: normalized,
-        channelThumbnailUrl
+        channelThumbnailUrl,
+        lastFetchAt: new Date().toLocaleString()
       }));
     } catch (error) {
       const message =
@@ -303,9 +311,23 @@ function App() {
 
           return (
             <article key={index} className="channel-column">
+              <div className="column-actions">
+                <Button
+                  type="primary"
+                  onClick={() => runFetch(index, column.handleInput)}
+                  disabled={!canSubmit || column.loading}
+                  loading={column.loading}
+                  aria-label={`Fetch column ${index + 1}`}
+                >
+                  Fetch
+                </Button>
+                <Text className="last-fetch-text">
+                  Last fetch: {column.lastFetchAt ?? "-"}
+                </Text>
+              </div>
+
               <Form
                 layout="vertical"
-                onFinish={() => runFetch(index, column.handleInput)}
                 className="full-width"
               >
                 <div className="column-header">
@@ -351,26 +373,6 @@ function App() {
                     Use @name
                   </Text>
                 ) : null}
-
-                <Space>
-                  <Button
-                    type="primary"
-                    htmlType="submit"
-                    disabled={!canSubmit}
-                    loading={column.loading}
-                    aria-label={`Fetch column ${index + 1}`}
-                  >
-                    Fetch
-                  </Button>
-                  <Button
-                    icon={<ReloadOutlined />}
-                    onClick={() => runFetch(index, column.currentHandle)}
-                    disabled={!column.currentHandle || column.loading}
-                    aria-label={`Refresh column ${index + 1}`}
-                  >
-                    Refresh
-                  </Button>
-                </Space>
               </Form>
 
               {column.loading && (

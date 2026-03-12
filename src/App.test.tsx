@@ -26,6 +26,10 @@ describe("App", () => {
 
   it("renders three independent columns", () => {
     render(<App />);
+    expect(screen.getByRole("button", { name: "Fetch column 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fetch column 2" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fetch column 3" })).toBeInTheDocument();
+    expect(screen.getAllByText("Last fetch: -")).toHaveLength(3);
     expect(
       screen.getByLabelText("Channel 1 placeholder")
     ).toBeInTheDocument();
@@ -48,6 +52,7 @@ describe("App", () => {
           handleInput: "@one",
           currentHandle: "@one",
           channelThumbnailUrl: "https://img.test/channel-1.jpg",
+          lastFetchAt: "11/03/2026, 22:17:03",
           videos: [
             {
               videoId: "vid-1",
@@ -73,7 +78,7 @@ describe("App", () => {
     expect(screen.getByLabelText("Channel 3 placeholder")).toBeInTheDocument();
   });
 
-  it("enables fetch only when a valid handle is entered per column", () => {
+  it("enables column fetch when that column handle is valid", () => {
     render(<App />);
     const fetchOne = screen.getByRole("button", { name: "Fetch column 1" });
     const columnOneInput = screen.getByLabelText("Channel 1 handle");
@@ -124,6 +129,9 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByText("Demo Video")).toBeInTheDocument();
     });
+    expect(
+      screen.getAllByText((content) => content.startsWith("Last fetch:")).length
+    ).toBeGreaterThan(0);
     expect(screen.getByText((content) => content.includes(", 777"))).toBeInTheDocument();
     expect(screen.getByAltText("Channel 1")).toBeInTheDocument();
     expect(screen.getByLabelText("Channel 2 placeholder")).toBeInTheDocument();
@@ -148,7 +156,7 @@ describe("App", () => {
     });
   });
 
-  it("refreshes using current handle", async () => {
+  it("fetches only the targeted column", async () => {
     const spy = vi
       .spyOn(youtubeApi, "getLatestVideosAndChannelByHandle")
       .mockResolvedValue({
@@ -158,18 +166,17 @@ describe("App", () => {
 
     render(<App />);
     fireEvent.change(screen.getByLabelText("Channel 1 handle"), {
-      target: { value: "@validhandle" }
+      target: { value: "@validone" }
+    });
+    fireEvent.change(screen.getByLabelText("Channel 2 handle"), {
+      target: { value: "@othertwo" }
+    });
+    fireEvent.change(screen.getByLabelText("Channel 3 handle"), {
+      target: { value: "invalid" }
     });
     fireEvent.click(screen.getByRole("button", { name: "Fetch column 1" }));
 
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
-
-    const refreshButton = screen.getByRole("button", {
-      name: "Refresh column 1"
-    });
-    fireEvent.click(refreshButton);
-
-    await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
-    expect(spy).toHaveBeenNthCalledWith(2, "@validhandle", 15);
+    expect(spy).toHaveBeenNthCalledWith(1, "@validone", 15);
   });
 });
