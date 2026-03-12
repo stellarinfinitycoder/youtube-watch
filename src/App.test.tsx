@@ -26,7 +26,15 @@ describe("App", () => {
 
   it("renders three independent columns", () => {
     render(<App />);
-    expect(screen.getAllByText("Enter")).toHaveLength(3);
+    expect(
+      screen.getByLabelText("Channel 1 placeholder")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Channel 2 placeholder")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Channel 3 placeholder")
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Channel 1 handle")).toBeInTheDocument();
     expect(screen.getByLabelText("Channel 2 handle")).toBeInTheDocument();
     expect(screen.getByLabelText("Channel 3 handle")).toBeInTheDocument();
@@ -59,7 +67,8 @@ describe("App", () => {
     expect(screen.getByLabelText("Channel 1 handle")).toHaveValue("@one");
     expect(screen.getByAltText("Channel 1")).toBeInTheDocument();
     expect(screen.getByText("Stored Video")).toBeInTheDocument();
-    expect(screen.getAllByText("Enter")).toHaveLength(2);
+    expect(screen.getByLabelText("Channel 2 placeholder")).toBeInTheDocument();
+    expect(screen.getByLabelText("Channel 3 placeholder")).toBeInTheDocument();
   });
 
   it("enables fetch only when a valid handle is entered per column", () => {
@@ -112,8 +121,9 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByText("Demo Video")).toBeInTheDocument();
     });
-    expect(screen.getAllByText("Enter")).toHaveLength(2);
     expect(screen.getByAltText("Channel 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Channel 2 placeholder")).toBeInTheDocument();
+    expect(screen.getByLabelText("Channel 3 placeholder")).toBeInTheDocument();
 
     expect(spy).toHaveBeenCalledWith("@validhandle", 15);
   });

@@ -40,16 +40,11 @@ body {
 }
 
 .column-header {
-  height: 42px;
+  min-height: 42px;
   margin-bottom: 12px;
   display: flex;
   align-items: center;
-}
-
-.column-label.ant-typography {
-  margin: 0;
-  letter-spacing: 0.08em;
-  font-weight: 700;
+  gap: 10px;
 }
 
 .channel-avatar {
@@ -58,6 +53,27 @@ body {
   display: block;
   border: 2px solid #111;
   object-fit: cover;
+  flex: 0 0 34px;
+}
+
+.channel-avatar-placeholder {
+  background: #fff;
+  color: #111;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.channel-handle-input {
+  flex: 1;
+}
+
+.input-hint.ant-typography {
+  display: block;
+  margin: -2px 0 10px;
+  font-size: 12px;
+  text-transform: uppercase;
 }
 
 .ant-form-item {

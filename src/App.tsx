@@ -237,45 +237,36 @@ function App() {
 
           return (
             <article key={index} className="channel-column">
-              <div className="column-header">
-                {column.channelThumbnailUrl ? (
-                  <img
-                    src={column.channelThumbnailUrl}
-                    alt={`Channel ${index + 1}`}
-                    className="channel-avatar"
-                    onError={() =>
-                      setColumn(index, (prev) => ({
-                        ...prev,
-                        channelThumbnailUrl: ""
-                      }))
-                    }
-                  />
-                ) : (
-                  <Title level={5} className="column-label">
-                    Enter
-                  </Title>
-                )}
-              </div>
-
               <Form
                 layout="vertical"
                 onFinish={() => runFetch(index, column.handleInput)}
                 className="full-width"
               >
-                <Form.Item
-                  label={null}
-                  validateStatus={
-                    column.handleInput.length > 0 && !canSubmit ? "error" : ""
-                  }
-                  help={
-                    column.handleInput.length > 0 && !canSubmit
-                      ? "Use @name"
-                      : null
-                  }
-                >
+                <div className="column-header">
+                  {column.channelThumbnailUrl ? (
+                    <img
+                      src={column.channelThumbnailUrl}
+                      alt={`Channel ${index + 1}`}
+                      className="channel-avatar"
+                      onError={() =>
+                        setColumn(index, (prev) => ({
+                          ...prev,
+                          channelThumbnailUrl: ""
+                        }))
+                      }
+                    />
+                  ) : (
+                    <div
+                      className="channel-avatar channel-avatar-placeholder"
+                      aria-label={`Channel ${index + 1} placeholder`}
+                    >
+                      <span>+</span>
+                    </div>
+                  )}
                   <Input
                     placeholder="@channel"
                     value={column.handleInput}
+                    className="channel-handle-input"
                     aria-label={`Channel ${index + 1} handle`}
                     onChange={(event) => {
                       const nextValue = event.target.value;
@@ -287,7 +278,13 @@ function App() {
                       }
                     }}
                   />
-                </Form.Item>
+                </div>
+
+                {column.handleInput.length > 0 && !canSubmit ? (
+                  <Text type="danger" className="input-hint">
+                    Use @name
+                  </Text>
+                ) : null}
 
                 <Space>
                   <Button
