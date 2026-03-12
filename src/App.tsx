@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type WheelEvent } from "react";
 import {
   Alert,
   Button,
@@ -21,17 +21,19 @@ import type { VideoItem } from "./types/youtube";
 
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 15;
-const COLUMN_COUNT = 3;
+const DEFAULT_COLUMN_COUNT = 3;
 const HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 
 type ColumnState = FetchState & {
+  id: string;
   handleInput: string;
   channelThumbnailUrl: string;
   lastFetchAt: string | null;
 };
 
 type PersistedColumnState = {
+  id: string;
   handleInput: string;
   currentHandle: string;
   channelThumbnailUrl: string;
@@ -39,15 +41,21 @@ type PersistedColumnState = {
   lastFetchAt: string | null;
 };
 
-function createColumnState(): ColumnState {
+function createColumnId(): string {
+  return `col-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createColumnState(overrides?: Partial<ColumnState>): ColumnState {
   return {
+    id: createColumnId(),
     handleInput: "",
     channelThumbnailUrl: "",
     lastFetchAt: null,
     loading: false,
     error: null,
     videos: [],
-    currentHandle: ""
+    currentHandle: "",
+    ...overrides
   };
 }
 
@@ -82,6 +90,7 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
   }
 
   const candidate = raw as {
+    id?: unknown;
     handleInput?: unknown;
     currentHandle?: unknown;
     channelThumbnailUrl?: unknown;
@@ -90,6 +99,7 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
   };
 
   if (
+    !(typeof candidate.id === "string" || typeof candidate.id === "undefined") ||
     typeof candidate.handleInput !== "string" ||
     typeof candidate.currentHandle !== "string" ||
     typeof candidate.channelThumbnailUrl !== "string" ||
@@ -138,6 +148,7 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
     .filter((video): video is VideoItem => video !== null);
 
   return {
+    id: candidate.id ?? createColumnId(),
     handleInput: candidate.handleInput,
     currentHandle: candidate.currentHandle,
     channelThumbnailUrl: candidate.channelThumbnailUrl,
@@ -175,6 +186,22 @@ function readStoredColumns(): PersistedColumnState[] {
   }
 }
 
+function hasStoredColumnsState(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.getItem !== "function") {
+      return false;
+    }
+    return storage.getItem(COLUMNS_STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
 function formatViewCount(viewCount: number | null): string {
   if (viewCount === null) {
     return "-";
@@ -194,19 +221,26 @@ function formatVideoMeta(video: VideoItem): string {
 }
 
 function App() {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const [columns, setColumns] = useState<ColumnState[]>(() => {
     const storedColumns = readStoredColumns();
+    const storedColumnsExists = hasStoredColumnsState();
     const storedHandles = readStoredHandles();
-    return Array.from({ length: COLUMN_COUNT }, (_, index) => ({
-      ...createColumnState(),
-      handleInput: storedColumns[index]?.handleInput ?? storedHandles[index] ?? "",
-      currentHandle: storedColumns[index]?.currentHandle ?? "",
-      channelThumbnailUrl: storedColumns[index]?.channelThumbnailUrl ?? "",
-      videos: storedColumns[index]?.videos ?? [],
-      lastFetchAt: storedColumns[index]?.lastFetchAt ?? null
-    }));
+    const resolvedCount = storedColumnsExists
+      ? storedColumns.length
+      : Math.max(DEFAULT_COLUMN_COUNT, storedHandles.length);
+    return Array.from({ length: resolvedCount }, (_, index) =>
+      createColumnState({
+        id: storedColumns[index]?.id ?? createColumnId(),
+        handleInput: storedColumns[index]?.handleInput ?? storedHandles[index] ?? "",
+        currentHandle: storedColumns[index]?.currentHandle ?? "",
+        channelThumbnailUrl: storedColumns[index]?.channelThumbnailUrl ?? "",
+        videos: storedColumns[index]?.videos ?? [],
+        lastFetchAt: storedColumns[index]?.lastFetchAt ?? null
+      })
+    );
   });
-  const [viewBackfillInFlight, setViewBackfillInFlight] = useState<number[]>([]);
+  const [viewBackfillInFlight, setViewBackfillInFlight] = useState<string[]>([]);
 
   useEffect(() => {
     try {
@@ -218,6 +252,7 @@ function App() {
       const handles = columns.map((column) => column.handleInput);
       storage.setItem(HANDLE_STORAGE_KEY, JSON.stringify(handles));
       const persistedColumns: PersistedColumnState[] = columns.map((column) => ({
+        id: column.id,
         handleInput: column.handleInput,
         currentHandle: column.currentHandle,
         channelThumbnailUrl: column.channelThumbnailUrl,
@@ -231,7 +266,7 @@ function App() {
   }, [columns]);
 
   useEffect(() => {
-    columns.forEach((column, index) => {
+    columns.forEach((column) => {
       const missingViewsIds = column.videos
         .filter((video) => video.viewCount === null)
         .map((video) => video.videoId);
@@ -240,14 +275,14 @@ function App() {
         return;
       }
 
-      if (viewBackfillInFlight.includes(index)) {
+      if (viewBackfillInFlight.includes(column.id)) {
         return;
       }
 
-      setViewBackfillInFlight((prev) => [...prev, index]);
+      setViewBackfillInFlight((prev) => [...prev, column.id]);
       fetchViewCountsByVideoIds(missingViewsIds)
         .then((viewCounts) => {
-          setColumn(index, (prev) => ({
+          setColumn(column.id, (prev) => ({
             ...prev,
             videos: prev.videos.map((video) => ({
               ...video,
@@ -260,27 +295,32 @@ function App() {
           // Ignore backfill errors; user can still refresh manually.
         })
         .finally(() => {
-          setViewBackfillInFlight((prev) => prev.filter((item) => item !== index));
+          setViewBackfillInFlight((prev) =>
+            prev.filter((item) => item !== column.id)
+          );
         });
     });
   }, [columns, viewBackfillInFlight]);
 
-  const setColumn = (index: number, updater: (state: ColumnState) => ColumnState) => {
+  const setColumn = (
+    columnId: string,
+    updater: (state: ColumnState) => ColumnState
+  ) => {
     setColumns((previous) =>
-      previous.map((column, columnIndex) =>
-        columnIndex === index ? updater(column) : column
+      previous.map((column) =>
+        column.id === columnId ? updater(column) : column
       )
     );
   };
 
-  const runFetch = async (index: number, handle: string): Promise<void> => {
-    setColumn(index, (prev) => ({ ...prev, loading: true, error: null }));
+  const runFetch = async (columnId: string, handle: string): Promise<void> => {
+    setColumn(columnId, (prev) => ({ ...prev, loading: true, error: null }));
 
     try {
       const normalized = normalizeHandle(handle);
       const { videos, channelThumbnailUrl } =
         await getLatestVideosAndChannelByHandle(normalized, DEFAULT_LIMIT);
-      setColumn(index, (prev) => ({
+      setColumn(columnId, (prev) => ({
         ...prev,
         loading: false,
         error: null,
@@ -292,14 +332,76 @@ function App() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to fetch videos.";
-      setColumn(index, (prev) => ({ ...prev, loading: false, error: message }));
+      setColumn(columnId, (prev) => ({ ...prev, loading: false, error: message }));
     }
+  };
+
+  const addColumn = (): void => {
+    setColumns((previous) => [...previous, createColumnState()]);
+  };
+
+  const removeColumnAt = (indexToRemove: number): void => {
+    setColumns((previous) =>
+      previous.filter((_, index) => index !== indexToRemove)
+    );
+  };
+
+  const handleHorizontalWheel = (event: WheelEvent<HTMLDivElement>): void => {
+    const node = scrollRef.current;
+    if (!node) {
+      return;
+    }
+
+    const hasOverflow = node.scrollWidth > node.clientWidth;
+    if (!hasOverflow) {
+      return;
+    }
+
+    if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+      node.scrollLeft += event.deltaY;
+      event.preventDefault();
+    }
+  };
+
+  const scrollColumns = (direction: "left" | "right"): void => {
+    const node = scrollRef.current;
+    if (!node) {
+      return;
+    }
+
+    const delta = direction === "left" ? -360 : 360;
+    node.scrollBy({ left: delta, behavior: "smooth" });
   };
 
   return (
     <main className="app-shell">
-      <section className="columns-grid">
-        {columns.map((column, index) => {
+      <div className="columns-nav">
+        <Button
+          htmlType="button"
+          onClick={() => scrollColumns("left")}
+          aria-label="Scroll columns left"
+          className="scroll-btn"
+        >
+          {"<"}
+        </Button>
+        <Button
+          htmlType="button"
+          onClick={() => scrollColumns("right")}
+          aria-label="Scroll columns right"
+          className="scroll-btn"
+        >
+          {">"}
+        </Button>
+      </div>
+
+      <div
+        ref={scrollRef}
+        className="columns-scroll"
+        onWheel={handleHorizontalWheel}
+      >
+        <div className="columns-layout">
+          <section className="columns-grid">
+            {columns.map((column, index) => {
           const canSubmit = (() => {
             try {
               normalizeHandle(column.handleInput);
@@ -310,20 +412,32 @@ function App() {
           })();
 
           return (
-            <article key={index} className="channel-column">
+            <article key={column.id} className="channel-column">
               <div className="column-actions">
+                <div className="column-actions-left">
+                  <Button
+                    type="primary"
+                    htmlType="button"
+                    onClick={() => runFetch(column.id, column.handleInput)}
+                    disabled={!canSubmit || column.loading}
+                    loading={column.loading}
+                    aria-label={`Fetch column ${index + 1}`}
+                  >
+                    Fetch
+                  </Button>
+                  <Text className="last-fetch-text">
+                    {column.lastFetchAt ?? "-"}
+                  </Text>
+                </div>
                 <Button
-                  type="primary"
-                  onClick={() => runFetch(index, column.handleInput)}
-                  disabled={!canSubmit || column.loading}
-                  loading={column.loading}
-                  aria-label={`Fetch column ${index + 1}`}
+                  htmlType="button"
+                  onClick={() => removeColumnAt(index)}
+                  disabled={column.loading}
+                  aria-label={`Remove column ${index + 1}`}
+                  className="remove-column-btn"
                 >
-                  Fetch
+                  x
                 </Button>
-                <Text className="last-fetch-text">
-                  Last fetch: {column.lastFetchAt ?? "-"}
-                </Text>
               </div>
 
               <Form
@@ -337,7 +451,7 @@ function App() {
                       alt={`Channel ${index + 1}`}
                       className="channel-avatar"
                       onError={() =>
-                        setColumn(index, (prev) => ({
+                        setColumn(column.id, (prev) => ({
                           ...prev,
                           channelThumbnailUrl: ""
                         }))
@@ -348,7 +462,7 @@ function App() {
                       className="channel-avatar channel-avatar-placeholder"
                       aria-label={`Channel ${index + 1} placeholder`}
                     >
-                      <span>+</span>
+                      <span />
                     </div>
                   )}
                   <Input
@@ -358,7 +472,10 @@ function App() {
                     aria-label={`Channel ${index + 1} handle`}
                     onChange={(event) => {
                       const nextValue = event.target.value;
-                      setColumn(index, (prev) => ({ ...prev, handleInput: nextValue }));
+                      setColumn(column.id, (prev) => ({
+                        ...prev,
+                        handleInput: nextValue
+                      }));
                     }}
                     onPressEnter={(event) => {
                       if (!canSubmit || column.loading) {
@@ -419,8 +536,20 @@ function App() {
               )}
             </article>
           );
-        })}
-      </section>
+            })}
+          </section>
+          <aside className="add-column-rail">
+            <Button
+              htmlType="button"
+              onClick={addColumn}
+              aria-label="Add column"
+              className="add-column-btn"
+            >
+              +
+            </Button>
+          </aside>
+        </div>
+      </div>
     </main>
   );
 }

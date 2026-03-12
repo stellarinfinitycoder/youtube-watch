@@ -26,10 +26,12 @@ describe("App", () => {
 
   it("renders three independent columns", () => {
     render(<App />);
+    expect(screen.getByRole("button", { name: "Add column" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Fetch column 1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Fetch column 2" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Fetch column 3" })).toBeInTheDocument();
-    expect(screen.getAllByText("Last fetch: -")).toHaveLength(3);
+    expect(screen.getByRole("button", { name: "Remove column 1" })).toBeInTheDocument();
+    expect(screen.getAllByText("-", { selector: ".last-fetch-text" })).toHaveLength(3);
     expect(
       screen.getByLabelText("Channel 1 placeholder")
     ).toBeInTheDocument();
@@ -74,8 +76,17 @@ describe("App", () => {
     expect(screen.getByAltText("Channel 1")).toBeInTheDocument();
     expect(screen.getByText("Stored Video")).toBeInTheDocument();
     expect(screen.getByText((content) => content.includes(", 4k"))).toBeInTheDocument();
-    expect(screen.getByLabelText("Channel 2 placeholder")).toBeInTheDocument();
-    expect(screen.getByLabelText("Channel 3 placeholder")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Channel 2 placeholder")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Channel 3 placeholder")).not.toBeInTheDocument();
+  });
+
+  it("restores zero columns when saved state is empty", () => {
+    window.localStorage.setItem("youtube-watch:columns:v2", JSON.stringify([]));
+
+    render(<App />);
+
+    expect(screen.queryByRole("button", { name: "Fetch column 1" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add column" })).toBeInTheDocument();
   });
 
   it("enables column fetch when that column handle is valid", () => {
@@ -130,8 +141,8 @@ describe("App", () => {
       expect(screen.getByText("Demo Video")).toBeInTheDocument();
     });
     expect(
-      screen.getAllByText((content) => content.startsWith("Last fetch:")).length
-    ).toBeGreaterThan(0);
+      screen.getAllByText("-", { selector: ".last-fetch-text" }).length
+    ).toBeLessThan(3);
     expect(screen.getByText((content) => content.includes(", 777"))).toBeInTheDocument();
     expect(screen.getByAltText("Channel 1")).toBeInTheDocument();
     expect(screen.getByLabelText("Channel 2 placeholder")).toBeInTheDocument();
@@ -178,5 +189,26 @@ describe("App", () => {
 
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
     expect(spy).toHaveBeenNthCalledWith(1, "@validone", 15);
+  });
+
+  it("adds and removes columns", () => {
+    render(<App />);
+    expect(screen.getAllByText("-", { selector: ".last-fetch-text" })).toHaveLength(3);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add column" }));
+    expect(screen.getAllByText("-", { selector: ".last-fetch-text" })).toHaveLength(4);
+    expect(screen.getByRole("button", { name: "Fetch column 4" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove column 4" }));
+    expect(screen.getAllByText("-", { selector: ".last-fetch-text" })).toHaveLength(3);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove column 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove column 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove column 1" }));
+    expect(screen.queryByRole("button", { name: "Fetch column 1" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add column" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add column" }));
+    expect(screen.getByRole("button", { name: "Fetch column 1" })).toBeInTheDocument();
   });
 });

@@ -1,10 +1,7 @@
 body {
   margin: 0;
   font-family: "IBM Plex Mono", "Courier New", monospace;
-  background:
-    linear-gradient(90deg, transparent 39px, #dcdcdc 40px, transparent 41px),
-    linear-gradient(#f5f5f5, #f5f5f5);
-  background-size: 40px 40px, auto;
+  background: #fff;
   color: #101010;
 }
 
@@ -17,19 +14,59 @@ body {
   padding: 28px 16px;
 }
 
+.columns-nav {
+  width: 100%;
+  margin: 0 0 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.scroll-btn.ant-btn {
+  width: 44px;
+  height: 40px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.columns-scroll {
+  width: 100%;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  padding-bottom: 8px;
+}
+
+.columns-layout {
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
 .last-fetch-text.ant-typography {
   font-size: 12px;
   text-transform: uppercase;
 }
 
 .columns-grid {
-  width: 100%;
-  max-width: 1240px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 320px));
-  justify-content: center;
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: nowrap;
   gap: 14px;
+}
+
+.add-column-rail {
+  flex: 0 0 46px;
+}
+
+.add-column-btn.ant-btn {
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  font-size: 28px;
+  line-height: 1;
 }
 
 .full-width {
@@ -37,6 +74,7 @@ body {
 }
 
 .channel-column {
+  flex: 0 0 320px;
   border: 2px solid #111;
   background: #fff;
   padding: 14px;
@@ -46,6 +84,13 @@ body {
 
 .column-actions {
   margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.column-actions-left {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -73,7 +118,17 @@ body {
   color: #111;
   display: grid;
   place-items: center;
-  font-size: 20px;
+}
+
+.channel-avatar-placeholder span {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #111;
+  display: block;
+}
+
+.remove-column-btn.ant-btn {
+  min-width: 40px;
   font-weight: 700;
 }
 
@@ -147,14 +202,21 @@ body {
 }
 
 @media (max-width: 1080px) {
+  .columns-layout {
+    align-items: stretch;
+  }
+
   .columns-grid {
-    grid-template-columns: repeat(2, minmax(0, 320px));
+    padding-bottom: 10px;
+  }
+
+  .add-column-rail {
+    flex: 0 0 auto;
   }
 }
 
 @media (max-width: 760px) {
-  .columns-grid {
-    grid-template-columns: minmax(0, 1fr);
-    max-width: 360px;
+  .channel-column {
+    flex-basis: 300px;
   }
 }
