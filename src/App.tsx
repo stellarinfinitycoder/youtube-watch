@@ -25,6 +25,74 @@ const DEFAULT_LIMIT = 15;
 const DEFAULT_COLUMN_COUNT = 3;
 const HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
+const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
+
+type YouTubePlayer = {
+  destroy: () => void;
+  setPlaybackRate: (suggestedRate: number) => void;
+  getAvailablePlaybackRates: () => number[];
+};
+
+type YouTubePlayerEvent = {
+  target: YouTubePlayer;
+};
+
+type YouTubeNamespace = {
+  Player: new (
+    element: HTMLElement,
+    options: {
+      videoId: string;
+      playerVars?: Record<string, number>;
+      events?: {
+        onReady?: (event: YouTubePlayerEvent) => void;
+      };
+    }
+  ) => YouTubePlayer;
+};
+
+declare global {
+  interface Window {
+    YT?: YouTubeNamespace;
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+let youtubeIframeApiPromise: Promise<void> | null = null;
+
+function loadYouTubeIframeApi(): Promise<void> {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("YouTube API unavailable in this environment."));
+  }
+
+  if (window.YT?.Player) {
+    return Promise.resolve();
+  }
+
+  if (youtubeIframeApiPromise) {
+    return youtubeIframeApiPromise;
+  }
+
+  youtubeIframeApiPromise = new Promise<void>((resolve) => {
+    const previousReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof previousReady === "function") {
+        previousReady();
+      }
+      resolve();
+    };
+
+    const existing = document.querySelector<HTMLScriptElement>(
+      `script[src="${YOUTUBE_IFRAME_API_SRC}"]`
+    );
+    if (!existing) {
+      const script = document.createElement("script");
+      script.src = YOUTUBE_IFRAME_API_SRC;
+      document.head.appendChild(script);
+    }
+  });
+
+  return youtubeIframeApiPromise;
+}
 
 type ColumnState = FetchState & {
   id: string;
@@ -241,8 +309,22 @@ function parseBulkHandles(raw: string): string[] {
 
 function App() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const playerHostRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<YouTubePlayer | null>(null);
+  const playerReadyRef = useRef(false);
+  const [playerHostNode, setPlayerHostNode] = useState<HTMLDivElement | null>(null);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [bulkInput, setBulkInput] = useState("");
+  const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
+  const [playbackRate, setPlaybackRate] = useState(1.5);
+  const [availablePlaybackRates, setAvailablePlaybackRates] = useState<number[]>([
+    0.5,
+    1,
+    1.5,
+    2
+  ]);
+  const [isPlayerReady, setIsPlayerReady] = useState(false);
+  const [useIframeFallback, setUseIframeFallback] = useState(false);
   const [pendingBulkFetch, setPendingBulkFetch] = useState<
     Array<{ id: string; handle: string }>
   >([]);
@@ -336,6 +418,89 @@ function App() {
     });
     setPendingBulkFetch([]);
   }, [pendingBulkFetch]);
+
+  useEffect(() => {
+    if (!activeVideo || !playerHostNode) {
+      return;
+    }
+
+    let isCancelled = false;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    setAvailablePlaybackRates([0.5, 1, 1.5, 2]);
+    setPlaybackRate(1.5);
+    setIsPlayerReady(false);
+    playerReadyRef.current = false;
+    setUseIframeFallback(false);
+    fallbackTimer = setTimeout(() => {
+      if (!isCancelled && !playerReadyRef.current) {
+        setUseIframeFallback(true);
+      }
+    }, 800);
+
+    loadYouTubeIframeApi()
+      .then(() => {
+        if (isCancelled || !playerHostNode || !window.YT?.Player) {
+          return;
+        }
+
+        if (playerRef.current) {
+          playerRef.current.destroy();
+          playerRef.current = null;
+        }
+
+        playerRef.current = new window.YT.Player(playerHostNode, {
+          videoId: activeVideo.videoId,
+          playerVars: {
+            autoplay: 1,
+            rel: 0
+          },
+          events: {
+            onReady: (event) => {
+              const rates = event.target.getAvailablePlaybackRates();
+              const normalizedRates = rates.length > 0 ? rates : [1];
+              setAvailablePlaybackRates(normalizedRates);
+              const preferred = normalizedRates.includes(1.5)
+                ? 1.5
+                : normalizedRates.includes(1)
+                ? 1
+                : normalizedRates[0];
+              event.target.setPlaybackRate(preferred);
+              setPlaybackRate(preferred);
+              setIsPlayerReady(true);
+              playerReadyRef.current = true;
+              setUseIframeFallback(false);
+              if (fallbackTimer) {
+                clearTimeout(fallbackTimer);
+                fallbackTimer = null;
+              }
+            }
+          }
+        });
+      })
+      .catch(() => {
+        setAvailablePlaybackRates([1]);
+        setPlaybackRate(1);
+        playerReadyRef.current = false;
+        setUseIframeFallback(true);
+      });
+
+    return () => {
+      isCancelled = true;
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+      }
+      if (playerRef.current) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
+      playerReadyRef.current = false;
+    };
+  }, [activeVideo, playerHostNode]);
+
+  const setPlayerHost = (node: HTMLDivElement | null): void => {
+    playerHostRef.current = node;
+    setPlayerHostNode(node);
+  };
 
   const setColumn = (
     columnId: string,
@@ -437,9 +602,37 @@ function App() {
     node.scrollTo({ left: maxLeft, behavior: "smooth" });
   };
 
+  const handlePlaybackRateClick = (rate: number): void => {
+    setPlaybackRate(rate);
+    if (!playerRef.current) {
+      return;
+    }
+    try {
+      playerRef.current.setPlaybackRate(rate);
+    } catch {
+      // Ignore unsupported playback-rate calls.
+    }
+  };
+
   return (
     <main className="app-shell">
       <div className="columns-nav">
+        <Button
+          htmlType="button"
+          onClick={() => setIsBulkModalOpen(true)}
+          aria-label="Bulk add channels"
+          className="nav-btn add-channels-btn"
+        >
+          Add Channels
+        </Button>
+        <Button
+          htmlType="button"
+          onClick={fetchAllColumns}
+          aria-label="Fetch all channels"
+          className="nav-btn"
+        >
+          Fetch All
+        </Button>
         <Button
           htmlType="button"
           onClick={() => scrollToEdge("start")}
@@ -472,22 +665,6 @@ function App() {
         >
           {">>"}
         </Button>
-        <Button
-          htmlType="button"
-          onClick={() => setIsBulkModalOpen(true)}
-          aria-label="Bulk add channels"
-          className="nav-btn add-channels-btn"
-        >
-          Add Channels
-        </Button>
-        <Button
-          htmlType="button"
-          onClick={fetchAllColumns}
-          aria-label="Fetch all channels"
-          className="nav-btn"
-        >
-          Fetch All
-        </Button>
       </div>
 
       <Modal
@@ -503,6 +680,57 @@ function App() {
           autoSize={{ minRows: 6, maxRows: 12 }}
           placeholder={"@channelOne\n@channelTwo\n@channelThree"}
         />
+      </Modal>
+
+      <Modal
+        title={activeVideo?.title ?? "Video"}
+        open={activeVideo !== null}
+        onCancel={() => {
+          setActiveVideo(null);
+          setIsPlayerReady(false);
+          playerReadyRef.current = false;
+          setUseIframeFallback(false);
+        }}
+        footer={null}
+        width={900}
+        destroyOnHidden
+      >
+        {activeVideo ? (
+          <Space direction="vertical" size="middle" className="full-width">
+            <div className="video-modal-wrap">
+              {useIframeFallback && !isPlayerReady ? (
+                <iframe
+                  src={`https://www.youtube.com/embed/${activeVideo.videoId}?autoplay=1&rel=0`}
+                  title={activeVideo.title}
+                  className="video-modal-frame"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                />
+              ) : null}
+              <div
+                ref={setPlayerHost}
+                className={`video-modal-frame ${
+                  useIframeFallback && !isPlayerReady ? "video-modal-frame-hidden" : ""
+                }`}
+              />
+            </div>
+            <div className="speed-controls">
+              {availablePlaybackRates.map((rate) => (
+                <Button
+                  key={rate}
+                  htmlType="button"
+                  className="speed-btn"
+                  type={playbackRate === rate ? "primary" : "default"}
+                  onClick={() => handlePlaybackRateClick(rate)}
+                  disabled={!isPlayerReady}
+                >
+                  {rate}x
+                </Button>
+              ))}
+            </div>
+          </Space>
+        ) : null}
       </Modal>
 
       <div
@@ -623,19 +851,27 @@ function App() {
                   renderItem={(video) => (
                     <List.Item key={video.videoId}>
                       <Space direction="vertical" size="small" className="full-width">
-                        <a href={video.videoUrl} target="_blank" rel="noreferrer">
+                        <button
+                          type="button"
+                          className="video-link-btn"
+                          onClick={() => setActiveVideo(video)}
+                        >
                           <Title level={5} className="video-title">
                             {video.title}
                           </Title>
-                        </a>
+                        </button>
                         {video.thumbnailUrl ? (
-                          <a href={video.videoUrl} target="_blank" rel="noreferrer">
+                          <button
+                            type="button"
+                            className="video-thumb-btn"
+                            onClick={() => setActiveVideo(video)}
+                          >
                             <img
                               src={video.thumbnailUrl}
                               alt={video.title}
                               className="video-thumb"
                             />
-                          </a>
+                          </button>
                         ) : null}
                         <Text type="secondary">{video.channelTitle}</Text>
                         <Text className="video-meta">{formatVideoMeta(video)}</Text>

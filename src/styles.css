@@ -189,6 +189,15 @@ body {
   line-height: 1.2;
 }
 
+.video-link-btn,
+.video-thumb-btn {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
 .video-thumb {
   width: 100%;
   border: 2px solid #111;
@@ -207,6 +216,38 @@ body {
 
 .video-meta.ant-typography {
   font-size: 12px;
+}
+
+.video-modal-wrap {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+}
+
+.speed-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.speed-btn.ant-btn {
+  min-width: 58px;
+  height: 32px;
+}
+
+.video-modal-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.video-modal-frame-hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 @media (max-width: 1080px) {
