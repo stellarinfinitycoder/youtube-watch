@@ -13,7 +13,10 @@ import {
 } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import type { FetchState } from "./types/youtube";
-import { getLatestVideosAndChannelByHandle } from "./api/youtube";
+import {
+  fetchViewCountsByVideoIds,
+  getLatestVideosAndChannelByHandle
+} from "./api/youtube";
 import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
 
@@ -105,7 +108,12 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
         typeof item.publishedAt !== "string" ||
         typeof item.thumbnailUrl !== "string" ||
         typeof item.channelTitle !== "string" ||
-        typeof item.videoUrl !== "string"
+        typeof item.videoUrl !== "string" ||
+        !(
+          typeof item.viewCount === "number" ||
+          item.viewCount === null ||
+          typeof item.viewCount === "undefined"
+        )
       ) {
         return null;
       }
@@ -116,7 +124,11 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
         publishedAt: item.publishedAt,
         thumbnailUrl: item.thumbnailUrl,
         channelTitle: item.channelTitle,
-        videoUrl: item.videoUrl
+        videoUrl: item.videoUrl,
+        viewCount:
+          typeof item.viewCount === "number" && Number.isFinite(item.viewCount)
+            ? item.viewCount
+            : null
       };
     })
     .filter((video): video is VideoItem => video !== null);
@@ -158,6 +170,24 @@ function readStoredColumns(): PersistedColumnState[] {
   }
 }
 
+function formatViewCount(viewCount: number | null): string {
+  if (viewCount === null) {
+    return "-";
+  }
+  const compact = new Intl.NumberFormat("en", {
+    notation: "compact",
+    maximumFractionDigits: 0
+  }).format(viewCount);
+  return compact.toLowerCase();
+}
+
+function formatVideoMeta(video: VideoItem): string {
+  const dateLabel = video.publishedAt
+    ? new Date(video.publishedAt).toLocaleString()
+    : "Unknown date";
+  return `${dateLabel}, ${formatViewCount(video.viewCount)}`;
+}
+
 function App() {
   const [columns, setColumns] = useState<ColumnState[]>(() => {
     const storedColumns = readStoredColumns();
@@ -170,6 +200,7 @@ function App() {
       videos: storedColumns[index]?.videos ?? []
     }));
   });
+  const [viewBackfillInFlight, setViewBackfillInFlight] = useState<number[]>([]);
 
   useEffect(() => {
     try {
@@ -191,6 +222,41 @@ function App() {
       // Ignore write failures (private mode / restricted environments).
     }
   }, [columns]);
+
+  useEffect(() => {
+    columns.forEach((column, index) => {
+      const missingViewsIds = column.videos
+        .filter((video) => video.viewCount === null)
+        .map((video) => video.videoId);
+
+      if (missingViewsIds.length === 0) {
+        return;
+      }
+
+      if (viewBackfillInFlight.includes(index)) {
+        return;
+      }
+
+      setViewBackfillInFlight((prev) => [...prev, index]);
+      fetchViewCountsByVideoIds(missingViewsIds)
+        .then((viewCounts) => {
+          setColumn(index, (prev) => ({
+            ...prev,
+            videos: prev.videos.map((video) => ({
+              ...video,
+              viewCount:
+                video.viewCount ?? viewCounts[video.videoId] ?? video.viewCount
+            }))
+          }));
+        })
+        .catch(() => {
+          // Ignore backfill errors; user can still refresh manually.
+        })
+        .finally(() => {
+          setViewBackfillInFlight((prev) => prev.filter((item) => item !== index));
+        });
+    });
+  }, [columns, viewBackfillInFlight]);
 
   const setColumn = (index: number, updater: (state: ColumnState) => ColumnState) => {
     setColumns((previous) =>
@@ -343,11 +409,7 @@ function App() {
                           </a>
                         ) : null}
                         <Text type="secondary">{video.channelTitle}</Text>
-                        <Text className="date-stamp">
-                          {video.publishedAt
-                            ? new Date(video.publishedAt).toLocaleString()
-                            : "Unknown date"}
-                        </Text>
+                        <Text className="video-meta">{formatVideoMeta(video)}</Text>
                       </Space>
                     </List.Item>
                   )}

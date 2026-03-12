@@ -5,6 +5,7 @@ export type VideoItem = {
   thumbnailUrl: string;
   channelTitle: string;
   videoUrl: string;
+  viewCount: number | null;
 };
 
 export type FetchState = {

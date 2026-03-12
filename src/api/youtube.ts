@@ -63,6 +63,15 @@ type PlaylistItem = {
   snippet?: PlaylistSnippet;
 };
 
+type VideoStatisticsResponse = {
+  items?: Array<{
+    id?: string;
+    statistics?: {
+      viewCount?: string;
+    };
+  }>;
+};
+
 export type ChannelLookupResult = {
   channelId: string;
   channelThumbnailUrl: string;
@@ -72,6 +81,8 @@ export type ChannelVideosResult = {
   channelThumbnailUrl: string;
   videos: VideoItem[];
 };
+
+type ViewCountMap = Record<string, number>;
 
 function getApiKey(): string {
   const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
@@ -128,7 +139,8 @@ function mapPlaylistItemToVideoItem(item: PlaylistItem): VideoItem | null {
     publishedAt: snippet.publishedAt ?? "",
     thumbnailUrl: normalizeImageUrl(pickThumbnailUrl(snippet)),
     channelTitle: snippet.channelTitle ?? "",
-    videoUrl: `https://www.youtube.com/watch?v=${videoId}`
+    videoUrl: `https://www.youtube.com/watch?v=${videoId}`,
+    viewCount: null
   };
 }
 
@@ -224,10 +236,21 @@ export async function fetchLatestVideos(
 
   const playlistData = await fetchJson<PlaylistItemsResponse>(playlistUrl);
 
-  return (playlistData.items ?? [])
+  const videos = (playlistData.items ?? [])
     .map(mapPlaylistItemToVideoItem)
     .filter((item): item is VideoItem => item !== null)
     .slice(0, limit);
+
+  if (videos.length === 0) {
+    return videos;
+  }
+
+  const viewCounts = await fetchViewCountsByVideoIds(videos.map((video) => video.videoId));
+
+  return videos.map((video) => ({
+    ...video,
+    viewCount: viewCounts[video.videoId] ?? null
+  }));
 }
 
 export async function getLatestVideosByHandle(
@@ -246,4 +269,38 @@ export async function getLatestVideosAndChannelByHandle(
     await resolveChannelByHandleWithThumbnail(handle);
   const videos = await fetchLatestVideos(channelId, limit);
   return { channelThumbnailUrl, videos };
+}
+
+export async function fetchViewCountsByVideoIds(
+  videoIds: string[]
+): Promise<ViewCountMap> {
+  const apiKey = getApiKey();
+  const uniqueIds = [...new Set(videoIds.filter(Boolean))];
+  const result: ViewCountMap = {};
+
+  for (let index = 0; index < uniqueIds.length; index += 50) {
+    const chunk = uniqueIds.slice(index, index + 50);
+    if (chunk.length === 0) {
+      continue;
+    }
+
+    const statsUrl = buildUrl("/videos", {
+      part: "statistics",
+      id: chunk.join(","),
+      key: apiKey
+    });
+    const statsData = await fetchJson<VideoStatisticsResponse>(statsUrl);
+
+    for (const item of statsData.items ?? []) {
+      if (!item.id) {
+        continue;
+      }
+      const parsed = Number(item.statistics?.viewCount ?? "");
+      if (Number.isFinite(parsed)) {
+        result[item.id] = parsed;
+      }
+    }
+  }
+
+  return result;
 }

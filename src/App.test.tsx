@@ -55,7 +55,8 @@ describe("App", () => {
               publishedAt: "2026-03-12T10:00:00Z",
               thumbnailUrl: "https://img.test/video-1.jpg",
               channelTitle: "Stored Channel",
-              videoUrl: "https://www.youtube.com/watch?v=vid-1"
+              videoUrl: "https://www.youtube.com/watch?v=vid-1",
+              viewCount: 4321
             }
           ]
         }
@@ -67,6 +68,7 @@ describe("App", () => {
     expect(screen.getByLabelText("Channel 1 handle")).toHaveValue("@one");
     expect(screen.getByAltText("Channel 1")).toBeInTheDocument();
     expect(screen.getByText("Stored Video")).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes(", 4k"))).toBeInTheDocument();
     expect(screen.getByLabelText("Channel 2 placeholder")).toBeInTheDocument();
     expect(screen.getByLabelText("Channel 3 placeholder")).toBeInTheDocument();
   });
@@ -113,7 +115,8 @@ describe("App", () => {
           publishedAt: "2026-01-01T12:00:00Z",
           thumbnailUrl: "https://img.test/demo.jpg",
           channelTitle: "Demo Channel",
-          videoUrl: "https://www.youtube.com/watch?v=abc123"
+          videoUrl: "https://www.youtube.com/watch?v=abc123",
+          viewCount: 777
         }
       ]
     });
@@ -121,6 +124,7 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByText("Demo Video")).toBeInTheDocument();
     });
+    expect(screen.getByText((content) => content.includes(", 777"))).toBeInTheDocument();
     expect(screen.getByAltText("Channel 1")).toBeInTheDocument();
     expect(screen.getByLabelText("Channel 2 placeholder")).toBeInTheDocument();
     expect(screen.getByLabelText("Channel 3 placeholder")).toBeInTheDocument();

@@ -65,11 +65,20 @@ describe("youtube api client", () => {
           ]
         })
       )
-      .mockResolvedValueOnce(makeResponse({ items })) as typeof fetch;
+      .mockResolvedValueOnce(makeResponse({ items }))
+      .mockResolvedValueOnce(
+        makeResponse({
+          items: items.map((item, index) => ({
+            id: item.snippet.resourceId.videoId,
+            statistics: { viewCount: String(1000 + index) }
+          }))
+        })
+      ) as typeof fetch;
 
     const videos = await fetchLatestVideos("UC123", 15);
     expect(videos).toHaveLength(15);
     expect(videos[0].videoId).toBe("video-0");
+    expect(videos[0].viewCount).toBe(1000);
   });
 
   it("maps missing fields safely", async () => {
@@ -97,6 +106,11 @@ describe("youtube api client", () => {
               }
             }
           ]
+        })
+      )
+      .mockResolvedValueOnce(
+        makeResponse({
+          items: [{ id: "video-1", statistics: {} }]
         })
       ) as typeof fetch;
 
