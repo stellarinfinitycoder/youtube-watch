@@ -40,6 +40,8 @@ type YouTubePlayer = {
   destroy: () => void;
   setPlaybackRate: (suggestedRate: number) => void;
   getAvailablePlaybackRates: () => number[];
+  seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
+  getCurrentTime: () => number;
 };
 
 type YouTubePlayerEvent = {
@@ -672,6 +674,19 @@ function getVideoPublishedTime(video: VideoItem): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function shouldIgnoreShortcutTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  const tagName = target.tagName.toLowerCase();
+  return (
+    target.isContentEditable ||
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select"
+  );
+}
+
 function parseBulkHandles(raw: string): string[] {
   const tokens = raw
     .split(/[\s,]+/)
@@ -960,6 +975,41 @@ function App() {
       playerReadyRef.current = false;
     };
   }, [activeVideo, playerHostNode, preferredPlaybackRate]);
+
+  useEffect(() => {
+    if (!activeVideo) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (shouldIgnoreShortcutTarget(event.target)) {
+        return;
+      }
+      if (!playerRef.current) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key !== "arrowleft" && key !== "arrowright" && key !== "j" && key !== "l") {
+        return;
+      }
+
+      event.preventDefault();
+      const delta = key === "arrowleft" || key === "j" ? -10 : 10;
+      try {
+        const currentTime = playerRef.current.getCurrentTime();
+        const nextTime = Math.max(0, currentTime + delta);
+        playerRef.current.seekTo(nextTime, true);
+      } catch {
+        // Ignore unsupported seeks.
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [activeVideo]);
 
   const setPlayerHost = (node: HTMLDivElement | null): void => {
     playerHostRef.current = node;
