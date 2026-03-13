@@ -45,13 +45,14 @@ body {
 
 .columns-nav {
   width: 100%;
-  margin: 0 0 4px;
-  padding: 10px;
+  margin: 0 0 8px;
+  padding: 12px;
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
   background: linear-gradient(180deg, var(--surface-2), var(--surface-3));
+  box-shadow: inset 0 -1px 0 rgba(255, 143, 31, 0.14);
 }
 
 .columns-nav .nav-btn.ant-btn,
@@ -229,11 +230,39 @@ body {
   order: 10;
 }
 
+.columns-nav [aria-label="Board selector"] {
+  order: 1;
+}
+
+.columns-nav [aria-label="Video filter"] {
+  order: 2;
+  margin-left: 0;
+}
+
+.columns-nav [aria-label="Default playback speed"] {
+  order: 3;
+}
+
+.columns-nav [aria-label="Fetch all channels"] {
+  order: 4;
+}
+
+.columns-nav [aria-label="Bulk add channels"] {
+  order: 5;
+}
+
+.columns-nav [aria-label="Scroll columns to first"],
+.columns-nav [aria-label="Scroll columns left"],
+.columns-nav [aria-label="Scroll columns right"],
+.columns-nav [aria-label="Scroll columns to last"] {
+  order: 6;
+}
+
 .columns-scroll {
   width: 100%;
   overflow-x: hidden;
   overflow-y: hidden;
-  padding: 10px 0 10px 10px;
+  padding: 8px 0 10px 10px;
   border: 0;
   background: var(--shell);
   box-shadow: inset 0 1px 0 rgba(255, 143, 31, 0.14);
@@ -253,8 +282,9 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
-  color: var(--amber);
+  font-size: 11px;
+  color: #c08f56;
+  letter-spacing: 0.02em;
 }
 
 .columns-grid {
@@ -282,21 +312,21 @@ body {
 
 .channel-column {
   flex: 0 0 320px;
-  border: 1px solid var(--amber);
+  border: 1px solid var(--amber-soft);
   background: var(--surface);
-  padding: 8px;
+  padding: 10px;
   min-height: 640px;
-  box-shadow: none;
+  box-shadow: 0 1px 0 rgba(91, 58, 18, 0.28);
 }
 
 .column-actions {
-  margin: -8px -8px 8px;
-  padding: 8px;
+  margin: -10px -10px 10px;
+  padding: 10px;
   display: flex;
   align-items: center;
   gap: 10px;
   justify-content: space-between;
-  border-bottom: 1px solid var(--amber-soft);
+  border-bottom: 1px solid rgba(91, 58, 18, 0.45);
 }
 
 .column-actions-left {
@@ -308,7 +338,7 @@ body {
 
 .column-header {
   min-height: 42px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -355,9 +385,9 @@ body {
   width: 28px;
   height: 28px;
   padding: 0;
-  font-weight: 700;
-  border-color: var(--red) !important;
-  color: var(--red) !important;
+  font-weight: 600;
+  border-color: rgba(204, 106, 106, 0.75) !important;
+  color: rgba(204, 106, 106, 0.88) !important;
   background: transparent !important;
 }
 
@@ -433,7 +463,8 @@ body {
 .ant-btn-default:focus,
 .ant-btn-primary:hover,
 .ant-btn-primary:focus {
-  opacity: 0.92;
+  opacity: 0.95;
+  transform: translateY(-1px);
 }
 
 .ant-btn-primary {
@@ -479,15 +510,19 @@ body {
 }
 
 .ant-list-item {
-  border-block-end: 1px solid var(--amber-soft) !important;
-  padding: 10px 0 !important;
+  border-block-end: 1px solid rgba(255, 143, 31, 0.28) !important;
+  padding: 12px 0 !important;
 }
 
 .video-title {
   margin: 0 0 8px !important;
   font-size: 16px !important;
-  line-height: 1.3 !important;
+  line-height: 1.4 !important;
   color: #ffe0b7 !important;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .video-link-btn,
@@ -504,6 +539,12 @@ body {
   border: 1px solid var(--amber-soft);
   display: block;
   background: linear-gradient(135deg, #082434, #0c1117 52%, #301a08);
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.video-thumb-btn:hover .video-thumb {
+  transform: translateY(-1px);
+  opacity: 0.96;
 }
 
 .date-stamp.ant-typography,
@@ -515,7 +556,7 @@ body {
 .video-meta.ant-typography {
   font-size: 12px;
   line-height: 1.45;
-  color: #9a9a9a;
+  color: #a3a3a3;
 }
 
 .video-meta-row {
@@ -633,15 +674,16 @@ body {
 
 .board-delete-btn.ant-btn.ant-btn-dangerous {
   background: transparent !important;
-  border-color: var(--red) !important;
-  color: var(--red) !important;
+  border-color: rgba(204, 106, 106, 0.78) !important;
+  color: rgba(204, 106, 106, 0.9) !important;
+  font-weight: 600;
 }
 
 .board-delete-btn.ant-btn.ant-btn-dangerous:hover,
 .board-delete-btn.ant-btn.ant-btn-dangerous:focus {
-  background: rgba(255, 92, 92, 0.1) !important;
-  border-color: var(--red) !important;
-  color: var(--red) !important;
+  background: rgba(204, 106, 106, 0.12) !important;
+  border-color: rgba(204, 106, 106, 0.86) !important;
+  color: rgba(214, 120, 120, 0.96) !important;
 }
 
 .delete-confirm-ok.ant-btn.ant-btn-primary.ant-btn-dangerous,
