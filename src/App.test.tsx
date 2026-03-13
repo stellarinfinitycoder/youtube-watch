@@ -8,6 +8,7 @@ describe("App", () => {
     if (typeof window.localStorage.removeItem === "function") {
       window.localStorage.removeItem("youtube-watch:handles:v1");
       window.localStorage.removeItem("youtube-watch:columns:v2");
+      window.localStorage.removeItem("youtube-watch:watched:v1");
     }
   });
 
@@ -148,7 +149,7 @@ describe("App", () => {
     expect(screen.getByLabelText("Channel 2 placeholder")).toBeInTheDocument();
     expect(screen.getByLabelText("Channel 3 placeholder")).toBeInTheDocument();
 
-    expect(spy).toHaveBeenCalledWith("@validhandle", 15);
+    expect(spy).toHaveBeenCalledWith("@validhandle", 25);
   });
 
   it("shows error alert on request failure", async () => {
@@ -188,7 +189,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fetch column 1" }));
 
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
-    expect(spy).toHaveBeenNthCalledWith(1, "@validone", 15);
+    expect(spy).toHaveBeenNthCalledWith(1, "@validone", 25);
   });
 
   it("adds and removes columns", () => {
@@ -210,5 +211,87 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add column" }));
     expect(screen.getByRole("button", { name: "Fetch column 1" })).toBeInTheDocument();
+  });
+
+  it("marks a video as watched, hides it in New filter, and persists state", async () => {
+    window.localStorage.setItem(
+      "youtube-watch:columns:v2",
+      JSON.stringify([
+        {
+          handleInput: "@one",
+          currentHandle: "@one",
+          channelThumbnailUrl: "https://img.test/channel-1.jpg",
+          lastFetchAt: "11/03/2026, 22:17:03",
+          videos: [
+            {
+              videoId: "vid-1",
+              title: "Stored Video",
+              publishedAt: "2026-03-12T10:00:00Z",
+              thumbnailUrl: "https://img.test/video-1.jpg",
+              channelTitle: "Stored Channel",
+              videoUrl: "https://www.youtube.com/watch?v=vid-1",
+              viewCount: 4321
+            }
+          ]
+        }
+      ])
+    );
+
+    render(<App />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Mark Stored Video as watched" })
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("Stored Video")).not.toBeInTheDocument();
+    });
+
+    expect(window.localStorage.getItem("youtube-watch:watched:v1")).toContain(
+      "\"vid-1\":true"
+    );
+  });
+
+  it("shows watched videos in Watched filter and allows restoring them to New", async () => {
+    window.localStorage.setItem(
+      "youtube-watch:columns:v2",
+      JSON.stringify([
+        {
+          handleInput: "@one",
+          currentHandle: "@one",
+          channelThumbnailUrl: "https://img.test/channel-1.jpg",
+          lastFetchAt: "11/03/2026, 22:17:03",
+          videos: [
+            {
+              videoId: "vid-1",
+              title: "Stored Video",
+              publishedAt: "2026-03-12T10:00:00Z",
+              thumbnailUrl: "https://img.test/video-1.jpg",
+              channelTitle: "Stored Channel",
+              videoUrl: "https://www.youtube.com/watch?v=vid-1",
+              viewCount: 4321
+            }
+          ]
+        }
+      ])
+    );
+    window.localStorage.setItem(
+      "youtube-watch:watched:v1",
+      JSON.stringify({ "vid-1": true })
+    );
+
+    render(<App />);
+
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Video filter" }));
+    fireEvent.click(await screen.findByText("Watched"));
+
+    expect(screen.getByText("Stored Video")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Mark Stored Video as new" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Stored Video")).not.toBeInTheDocument();
+    });
+
+    expect(window.localStorage.getItem("youtube-watch:watched:v1")).toBe("{}");
   });
 });

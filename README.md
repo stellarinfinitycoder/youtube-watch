@@ -1,6 +1,6 @@
 # YouTube Watch
 
-A React + TypeScript + Ant Design app (Vite) that fetches and displays the latest 15 videos for a YouTube channel handle (`@name`) using the YouTube Data API.
+A React + TypeScript + Ant Design app (Vite) that fetches and displays the latest 25 videos for a YouTube channel handle (`@name`) using the YouTube Data API.
 
 ## Stack
 
@@ -45,6 +45,6 @@ npm run test
 ## Notes
 
 - Input format is strictly `@handle`.
-- Latest 15 videos are loaded by resolving channel handle -> channel ID -> uploads playlist -> playlist items.
+- Latest 25 videos are loaded by resolving channel handle -> channel ID -> uploads playlist -> playlist items.
 - Refresh is manual via the **Refresh** button.
 - This implementation is frontend-only, so `VITE_YOUTUBE_API_KEY` is exposed in browser network requests.

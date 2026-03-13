@@ -30,6 +30,54 @@ body {
   justify-content: center;
 }
 
+.video-filter-select {
+  min-width: 110px;
+}
+
+.video-filter-select .ant-select-selector {
+  height: 32px !important;
+  border: 2px solid #111 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  font-weight: 700;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  background: #fff !important;
+  padding-inline: 10px 28px !important;
+}
+
+.video-filter-select.ant-select-single {
+  font-size: 14px;
+}
+
+.video-filter-select .ant-select-selection-item {
+  line-height: 28px !important;
+  font-weight: 700;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  color: #111;
+  letter-spacing: 0;
+}
+
+.video-filter-select .ant-select-arrow {
+  color: #111;
+  font-size: 12px;
+}
+
+.ant-select-dropdown .ant-select-item {
+  border-radius: 0 !important;
+  font-weight: 700;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  color: #111;
+}
+
+.ant-select-dropdown .ant-select-item-option-selected {
+  background: #111 !important;
+  color: #fff !important;
+}
+
+.ant-select-dropdown .ant-select-item-option-active {
+  background: #efefef !important;
+}
+
 .scroll-btn.ant-btn {
   width: 44px;
   padding: 0;
@@ -215,6 +263,25 @@ body {
 }
 
 .video-meta.ant-typography {
+  font-size: 12px;
+}
+
+.video-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.video-meta-row .video-meta.ant-typography {
+  flex: 1;
+}
+
+.video-watch-btn.ant-btn {
+  min-width: 32px;
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  margin-left: auto;
   font-size: 12px;
 }
 

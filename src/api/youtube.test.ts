@@ -39,7 +39,7 @@ describe("youtube api client", () => {
     expect(channelId).toBe("UC123");
   });
 
-  it("returns exactly 15 videos when requesting latest uploads", async () => {
+  it("returns exactly 25 videos when requesting latest uploads", async () => {
     const items = Array.from({ length: 20 }, (_, index) => ({
       snippet: {
         title: `Video ${index}`,

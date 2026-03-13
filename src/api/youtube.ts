@@ -2,7 +2,7 @@ import type { VideoItem } from "../types/youtube";
 import { normalizeHandle, stripHandlePrefix } from "../utils/handle";
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
-const DEFAULT_LIMIT = 15;
+const DEFAULT_LIMIT = 25;
 
 type ChannelByHandleResponse = {
   items?: Array<{

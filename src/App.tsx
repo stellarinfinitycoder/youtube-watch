@@ -7,6 +7,7 @@ import {
   Input,
   List,
   Modal,
+  Select,
   Skeleton,
   Space,
   Spin,
@@ -21,11 +22,14 @@ import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
 
 const { Title, Text } = Typography;
-const DEFAULT_LIMIT = 15;
+const DEFAULT_LIMIT = 25;
 const DEFAULT_COLUMN_COUNT = 3;
 const HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
+const WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
 const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
+
+type VideoFilter = "all" | "new" | "watched";
 
 type YouTubePlayer = {
   destroy: () => void;
@@ -150,6 +154,37 @@ function readStoredHandles(): string[] {
       : [];
   } catch {
     return [];
+  }
+}
+
+function readStoredWatchedVideos(): Record<string, boolean> {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.getItem !== "function") {
+      return {};
+    }
+
+    const raw = storage.getItem(WATCHED_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, boolean] => typeof entry[1] === "boolean"
+      )
+    );
+  } catch {
+    return {};
   }
 }
 
@@ -325,6 +360,10 @@ function App() {
   ]);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [useIframeFallback, setUseIframeFallback] = useState(false);
+  const [videoFilter, setVideoFilter] = useState<VideoFilter>("new");
+  const [watchedVideos, setWatchedVideos] = useState<Record<string, boolean>>(() =>
+    readStoredWatchedVideos()
+  );
   const [pendingBulkFetch, setPendingBulkFetch] = useState<
     Array<{ id: string; handle: string }>
   >([]);
@@ -370,6 +409,19 @@ function App() {
       // Ignore write failures (private mode / restricted environments).
     }
   }, [columns]);
+
+  useEffect(() => {
+    try {
+      const storage = window.localStorage;
+      if (!storage || typeof storage.setItem !== "function") {
+        return;
+      }
+
+      storage.setItem(WATCHED_STORAGE_KEY, JSON.stringify(watchedVideos));
+    } catch {
+      // Ignore write failures (private mode / restricted environments).
+    }
+  }, [watchedVideos]);
 
   useEffect(() => {
     columns.forEach((column) => {
@@ -614,6 +666,18 @@ function App() {
     }
   };
 
+  const toggleWatched = (videoId: string): void => {
+    setWatchedVideos((previous) => {
+      const next = { ...previous };
+      if (next[videoId]) {
+        delete next[videoId];
+      } else {
+        next[videoId] = true;
+      }
+      return next;
+    });
+  };
+
   return (
     <main className="app-shell">
       <div className="columns-nav">
@@ -633,6 +697,17 @@ function App() {
         >
           Fetch All
         </Button>
+        <Select<VideoFilter>
+          value={videoFilter}
+          onChange={setVideoFilter}
+          aria-label="Video filter"
+          className="video-filter-select"
+          options={[
+            { value: "all", label: "All" },
+            { value: "new", label: "New" },
+            { value: "watched", label: "Watched" }
+          ]}
+        />
         <Button
           htmlType="button"
           onClick={() => scrollToEdge("start")}
@@ -740,148 +815,174 @@ function App() {
         <div className="columns-layout">
           <section className="columns-grid">
             {columns.map((column, index) => {
-          const canSubmit = (() => {
-            try {
-              normalizeHandle(column.handleInput);
-              return true;
-            } catch {
-              return false;
-            }
-          })();
+              const canSubmit = (() => {
+                try {
+                  normalizeHandle(column.handleInput);
+                  return true;
+                } catch {
+                  return false;
+                }
+              })();
 
-          return (
-            <article key={column.id} className="channel-column">
-              <div className="column-actions">
-                <div className="column-actions-left">
-                  <Button
-                    type="primary"
-                    htmlType="button"
-                    onClick={() => runFetch(column.id, column.handleInput)}
-                    disabled={!canSubmit || column.loading}
-                    loading={column.loading}
-                    aria-label={`Fetch column ${index + 1}`}
-                  >
-                    Fetch
-                  </Button>
-                  <Text className="last-fetch-text">
-                    {column.lastFetchAt ?? "-"}
-                  </Text>
-                </div>
-                <Button
-                  htmlType="button"
-                  onClick={() => removeColumnAt(index)}
-                  disabled={column.loading}
-                  aria-label={`Remove column ${index + 1}`}
-                  className="remove-column-btn"
-                >
-                  x
-                </Button>
-              </div>
+              const filteredVideos = column.videos.filter((video) => {
+                const isWatched = watchedVideos[video.videoId] === true;
+                if (videoFilter === "all") {
+                  return true;
+                }
+                if (videoFilter === "watched") {
+                  return isWatched;
+                }
+                return !isWatched;
+              });
 
-              <Form
-                layout="vertical"
-                className="full-width"
-              >
-                <div className="column-header">
-                  {column.channelThumbnailUrl ? (
-                    <img
-                      src={column.channelThumbnailUrl}
-                      alt={`Channel ${index + 1}`}
-                      className="channel-avatar"
-                      onError={() =>
-                        setColumn(column.id, (prev) => ({
-                          ...prev,
-                          channelThumbnailUrl: ""
-                        }))
-                      }
-                    />
-                  ) : (
-                    <div
-                      className="channel-avatar channel-avatar-placeholder"
-                      aria-label={`Channel ${index + 1} placeholder`}
-                    >
-                      <span />
+              return (
+                <article key={column.id} className="channel-column">
+                  <div className="column-actions">
+                    <div className="column-actions-left">
+                      <Button
+                        type="primary"
+                        htmlType="button"
+                        onClick={() => runFetch(column.id, column.handleInput)}
+                        disabled={!canSubmit || column.loading}
+                        loading={column.loading}
+                        aria-label={`Fetch column ${index + 1}`}
+                      >
+                        Fetch
+                      </Button>
+                      <Text className="last-fetch-text">
+                        {column.lastFetchAt ?? "-"}
+                      </Text>
                     </div>
-                  )}
-                  <Input
-                    placeholder="@channel"
-                    value={column.handleInput}
-                    className="channel-handle-input"
-                    aria-label={`Channel ${index + 1} handle`}
-                    onChange={(event) => {
-                      const nextValue = event.target.value;
-                      setColumn(column.id, (prev) => ({
-                        ...prev,
-                        handleInput: nextValue
-                      }));
-                    }}
-                    onPressEnter={(event) => {
-                      if (!canSubmit || column.loading) {
-                        event.preventDefault();
-                      }
-                    }}
-                  />
-                </div>
+                    <Button
+                      htmlType="button"
+                      onClick={() => removeColumnAt(index)}
+                      disabled={column.loading}
+                      aria-label={`Remove column ${index + 1}`}
+                      className="remove-column-btn"
+                    >
+                      x
+                    </Button>
+                  </div>
 
-                {column.handleInput.length > 0 && !canSubmit ? (
-                  <Text type="danger" className="input-hint">
-                    Use @name
-                  </Text>
-                ) : null}
-              </Form>
-
-              {column.loading && (
-                <Space direction="vertical" className="full-width">
-                  <Text>Loading...</Text>
-                  <Spin />
-                  <Skeleton active paragraph={{ rows: 2 }} />
-                </Space>
-              )}
-
-              {column.error && <Alert type="error" message={column.error} showIcon />}
-
-              {!column.loading && !column.error && column.videos.length === 0 && (
-                <Empty description="No data" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              )}
-
-              {!column.loading && column.videos.length > 0 && (
-                <List
-                  itemLayout="vertical"
-                  dataSource={column.videos}
-                  renderItem={(video) => (
-                    <List.Item key={video.videoId}>
-                      <Space direction="vertical" size="small" className="full-width">
-                        <button
-                          type="button"
-                          className="video-link-btn"
-                          onClick={() => setActiveVideo(video)}
+                  <Form
+                    layout="vertical"
+                    className="full-width"
+                  >
+                    <div className="column-header">
+                      {column.channelThumbnailUrl ? (
+                        <img
+                          src={column.channelThumbnailUrl}
+                          alt={`Channel ${index + 1}`}
+                          className="channel-avatar"
+                          onError={() =>
+                            setColumn(column.id, (prev) => ({
+                              ...prev,
+                              channelThumbnailUrl: ""
+                            }))
+                          }
+                        />
+                      ) : (
+                        <div
+                          className="channel-avatar channel-avatar-placeholder"
+                          aria-label={`Channel ${index + 1} placeholder`}
                         >
-                          <Title level={5} className="video-title">
-                            {video.title}
-                          </Title>
-                        </button>
-                        {video.thumbnailUrl ? (
-                          <button
-                            type="button"
-                            className="video-thumb-btn"
-                            onClick={() => setActiveVideo(video)}
-                          >
-                            <img
-                              src={video.thumbnailUrl}
-                              alt={video.title}
-                              className="video-thumb"
-                            />
-                          </button>
-                        ) : null}
-                        <Text type="secondary">{video.channelTitle}</Text>
-                        <Text className="video-meta">{formatVideoMeta(video)}</Text>
-                      </Space>
-                    </List.Item>
+                          <span />
+                        </div>
+                      )}
+                      <Input
+                        placeholder="@channel"
+                        value={column.handleInput}
+                        className="channel-handle-input"
+                        aria-label={`Channel ${index + 1} handle`}
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          setColumn(column.id, (prev) => ({
+                            ...prev,
+                            handleInput: nextValue
+                          }));
+                        }}
+                        onPressEnter={(event) => {
+                          if (!canSubmit || column.loading) {
+                            event.preventDefault();
+                          }
+                        }}
+                      />
+                    </div>
+
+                    {column.handleInput.length > 0 && !canSubmit ? (
+                      <Text type="danger" className="input-hint">
+                        Use @name
+                      </Text>
+                    ) : null}
+                  </Form>
+
+                  {column.loading && (
+                    <Space direction="vertical" className="full-width">
+                      <Text>Loading...</Text>
+                      <Spin />
+                      <Skeleton active paragraph={{ rows: 2 }} />
+                    </Space>
                   )}
-                />
-              )}
-            </article>
-          );
+
+                  {column.error && <Alert type="error" message={column.error} showIcon />}
+
+                  {!column.loading && !column.error && filteredVideos.length === 0 && (
+                    <Empty description="No data" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  )}
+
+                  {!column.loading && filteredVideos.length > 0 && (
+                    <List
+                      itemLayout="vertical"
+                      dataSource={filteredVideos}
+                      renderItem={(video) => {
+                        const isWatched = watchedVideos[video.videoId] === true;
+                        return (
+                          <List.Item key={video.videoId}>
+                            <Space direction="vertical" size="small" className="full-width">
+                              <button
+                                type="button"
+                                className="video-link-btn"
+                                onClick={() => setActiveVideo(video)}
+                              >
+                                <Title level={5} className="video-title">
+                                  {video.title}
+                                </Title>
+                              </button>
+                              {video.thumbnailUrl ? (
+                                <button
+                                  type="button"
+                                  className="video-thumb-btn"
+                                  onClick={() => setActiveVideo(video)}
+                                >
+                                  <img
+                                    src={video.thumbnailUrl}
+                                    alt={video.title}
+                                    className="video-thumb"
+                                  />
+                                </button>
+                              ) : null}
+                              <Text type="secondary">{video.channelTitle}</Text>
+                              <div className="video-meta-row">
+                                <Text className="video-meta">{formatVideoMeta(video)}</Text>
+                                <Button
+                                  htmlType="button"
+                                  className="video-watch-btn"
+                                  aria-label={`Mark ${video.title} as ${
+                                    isWatched ? "new" : "watched"
+                                  }`}
+                                  onClick={() => toggleWatched(video.videoId)}
+                                >
+                                  {isWatched ? "U" : "W"}
+                                </Button>
+                              </div>
+                            </Space>
+                          </List.Item>
+                        );
+                      }}
+                    />
+                  )}
+                </article>
+              );
             })}
           </section>
           <aside className="add-column-rail">
