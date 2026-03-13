@@ -336,6 +336,24 @@ body {
   min-width: 0;
 }
 
+.column-move-btn.ant-btn {
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-color: var(--amber-soft) !important;
+  color: var(--text) !important;
+  background: #0b0b0d !important;
+}
+
+.column-move-btn.ant-btn > span {
+  line-height: 1;
+}
+
+.column-move-btn.ant-btn[disabled] {
+  opacity: 0.45;
+}
+
 .column-header {
   min-height: 42px;
   margin-bottom: 10px;

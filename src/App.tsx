@@ -1130,6 +1130,29 @@ function App() {
     }));
   };
 
+  const moveColumnById = (columnIdToMove: string, direction: "left" | "right"): void => {
+    if (!activeBoard) {
+      return;
+    }
+    setBoard(activeBoard.id, (board) => {
+      const fromIndex = board.columns.findIndex((column) => column.id === columnIdToMove);
+      if (fromIndex < 0) {
+        return board;
+      }
+      const toIndex = direction === "left" ? fromIndex - 1 : fromIndex + 1;
+      if (toIndex < 0 || toIndex >= board.columns.length) {
+        return board;
+      }
+      const nextColumns = [...board.columns];
+      const [moved] = nextColumns.splice(fromIndex, 1);
+      nextColumns.splice(toIndex, 0, moved);
+      return {
+        ...board,
+        columns: nextColumns
+      };
+    });
+  };
+
   const confirmDeleteColumn = (): void => {
     if (!deletingColumnId) {
       return;
@@ -1641,6 +1664,24 @@ function App() {
                 <article key={column.id} className="channel-column">
                   <div className="column-actions">
                     <div className="column-actions-left">
+                      <Button
+                        htmlType="button"
+                        onClick={() => moveColumnById(column.id, "left")}
+                        disabled={index === 0 || column.loading}
+                        aria-label={`Move column ${index + 1} left`}
+                        className="column-move-btn"
+                      >
+                        {"<"}
+                      </Button>
+                      <Button
+                        htmlType="button"
+                        onClick={() => moveColumnById(column.id, "right")}
+                        disabled={index === columns.length - 1 || column.loading}
+                        aria-label={`Move column ${index + 1} right`}
+                        className="column-move-btn"
+                      >
+                        {">"}
+                      </Button>
                       <Text className="last-fetch-text">
                         {column.lastFetchAt ?? "-"}
                       </Text>
