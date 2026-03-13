@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchLatestVideos, getLatestVideosByHandle, resolveChannelByHandle } from "./youtube";
+import {
+  fetchLatestVideos,
+  fetchViewCountsByVideoIds,
+  getLatestVideosByHandle,
+  getLatestVideosAndChannelByHandle,
+  resolveChannelByHandle
+} from "./youtube";
 
 const originalFetch = global.fetch;
 
@@ -14,136 +20,105 @@ function makeResponse(data: unknown, ok = true, status = 200): Response {
 describe("youtube api client", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    vi.stubEnv("VITE_YOUTUBE_API_KEY", "test-key");
   });
 
-  it("resolves channel id by handle", async () => {
-    global.fetch = vi
+  it("resolves channel id by handle via internal api", async () => {
+    const spy = vi
       .fn()
-      .mockResolvedValueOnce(makeResponse({ items: [{ id: "UC123" }] }))
       .mockResolvedValueOnce(
-        makeResponse({
-          items: [
-            {
-              snippet: {
-                thumbnails: {
-                  high: { url: "https://img.test/channel.jpg" }
-                }
-              }
-            }
-          ]
-        })
-      ) as typeof fetch;
+        makeResponse({ channelId: "UC123", channelThumbnailUrl: "https://img.test/channel.jpg" })
+      );
+    global.fetch = spy as typeof fetch;
 
     const channelId = await resolveChannelByHandle("@testchannel");
     expect(channelId).toBe("UC123");
+    expect(spy).toHaveBeenCalledWith("/api/youtube/resolve?handle=%40testchannel", undefined);
   });
 
-  it("returns exactly 25 videos when requesting latest uploads", async () => {
-    const items = Array.from({ length: 20 }, (_, index) => ({
-      snippet: {
-        title: `Video ${index}`,
-        channelTitle: "Test Channel",
-        publishedAt: "2025-01-01T00:00:00Z",
-        resourceId: { videoId: `video-${index}` },
-        thumbnails: { medium: { url: `https://img.test/${index}.jpg` } }
-      }
+  it("returns exactly 15 videos when requesting by channel id", async () => {
+    const videos = Array.from({ length: 15 }, (_, index) => ({
+      videoId: `video-${index}`,
+      title: `Video ${index}`,
+      publishedAt: "2025-01-01T00:00:00Z",
+      thumbnailUrl: `https://img.test/${index}.jpg`,
+      channelTitle: "Test Channel",
+      videoUrl: `https://www.youtube.com/watch?v=video-${index}`,
+      viewCount: 1000 + index
     }));
 
     global.fetch = vi
       .fn()
-      .mockResolvedValueOnce(
-        makeResponse({
-          items: [
-            {
-              contentDetails: {
-                relatedPlaylists: {
-                  uploads: "UU123"
-                }
-              }
-            }
-          ]
-        })
-      )
-      .mockResolvedValueOnce(makeResponse({ items }))
-      .mockResolvedValueOnce(
-        makeResponse({
-          items: items.map((item, index) => ({
-            id: item.snippet.resourceId.videoId,
-            statistics: { viewCount: String(1000 + index) }
-          }))
-        })
-      ) as typeof fetch;
+      .mockResolvedValueOnce(makeResponse({ videos })) as typeof fetch;
 
-    const videos = await fetchLatestVideos("UC123", 15);
-    expect(videos).toHaveLength(15);
-    expect(videos[0].videoId).toBe("video-0");
-    expect(videos[0].viewCount).toBe(1000);
+    const result = await fetchLatestVideos("UC123", 15);
+    expect(result).toHaveLength(15);
+    expect(result[0].videoId).toBe("video-0");
   });
 
-  it("maps missing fields safely", async () => {
+  it("gets latest videos by handle", async () => {
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce(
-        makeResponse({
-          items: [
-            {
-              contentDetails: {
-                relatedPlaylists: {
-                  uploads: "UU123"
-                }
-              }
-            }
-          ]
-        })
-      )
-      .mockResolvedValueOnce(
-        makeResponse({
-          items: [
-            {
-              snippet: {
-                resourceId: { videoId: "video-1" }
-              }
-            }
-          ]
-        })
-      )
-      .mockResolvedValueOnce(
-        makeResponse({
-          items: [{ id: "video-1", statistics: {} }]
-        })
+        makeResponse({ channelThumbnailUrl: "https://img.test/c.jpg", videos: [{
+          videoId: "v1",
+          title: "Demo",
+          publishedAt: "2026-01-01T00:00:00Z",
+          thumbnailUrl: "",
+          channelTitle: "C",
+          videoUrl: "https://www.youtube.com/watch?v=v1",
+          viewCount: null
+        }] })
       ) as typeof fetch;
 
-    const videos = await fetchLatestVideos("UC123", 15);
-    expect(videos[0]).toMatchObject({
-      videoId: "video-1",
-      title: "Untitled video",
-      thumbnailUrl: ""
-    });
+    const videos = await getLatestVideosByHandle("@demo");
+    expect(videos).toHaveLength(1);
+    expect(videos[0].videoId).toBe("v1");
   });
 
-  it("throws channel not found error", async () => {
+  it("returns channel thumbnail and videos by handle", async () => {
     global.fetch = vi
       .fn()
-      .mockResolvedValueOnce(makeResponse({ items: [] })) as typeof fetch;
+      .mockResolvedValueOnce(
+        makeResponse({ channelThumbnailUrl: "https://img.test/channel.jpg", videos: [] })
+      ) as typeof fetch;
 
-    await expect(resolveChannelByHandle("@missing")).rejects.toThrow(
-      "Channel not found"
+    const result = await getLatestVideosAndChannelByHandle("@test", 25);
+    expect(result.channelThumbnailUrl).toContain("img.test/channel.jpg");
+    expect(result.videos).toEqual([]);
+  });
+
+  it("posts video ids for view-count backfill", async () => {
+    const spy = vi
+      .fn()
+      .mockResolvedValueOnce(makeResponse({ v1: 12, v2: 34 }));
+    global.fetch = spy as typeof fetch;
+
+    const result = await fetchViewCountsByVideoIds(["v1", "v2", "v1"]);
+    expect(result).toEqual({ v1: 12, v2: 34 });
+    expect(spy).toHaveBeenCalledWith(
+      "/api/youtube/view-counts",
+      expect.objectContaining({ method: "POST" })
     );
   });
 
-  it("throws api error for quota/network style failures", async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce(
-      makeResponse(
-        { error: { message: "Quota exceeded" } },
-        false,
-        403
-      )
-    ) as typeof fetch;
+  it("throws api route unavailable error for missing local api", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(makeResponse({}, false, 404)) as typeof fetch;
 
     await expect(getLatestVideosByHandle("@test")).rejects.toThrow(
-      "Quota exceeded"
+      "API route unavailable"
     );
+  });
+
+  it("throws backend error messages", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({ error: "Quota exceeded" }, false, 403)
+      ) as typeof fetch;
+
+    await expect(getLatestVideosByHandle("@test")).rejects.toThrow("Quota exceeded");
   });
 });
 

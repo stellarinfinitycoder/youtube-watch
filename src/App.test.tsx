@@ -3,8 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import * as youtubeApi from "./api/youtube";
 
+const originalFetch = global.fetch;
+
 describe("App", () => {
   beforeEach(() => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({})
+    } as Response) as typeof fetch;
+
     if (typeof window.localStorage.removeItem === "function") {
       window.localStorage.removeItem("youtube-watch:boards:v1");
       window.localStorage.removeItem("youtube-watch:active-board-id:v1");
@@ -13,6 +21,10 @@ describe("App", () => {
       window.localStorage.removeItem("youtube-watch:watched:v1");
       window.localStorage.removeItem("youtube-watch:playback-rate:v1");
     }
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
   });
 
   it("restores saved handles from localStorage", () => {
