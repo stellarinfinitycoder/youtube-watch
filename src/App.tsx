@@ -682,20 +682,21 @@ function App() {
     <main className="app-shell">
       <div className="columns-nav">
         <Button
-          htmlType="button"
-          onClick={() => setIsBulkModalOpen(true)}
-          aria-label="Bulk add channels"
-          className="nav-btn add-channels-btn"
-        >
-          Add Channels
-        </Button>
-        <Button
+          type="primary"
           htmlType="button"
           onClick={fetchAllColumns}
           aria-label="Fetch all channels"
           className="nav-btn"
         >
           Fetch All
+        </Button>
+        <Button
+          htmlType="button"
+          onClick={() => setIsBulkModalOpen(true)}
+          aria-label="Bulk add channels"
+          className="nav-btn add-channels-btn"
+        >
+          Add Channels
         </Button>
         <Select<VideoFilter>
           value={videoFilter}
@@ -842,7 +843,6 @@ function App() {
                   <div className="column-actions">
                     <div className="column-actions-left">
                       <Button
-                        type="primary"
                         htmlType="button"
                         onClick={() => runFetch(column.id, column.handleInput)}
                         disabled={!canSubmit || column.loading}

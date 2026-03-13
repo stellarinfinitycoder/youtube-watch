@@ -45,16 +45,13 @@ body {
 
 .columns-nav {
   width: 100%;
-  margin: 0 0 10px;
+  margin: 0 0 4px;
   padding: 10px;
   display: flex;
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
-  border: 2px solid var(--amber);
-  border-bottom-width: 1px;
   background: linear-gradient(180deg, var(--surface-2), var(--surface-3));
-  box-shadow: inset 0 0 0 1px rgba(255, 143, 31, 0.14);
 }
 
 .columns-nav .nav-btn.ant-btn,
@@ -72,13 +69,13 @@ body {
 }
 
 .video-filter-select .ant-select-selector {
-  border: 1px solid var(--amber) !important;
+  border: 1px solid var(--amber-soft) !important;
   border-radius: 0 !important;
   box-shadow: none !important;
   font-weight: 700;
   font-family: "IBM Plex Mono", "Courier New", monospace;
-  background: var(--amber) !important;
-  color: #18110a !important;
+  background: #0b0b0d !important;
+  color: var(--text) !important;
   padding-inline: 10px 28px !important;
 }
 
@@ -87,12 +84,12 @@ body {
   line-height: 30px !important;
   font-weight: 700;
   font-family: "IBM Plex Mono", "Courier New", monospace;
-  color: #18110a !important;
+  color: var(--text) !important;
   text-transform: uppercase;
 }
 
 .video-filter-select .ant-select-arrow {
-  color: #18110a !important;
+  color: var(--text) !important;
   font-size: 12px;
 }
 
@@ -126,17 +123,38 @@ body {
   padding: 0;
   font-size: 20px;
   line-height: 1;
+  position: relative;
+  text-align: center;
+}
+
+.scroll-btn.ant-btn > span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  line-height: 1;
+  letter-spacing: 0;
+  transform: translateX(2px);
+}
+
+.columns-nav .scroll-btn.ant-btn:nth-of-type(3),
+.columns-nav .scroll-btn.ant-btn:nth-of-type(4),
+.columns-nav .scroll-btn.ant-btn:nth-of-type(5),
+.columns-nav .scroll-btn.ant-btn:nth-of-type(6) {
+  order: 10;
 }
 
 .columns-scroll {
   width: 100%;
   overflow-x: hidden;
   overflow-y: hidden;
-  padding: 10px;
-  border: 2px solid var(--amber);
-  border-top: 0;
+  padding: 10px 0 10px 10px;
+  border: 0;
   background: var(--shell);
-  box-shadow: inset 0 0 0 1px rgba(255, 143, 31, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 143, 31, 0.14);
 }
 
 .columns-layout {
@@ -249,6 +267,24 @@ body {
   background: transparent !important;
 }
 
+.columns-nav .nav-btn.ant-btn {
+  background: #0b0b0d !important;
+  color: var(--text) !important;
+  border-color: var(--amber-soft) !important;
+}
+
+.columns-nav .nav-btn.ant-btn.ant-btn-primary {
+  background: var(--amber) !important;
+  color: #18110a !important;
+  border-color: var(--amber) !important;
+}
+
+.columns-nav .add-channels-btn.ant-btn {
+  background: #0b0b0d !important;
+  color: var(--text) !important;
+  border-color: var(--amber-soft) !important;
+}
+
 .channel-handle-input {
   flex: 1;
 }
@@ -294,8 +330,9 @@ body {
 }
 
 .ant-btn-default {
-  background: var(--amber) !important;
-  color: #18110a !important;
+  background: #0b0b0d !important;
+  color: var(--text) !important;
+  border-color: var(--amber-soft) !important;
 }
 
 .ant-btn-default:hover,
@@ -306,8 +343,9 @@ body {
 }
 
 .ant-btn-primary {
-  background: var(--amber-deep) !important;
-  color: var(--amber) !important;
+  background: var(--amber) !important;
+  color: #18110a !important;
+  border-color: var(--amber) !important;
 }
 
 .ant-btn[disabled] {
