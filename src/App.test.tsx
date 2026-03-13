@@ -204,11 +204,15 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Fetch column 4" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Remove column 4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(screen.getAllByText("-", { selector: ".last-fetch-text" })).toHaveLength(3);
 
     fireEvent.click(screen.getByRole("button", { name: "Remove column 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove column 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove column 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(screen.queryByRole("button", { name: "Fetch column 1" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add column" })).toBeInTheDocument();
 

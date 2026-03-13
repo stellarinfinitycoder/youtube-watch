@@ -686,6 +686,8 @@ function App() {
   );
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [isRenameBoardModalOpen, setIsRenameBoardModalOpen] = useState(false);
+  const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
+  const [deletingColumnId, setDeletingColumnId] = useState<string | null>(null);
   const [renameBoardInput, setRenameBoardInput] = useState("");
   const [isDeleteBoardModalOpen, setIsDeleteBoardModalOpen] = useState(false);
   const [bulkInput, setBulkInput] = useState("");
@@ -705,7 +707,15 @@ function App() {
   const [viewBackfillInFlight, setViewBackfillInFlight] = useState<string[]>([]);
   const activeBoard =
     boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
+  const editingBoard =
+    (editingBoardId
+      ? boards.find((board) => board.id === editingBoardId)
+      : undefined) ?? activeBoard;
   const columns = activeBoard?.columns ?? [];
+  const deletingColumn =
+    (deletingColumnId
+      ? columns.find((column) => column.id === deletingColumnId)
+      : undefined) ?? null;
   const watchedVideos = activeBoard?.watchedVideos ?? {};
   const videoFilter = activeBoard?.videoFilter ?? "new";
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
@@ -946,14 +956,22 @@ function App() {
     }));
   };
 
-  const removeColumnAt = (indexToRemove: number): void => {
+  const removeColumnById = (columnIdToRemove: string): void => {
     if (!activeBoard) {
       return;
     }
     setBoard(activeBoard.id, (board) => ({
       ...board,
-      columns: board.columns.filter((_, index) => index !== indexToRemove)
+      columns: board.columns.filter((column) => column.id !== columnIdToRemove)
     }));
+  };
+
+  const confirmDeleteColumn = (): void => {
+    if (!deletingColumnId) {
+      return;
+    }
+    removeColumnById(deletingColumnId);
+    setDeletingColumnId(null);
   };
 
   const handleBulkAddConfirm = (): void => {
@@ -1095,35 +1113,41 @@ function App() {
     setActiveBoardId(value);
   };
 
-  const openRenameBoardModal = (): void => {
-    if (!activeBoard) {
+  const openRenameBoardModal = (boardId?: string): void => {
+    const targetBoard =
+      (boardId ? boards.find((board) => board.id === boardId) : undefined) ??
+      activeBoard;
+    if (!targetBoard) {
       return;
     }
-    setRenameBoardInput(activeBoard.name);
+    setEditingBoardId(targetBoard.id);
+    setRenameBoardInput(targetBoard.name);
     setIsRenameBoardModalOpen(true);
   };
 
   const confirmRenameBoard = (): void => {
-    if (!activeBoard) {
+    const targetBoardId = editingBoardId ?? activeBoard?.id;
+    if (!targetBoardId) {
       return;
     }
-    const nextName = renameBoardInput.trim();
+    const nextName = renameBoardInput.trim().slice(0, 15);
     if (nextName.length === 0) {
       return;
     }
-    setBoard(activeBoard.id, (board) => ({
+    setBoard(targetBoardId, (board) => ({
       ...board,
       name: nextName
     }));
+    setEditingBoardId(null);
     setIsRenameBoardModalOpen(false);
   };
 
   const confirmDeleteBoard = (): void => {
-    if (!activeBoard) {
+    const removingBoardId = editingBoardId ?? activeBoard?.id;
+    if (!removingBoardId) {
       return;
     }
 
-    const removingBoardId = activeBoard.id;
     let nextActiveBoardId = "";
     setBoards((previous) => {
       const filtered = previous.filter((board) => board.id !== removingBoardId);
@@ -1139,6 +1163,7 @@ function App() {
       return [replacement];
     });
     setActiveBoardId(nextActiveBoardId);
+    setEditingBoardId(null);
     setIsDeleteBoardModalOpen(false);
   };
 
@@ -1211,17 +1236,41 @@ function App() {
           onChange={handleBoardSelectChange}
           aria-label="Board selector"
           className="video-filter-select board-select"
-          options={[
-            ...boards.map((board) => ({
-              value: board.id,
-              label: board.name.toUpperCase()
-            })),
-            {
-              value: NEW_BOARD_OPTION_VALUE,
-              label: "NEW"
-            }
-          ]}
-        />
+          optionLabelProp="title"
+        >
+          {boards.map((board) => (
+            <Select.Option
+              key={board.id}
+              value={board.id}
+              title={board.name.toUpperCase()}
+            >
+              <div className="board-option-row">
+                <span>{board.name.toUpperCase()}</span>
+                <button
+                  type="button"
+                  className="board-option-edit-btn"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    openRenameBoardModal(board.id);
+                  }}
+                >
+                  E
+                </button>
+              </div>
+            </Select.Option>
+          ))}
+          <Select.Option
+            value={NEW_BOARD_OPTION_VALUE}
+            title="NEW"
+          >
+            NEW
+          </Select.Option>
+        </Select>
         <Button
           type="primary"
           htmlType="button"
@@ -1301,15 +1350,6 @@ function App() {
           className="nav-btn scroll-btn"
         >
           {">>"}
-        </Button>
-        <Button
-          htmlType="button"
-          className="board-name-btn"
-          aria-label="Edit board"
-          onClick={openRenameBoardModal}
-          disabled={!activeBoard}
-        >
-          {activeBoard?.name.toUpperCase() ?? "BOARD"}
         </Button>
       </div>
 
@@ -1418,7 +1458,7 @@ function App() {
                     </div>
                     <Button
                       htmlType="button"
-                      onClick={() => removeColumnAt(index)}
+                      onClick={() => setDeletingColumnId(column.id)}
                       disabled={column.loading}
                       aria-label={`Remove column ${index + 1}`}
                       className="remove-column-btn"
@@ -1600,7 +1640,10 @@ function App() {
       <Modal
         title="Edit Board"
         open={isRenameBoardModalOpen}
-        onCancel={() => setIsRenameBoardModalOpen(false)}
+        onCancel={() => {
+          setEditingBoardId(null);
+          setIsRenameBoardModalOpen(false);
+        }}
         onOk={confirmRenameBoard}
         okText="Save"
         cancelText="Cancel"
@@ -1615,7 +1658,7 @@ function App() {
                 setIsRenameBoardModalOpen(false);
                 setIsDeleteBoardModalOpen(true);
               }}
-              disabled={!activeBoard}
+              disabled={!editingBoard}
             >
               Delete
             </Button>
@@ -1634,7 +1677,7 @@ function App() {
             confirmRenameBoard();
           }}
           placeholder="Board name"
-          maxLength={40}
+          maxLength={15}
           autoFocus
         />
       </Modal>
@@ -1642,15 +1685,33 @@ function App() {
       <Modal
         title="Delete Board"
         open={isDeleteBoardModalOpen}
-        onCancel={() => setIsDeleteBoardModalOpen(false)}
+        onCancel={() => {
+          setEditingBoardId(null);
+          setIsDeleteBoardModalOpen(false);
+        }}
         onOk={confirmDeleteBoard}
         okText="Delete"
-        okButtonProps={{ danger: true }}
+        okButtonProps={{ danger: true, className: "delete-confirm-ok" }}
+        width={360}
+        className="delete-board-modal"
+      >
+        <Text>
+          Delete board {editingBoard ? `"${editingBoard.name}"` : ""}?
+        </Text>
+      </Modal>
+
+      <Modal
+        title="Delete Channel"
+        open={deletingColumnId !== null}
+        onCancel={() => setDeletingColumnId(null)}
+        onOk={confirmDeleteColumn}
+        okText="Delete"
+        okButtonProps={{ danger: true, className: "delete-confirm-ok" }}
         width={360}
       >
         <Text>
-          Delete board {activeBoard ? `"${activeBoard.name}"` : ""}? This cannot
-          be undone.
+          Delete channel
+          {deletingColumn?.handleInput ? ` "${deletingColumn.handleInput}"` : ""}?
         </Text>
       </Modal>
     </main>
