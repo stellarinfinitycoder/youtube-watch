@@ -537,10 +537,21 @@ body {
 
 .speed-controls {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
   width: 100%;
+}
+
+.speed-controls-left,
+.speed-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.speed-controls-right {
+  justify-content: flex-end;
 }
 
 .speed-btn.ant-btn {
@@ -549,6 +560,10 @@ body {
   background: #0b0b0d !important;
   color: var(--text) !important;
   border-color: var(--amber-soft) !important;
+}
+
+.modal-watch-btn.ant-btn {
+  margin-left: 0;
 }
 
 .ant-modal .ant-modal-content {

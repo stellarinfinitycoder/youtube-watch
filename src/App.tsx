@@ -754,6 +754,9 @@ function App() {
       ? columns.find((column) => column.id === deletingColumnId)
       : undefined) ?? null;
   const watchedVideos = activeBoard?.watchedVideos ?? {};
+  const isActiveVideoWatched = activeVideo
+    ? watchedVideos[activeVideo.videoId] === true
+    : false;
   const videoFilter = activeBoard?.videoFilter ?? "new";
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
 
@@ -1565,18 +1568,38 @@ function App() {
               />
             </div>
             <div className="speed-controls">
-              {availablePlaybackRates.map((rate) => (
+              <div className="speed-controls-left">
                 <Button
-                  key={rate}
                   htmlType="button"
-                  className="speed-btn"
-                  type={playbackRate === rate ? "primary" : "default"}
-                  onClick={() => handlePlaybackRateClick(rate)}
-                  disabled={!isPlayerReady}
+                  className="video-watch-btn modal-watch-btn"
+                  aria-label={`Mark ${activeVideo.title} as ${
+                    isActiveVideoWatched ? "new" : "watched"
+                  }`}
+                  onClick={() => {
+                    toggleWatched(activeVideo.videoId);
+                    setActiveVideo(null);
+                    setIsPlayerReady(false);
+                    playerReadyRef.current = false;
+                    setUseIframeFallback(false);
+                  }}
                 >
-                  {rate}x
+                  {isActiveVideoWatched ? "U" : "W"}
                 </Button>
-              ))}
+              </div>
+              <div className="speed-controls-right">
+                {availablePlaybackRates.map((rate) => (
+                  <Button
+                    key={rate}
+                    htmlType="button"
+                    className="speed-btn"
+                    type={playbackRate === rate ? "primary" : "default"}
+                    onClick={() => handlePlaybackRateClick(rate)}
+                    disabled={!isPlayerReady}
+                  >
+                    {rate}x
+                  </Button>
+                ))}
+              </div>
             </div>
           </Space>
         ) : null}
