@@ -64,6 +64,10 @@ body {
   min-width: 110px;
 }
 
+.playback-speed-select {
+  min-width: 88px;
+}
+
 .backup-file-input {
   display: none;
 }

@@ -769,6 +769,19 @@ function App() {
     }
   };
 
+  const handlePreferredPlaybackRateChange = (rate: number): void => {
+    setPreferredPlaybackRate(rate);
+    setPlaybackRate(rate);
+    if (!playerRef.current) {
+      return;
+    }
+    try {
+      playerRef.current.setPlaybackRate(rate);
+    } catch {
+      // Ignore unsupported playback-rate calls.
+    }
+  };
+
   const toggleWatched = (videoId: string): void => {
     setWatchedVideos((previous) => {
       const next = { ...previous };
@@ -880,6 +893,18 @@ function App() {
             { value: "all", label: "ALL" },
             { value: "new", label: "NEW" },
             { value: "watched", label: "WATCHED" }
+          ]}
+        />
+        <Select<number>
+          value={preferredPlaybackRate}
+          onChange={handlePreferredPlaybackRateChange}
+          aria-label="Default playback speed"
+          className="video-filter-select playback-speed-select"
+          options={[
+            { value: 0.5, label: "0.5X" },
+            { value: 1, label: "1X" },
+            { value: 1.5, label: "1.5X" },
+            { value: 2, label: "2X" }
           ]}
         />
         <Button
