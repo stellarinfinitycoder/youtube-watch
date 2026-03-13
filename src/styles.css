@@ -64,8 +64,29 @@ body {
   min-width: 110px;
 }
 
+.board-select {
+  min-width: 156px;
+}
+
 .playback-speed-select {
   min-width: 88px;
+}
+
+.board-name-btn.ant-btn {
+  margin-left: auto;
+  height: 32px;
+  padding: 0 12px;
+  background: transparent !important;
+  color: var(--amber) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  text-transform: uppercase;
+}
+
+.board-name-btn.ant-btn:hover,
+.board-name-btn.ant-btn:focus {
+  background: transparent !important;
+  color: var(--text-strong) !important;
 }
 
 .backup-file-input {
@@ -549,6 +570,26 @@ body {
   background: #0b0b0d !important;
   color: var(--text) !important;
   border-color: var(--amber-soft) !important;
+}
+
+.board-edit-footer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.board-delete-btn.ant-btn.ant-btn-dangerous {
+  background: transparent !important;
+  border-color: var(--red) !important;
+  color: var(--red) !important;
+}
+
+.board-delete-btn.ant-btn.ant-btn-dangerous:hover,
+.board-delete-btn.ant-btn.ant-btn-dangerous:focus {
+  background: rgba(255, 92, 92, 0.1) !important;
+  border-color: var(--red) !important;
+  color: var(--red) !important;
 }
 
 .video-modal-wrap {

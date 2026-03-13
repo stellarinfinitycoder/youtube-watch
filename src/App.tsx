@@ -25,10 +25,12 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 25;
 const DEFAULT_COLUMN_COUNT = 3;
-const HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
-const COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
-const WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
-const PLAYBACK_RATE_STORAGE_KEY = "youtube-watch:playback-rate:v1";
+const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
+const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
+const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
+const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
+const LEGACY_WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
+const LEGACY_PLAYBACK_RATE_STORAGE_KEY = "youtube-watch:playback-rate:v1";
 const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 
 type VideoFilter = "all" | "new" | "watched";
@@ -116,17 +118,39 @@ type PersistedColumnState = {
   lastFetchAt: string | null;
 };
 
-type BackupPayload = {
-  version: 1;
-  exportedAt: string;
+type BoardState = {
+  id: string;
+  name: string;
+  columns: ColumnState[];
+  watchedVideos: Record<string, boolean>;
+  videoFilter: VideoFilter;
+  defaultPlaybackRate: number;
+};
+
+type PersistedBoardState = {
+  id: string;
+  name: string;
   columns: PersistedColumnState[];
   watchedVideos: Record<string, boolean>;
   videoFilter: VideoFilter;
   defaultPlaybackRate: number;
 };
 
+type BackupPayload = {
+  version: 2;
+  exportedAt: string;
+  boards: PersistedBoardState[];
+  activeBoardId: string;
+};
+
+const NEW_BOARD_OPTION_VALUE = "__new__";
+
 function createColumnId(): string {
   return `col-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createBoardId(): string {
+  return `board-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function createColumnState(overrides?: Partial<ColumnState>): ColumnState {
@@ -143,7 +167,7 @@ function createColumnState(overrides?: Partial<ColumnState>): ColumnState {
   };
 }
 
-function readStoredHandles(): string[] {
+function readLegacyStoredHandles(): string[] {
   if (typeof window === "undefined") {
     return [];
   }
@@ -154,7 +178,7 @@ function readStoredHandles(): string[] {
       return [];
     }
 
-    const raw = storage.getItem(HANDLE_STORAGE_KEY);
+    const raw = storage.getItem(LEGACY_HANDLE_STORAGE_KEY);
     if (!raw) {
       return [];
     }
@@ -168,7 +192,7 @@ function readStoredHandles(): string[] {
   }
 }
 
-function readStoredWatchedVideos(): Record<string, boolean> {
+function readLegacyStoredWatchedVideos(): Record<string, boolean> {
   if (typeof window === "undefined") {
     return {};
   }
@@ -179,7 +203,7 @@ function readStoredWatchedVideos(): Record<string, boolean> {
       return {};
     }
 
-    const raw = storage.getItem(WATCHED_STORAGE_KEY);
+    const raw = storage.getItem(LEGACY_WATCHED_STORAGE_KEY);
     if (!raw) {
       return {};
     }
@@ -199,7 +223,7 @@ function readStoredWatchedVideos(): Record<string, boolean> {
   }
 }
 
-function readStoredPlaybackRate(): number {
+function readLegacyStoredPlaybackRate(): number {
   if (typeof window === "undefined") {
     return 1.5;
   }
@@ -210,7 +234,7 @@ function readStoredPlaybackRate(): number {
       return 1.5;
     }
 
-    const raw = storage.getItem(PLAYBACK_RATE_STORAGE_KEY);
+    const raw = storage.getItem(LEGACY_PLAYBACK_RATE_STORAGE_KEY);
     if (!raw) {
       return 1.5;
     }
@@ -315,6 +339,8 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
   const candidate = raw as {
     version?: unknown;
     exportedAt?: unknown;
+    boards?: unknown;
+    activeBoardId?: unknown;
     columns?: unknown;
     watchedVideos?: unknown;
     videoFilter?: unknown;
@@ -322,38 +348,67 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
   };
 
   if (
-    candidate.version !== 1 ||
-    typeof candidate.exportedAt !== "string" ||
-    !Array.isArray(candidate.columns)
+    candidate.version === 2 &&
+    typeof candidate.exportedAt === "string" &&
+    Array.isArray(candidate.boards)
   ) {
-    return null;
+    const boards = candidate.boards
+      .map((item) => sanitizePersistedBoard(item))
+      .filter((item): item is PersistedBoardState => item !== null);
+    if (boards.length === 0) {
+      return null;
+    }
+    const activeBoardId =
+      typeof candidate.activeBoardId === "string" &&
+      boards.some((board) => board.id === candidate.activeBoardId)
+        ? candidate.activeBoardId
+        : boards[0].id;
+    return {
+      version: 2,
+      exportedAt: candidate.exportedAt,
+      boards,
+      activeBoardId
+    };
   }
 
-  const columns = candidate.columns
-    .map((item) => sanitizePersistedColumn(item))
-    .filter((item): item is PersistedColumnState => item !== null);
+  if (
+    candidate.version === 1 &&
+    typeof candidate.exportedAt === "string" &&
+    Array.isArray(candidate.columns)
+  ) {
+    const columns = candidate.columns
+      .map((item) => sanitizePersistedColumn(item))
+      .filter((item): item is PersistedColumnState => item !== null);
+    const board: PersistedBoardState = {
+      id: createBoardId(),
+      name: "BOARD 1",
+      columns,
+      watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
+      videoFilter:
+        candidate.videoFilter === "all" ||
+        candidate.videoFilter === "new" ||
+        candidate.videoFilter === "watched"
+          ? candidate.videoFilter
+          : "new",
+      defaultPlaybackRate:
+        typeof candidate.defaultPlaybackRate === "number" &&
+        Number.isFinite(candidate.defaultPlaybackRate) &&
+        candidate.defaultPlaybackRate > 0
+          ? candidate.defaultPlaybackRate
+          : 1.5
+    };
+    return {
+      version: 2,
+      exportedAt: candidate.exportedAt,
+      boards: [board],
+      activeBoardId: board.id
+    };
+  }
 
-  return {
-    version: 1,
-    exportedAt: candidate.exportedAt,
-    columns,
-    watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
-    videoFilter:
-      candidate.videoFilter === "all" ||
-      candidate.videoFilter === "new" ||
-      candidate.videoFilter === "watched"
-        ? candidate.videoFilter
-        : "new",
-    defaultPlaybackRate:
-      typeof candidate.defaultPlaybackRate === "number" &&
-      Number.isFinite(candidate.defaultPlaybackRate) &&
-      candidate.defaultPlaybackRate > 0
-        ? candidate.defaultPlaybackRate
-        : 1.5
-  };
+  return null;
 }
 
-function readStoredColumns(): PersistedColumnState[] {
+function readLegacyStoredColumns(): PersistedColumnState[] {
   if (typeof window === "undefined") {
     return [];
   }
@@ -364,7 +419,7 @@ function readStoredColumns(): PersistedColumnState[] {
       return [];
     }
 
-    const raw = storage.getItem(COLUMNS_STORAGE_KEY);
+    const raw = storage.getItem(LEGACY_COLUMNS_STORAGE_KEY);
     if (!raw) {
       return [];
     }
@@ -382,7 +437,7 @@ function readStoredColumns(): PersistedColumnState[] {
   }
 }
 
-function hasStoredColumnsState(): boolean {
+function hasLegacyStoredColumnsState(): boolean {
   if (typeof window === "undefined") {
     return false;
   }
@@ -392,10 +447,193 @@ function hasStoredColumnsState(): boolean {
     if (!storage || typeof storage.getItem !== "function") {
       return false;
     }
-    return storage.getItem(COLUMNS_STORAGE_KEY) !== null;
+    return storage.getItem(LEGACY_COLUMNS_STORAGE_KEY) !== null;
   } catch {
     return false;
   }
+}
+
+function createBoardState(name: string, overrides?: Partial<BoardState>): BoardState {
+  return {
+    id: createBoardId(),
+    name,
+    columns: Array.from({ length: DEFAULT_COLUMN_COUNT }, () => createColumnState()),
+    watchedVideos: {},
+    videoFilter: "new",
+    defaultPlaybackRate: 1.5,
+    ...overrides
+  };
+}
+
+function getNextBoardName(boards: BoardState[]): string {
+  let index = 1;
+  while (boards.some((board) => board.name === `BOARD ${index}`)) {
+    index += 1;
+  }
+  return `BOARD ${index}`;
+}
+
+function toPersistedColumns(columns: ColumnState[]): PersistedColumnState[] {
+  return columns.map((column) => ({
+    id: column.id,
+    handleInput: column.handleInput,
+    currentHandle: column.currentHandle,
+    channelThumbnailUrl: column.channelThumbnailUrl,
+    videos: column.videos,
+    lastFetchAt: column.lastFetchAt
+  }));
+}
+
+function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const candidate = raw as {
+    id?: unknown;
+    name?: unknown;
+    columns?: unknown;
+    watchedVideos?: unknown;
+    videoFilter?: unknown;
+    defaultPlaybackRate?: unknown;
+  };
+
+  if (
+    typeof candidate.id !== "string" ||
+    typeof candidate.name !== "string" ||
+    !Array.isArray(candidate.columns)
+  ) {
+    return null;
+  }
+
+  const columns = candidate.columns
+    .map((item) => sanitizePersistedColumn(item))
+    .filter((item): item is PersistedColumnState => item !== null);
+
+  return {
+    id: candidate.id,
+    name: candidate.name,
+    columns,
+    watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
+    videoFilter:
+      candidate.videoFilter === "all" ||
+      candidate.videoFilter === "new" ||
+      candidate.videoFilter === "watched"
+        ? candidate.videoFilter
+        : "new",
+    defaultPlaybackRate:
+      typeof candidate.defaultPlaybackRate === "number" &&
+      Number.isFinite(candidate.defaultPlaybackRate) &&
+      candidate.defaultPlaybackRate > 0
+        ? candidate.defaultPlaybackRate
+        : 1.5
+  };
+}
+
+function fromPersistedBoard(board: PersistedBoardState): BoardState {
+  return createBoardState(board.name, {
+    id: board.id,
+    columns: board.columns.map((column) =>
+      createColumnState({
+        id: column.id,
+        handleInput: column.handleInput,
+        currentHandle: column.currentHandle,
+        channelThumbnailUrl: column.channelThumbnailUrl,
+        videos: column.videos,
+        lastFetchAt: column.lastFetchAt
+      })
+    ),
+    watchedVideos: board.watchedVideos,
+    videoFilter: board.videoFilter,
+    defaultPlaybackRate: board.defaultPlaybackRate
+  });
+}
+
+function readStoredBoards(): BoardState[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.getItem !== "function") {
+      return [];
+    }
+
+    const raw = storage.getItem(BOARDS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((item) => sanitizePersistedBoard(item))
+      .filter((item): item is PersistedBoardState => item !== null)
+      .map((board) => fromPersistedBoard(board));
+  } catch {
+    return [];
+  }
+}
+
+function readStoredActiveBoardId(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.getItem !== "function") {
+      return null;
+    }
+    const raw = storage.getItem(ACTIVE_BOARD_ID_STORAGE_KEY);
+    return typeof raw === "string" && raw.length > 0 ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string } {
+  const storedBoards = readStoredBoards();
+  if (storedBoards.length > 0) {
+    const storedActiveBoardId = readStoredActiveBoardId();
+    const activeBoardId =
+      storedActiveBoardId &&
+      storedBoards.some((board) => board.id === storedActiveBoardId)
+        ? storedActiveBoardId
+        : storedBoards[0].id;
+    return { boards: storedBoards, activeBoardId };
+  }
+
+  const legacyColumns = readLegacyStoredColumns();
+  const legacyColumnsExists = hasLegacyStoredColumnsState();
+  const legacyHandles = readLegacyStoredHandles();
+  const legacyWatchedVideos = readLegacyStoredWatchedVideos();
+  const legacyPlaybackRate = readLegacyStoredPlaybackRate();
+  const resolvedCount = legacyColumnsExists
+    ? legacyColumns.length
+    : Math.max(DEFAULT_COLUMN_COUNT, legacyHandles.length);
+
+  const board = createBoardState("BOARD 1", {
+    columns: Array.from({ length: resolvedCount }, (_, index) =>
+      createColumnState({
+        id: legacyColumns[index]?.id ?? createColumnId(),
+        handleInput: legacyColumns[index]?.handleInput ?? legacyHandles[index] ?? "",
+        currentHandle: legacyColumns[index]?.currentHandle ?? "",
+        channelThumbnailUrl: legacyColumns[index]?.channelThumbnailUrl ?? "",
+        videos: legacyColumns[index]?.videos ?? [],
+        lastFetchAt: legacyColumns[index]?.lastFetchAt ?? null
+      })
+    ),
+    watchedVideos: legacyWatchedVideos,
+    videoFilter: "new",
+    defaultPlaybackRate: legacyPlaybackRate
+  });
+
+  return { boards: [board], activeBoardId: board.id };
 }
 
 function formatViewCount(viewCount: number | null): string {
@@ -441,15 +679,18 @@ function App() {
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerReadyRef = useRef(false);
   const [playerHostNode, setPlayerHostNode] = useState<HTMLDivElement | null>(null);
+  const initialBoardsState = getInitialBoardsState();
+  const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
+  const [activeBoardId, setActiveBoardId] = useState<string>(
+    initialBoardsState.activeBoardId
+  );
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isRenameBoardModalOpen, setIsRenameBoardModalOpen] = useState(false);
+  const [renameBoardInput, setRenameBoardInput] = useState("");
+  const [isDeleteBoardModalOpen, setIsDeleteBoardModalOpen] = useState(false);
   const [bulkInput, setBulkInput] = useState("");
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
-  const [preferredPlaybackRate, setPreferredPlaybackRate] = useState<number>(() =>
-    readStoredPlaybackRate()
-  );
-  const [playbackRate, setPlaybackRate] = useState<number>(() =>
-    readStoredPlaybackRate()
-  );
+  const [playbackRate, setPlaybackRate] = useState<number>(1.5);
   const [availablePlaybackRates, setAvailablePlaybackRates] = useState<number[]>([
     0.5,
     1,
@@ -458,32 +699,29 @@ function App() {
   ]);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [useIframeFallback, setUseIframeFallback] = useState(false);
-  const [videoFilter, setVideoFilter] = useState<VideoFilter>("new");
-  const [watchedVideos, setWatchedVideos] = useState<Record<string, boolean>>(() =>
-    readStoredWatchedVideos()
-  );
   const [pendingBulkFetch, setPendingBulkFetch] = useState<
-    Array<{ id: string; handle: string }>
+    Array<{ boardId: string; id: string; handle: string }>
   >([]);
-  const [columns, setColumns] = useState<ColumnState[]>(() => {
-    const storedColumns = readStoredColumns();
-    const storedColumnsExists = hasStoredColumnsState();
-    const storedHandles = readStoredHandles();
-    const resolvedCount = storedColumnsExists
-      ? storedColumns.length
-      : Math.max(DEFAULT_COLUMN_COUNT, storedHandles.length);
-    return Array.from({ length: resolvedCount }, (_, index) =>
-      createColumnState({
-        id: storedColumns[index]?.id ?? createColumnId(),
-        handleInput: storedColumns[index]?.handleInput ?? storedHandles[index] ?? "",
-        currentHandle: storedColumns[index]?.currentHandle ?? "",
-        channelThumbnailUrl: storedColumns[index]?.channelThumbnailUrl ?? "",
-        videos: storedColumns[index]?.videos ?? [],
-        lastFetchAt: storedColumns[index]?.lastFetchAt ?? null
-      })
-    );
-  });
   const [viewBackfillInFlight, setViewBackfillInFlight] = useState<string[]>([]);
+  const activeBoard =
+    boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
+  const columns = activeBoard?.columns ?? [];
+  const watchedVideos = activeBoard?.watchedVideos ?? {};
+  const videoFilter = activeBoard?.videoFilter ?? "new";
+  const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
+
+  useEffect(() => {
+    if (boards.length === 0) {
+      return;
+    }
+    if (!boards.some((board) => board.id === activeBoardId)) {
+      setActiveBoardId(boards[0].id);
+    }
+  }, [activeBoardId, boards]);
+
+  useEffect(() => {
+    setPlaybackRate(preferredPlaybackRate);
+  }, [preferredPlaybackRate]);
 
   useEffect(() => {
     try {
@@ -492,57 +730,44 @@ function App() {
         return;
       }
 
-      const handles = columns.map((column) => column.handleInput);
-      storage.setItem(HANDLE_STORAGE_KEY, JSON.stringify(handles));
-      const persistedColumns: PersistedColumnState[] = columns.map((column) => ({
-        id: column.id,
-        handleInput: column.handleInput,
-        currentHandle: column.currentHandle,
-        channelThumbnailUrl: column.channelThumbnailUrl,
-        videos: column.videos,
-        lastFetchAt: column.lastFetchAt
+      const persistedBoards: PersistedBoardState[] = boards.map((board) => ({
+        id: board.id,
+        name: board.name,
+        columns: toPersistedColumns(board.columns),
+        watchedVideos: board.watchedVideos,
+        videoFilter: board.videoFilter,
+        defaultPlaybackRate: board.defaultPlaybackRate
       }));
-      storage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify(persistedColumns));
+      storage.setItem(BOARDS_STORAGE_KEY, JSON.stringify(persistedBoards));
+      storage.setItem(ACTIVE_BOARD_ID_STORAGE_KEY, activeBoardId);
     } catch {
       // Ignore write failures (private mode / restricted environments).
     }
-  }, [columns]);
+  }, [activeBoardId, boards]);
 
   useEffect(() => {
-    try {
-      const storage = window.localStorage;
-      if (!storage || typeof storage.setItem !== "function") {
-        return;
-      }
-
-      storage.setItem(WATCHED_STORAGE_KEY, JSON.stringify(watchedVideos));
-      storage.setItem(
-        PLAYBACK_RATE_STORAGE_KEY,
-        String(preferredPlaybackRate)
-      );
-    } catch {
-      // Ignore write failures (private mode / restricted environments).
+    if (!activeBoard) {
+      return;
     }
-  }, [preferredPlaybackRate, watchedVideos]);
 
-  useEffect(() => {
     columns.forEach((column) => {
       const missingViewsIds = column.videos
         .filter((video) => video.viewCount === null)
         .map((video) => video.videoId);
+      const backfillKey = `${activeBoard.id}:${column.id}`;
 
       if (missingViewsIds.length === 0) {
         return;
       }
 
-      if (viewBackfillInFlight.includes(column.id)) {
+      if (viewBackfillInFlight.includes(backfillKey)) {
         return;
       }
 
-      setViewBackfillInFlight((prev) => [...prev, column.id]);
+      setViewBackfillInFlight((prev) => [...prev, backfillKey]);
       fetchViewCountsByVideoIds(missingViewsIds)
         .then((viewCounts) => {
-          setColumn(column.id, (prev) => ({
+          setColumn(activeBoard.id, column.id, (prev) => ({
             ...prev,
             videos: prev.videos.map((video) => ({
               ...video,
@@ -556,11 +781,11 @@ function App() {
         })
         .finally(() => {
           setViewBackfillInFlight((prev) =>
-            prev.filter((item) => item !== column.id)
+            prev.filter((item) => item !== backfillKey)
           );
         });
     });
-  }, [columns, viewBackfillInFlight]);
+  }, [activeBoard, columns, viewBackfillInFlight]);
 
   useEffect(() => {
     if (pendingBulkFetch.length === 0) {
@@ -568,7 +793,7 @@ function App() {
     }
 
     pendingBulkFetch.forEach((target) => {
-      runFetch(target.id, target.handle);
+      runFetch(target.boardId, target.id, target.handle);
     });
     setPendingBulkFetch([]);
   }, [pendingBulkFetch]);
@@ -656,25 +881,42 @@ function App() {
     setPlayerHostNode(node);
   };
 
-  const setColumn = (
-    columnId: string,
-    updater: (state: ColumnState) => ColumnState
+  const setBoard = (
+    boardId: string,
+    updater: (state: BoardState) => BoardState
   ) => {
-    setColumns((previous) =>
-      previous.map((column) =>
-        column.id === columnId ? updater(column) : column
+    setBoards((previous) =>
+      previous.map((board) =>
+        board.id === boardId ? updater(board) : board
       )
     );
   };
 
-  const runFetch = async (columnId: string, handle: string): Promise<void> => {
-    setColumn(columnId, (prev) => ({ ...prev, loading: true, error: null }));
+  const setColumn = (
+    boardId: string,
+    columnId: string,
+    updater: (state: ColumnState) => ColumnState
+  ) => {
+    setBoard(boardId, (board) => ({
+      ...board,
+      columns: board.columns.map((column) =>
+        column.id === columnId ? updater(column) : column
+      )
+    }));
+  };
+
+  const runFetch = async (
+    boardId: string,
+    columnId: string,
+    handle: string
+  ): Promise<void> => {
+    setColumn(boardId, columnId, (prev) => ({ ...prev, loading: true, error: null }));
 
     try {
       const normalized = normalizeHandle(handle);
       const { videos, channelThumbnailUrl } =
         await getLatestVideosAndChannelByHandle(normalized, DEFAULT_LIMIT);
-      setColumn(columnId, (prev) => ({
+      setColumn(boardId, columnId, (prev) => ({
         ...prev,
         loading: false,
         error: null,
@@ -686,21 +928,38 @@ function App() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to fetch videos.";
-      setColumn(columnId, (prev) => ({ ...prev, loading: false, error: message }));
+      setColumn(boardId, columnId, (prev) => ({
+        ...prev,
+        loading: false,
+        error: message
+      }));
     }
   };
 
   const addColumn = (): void => {
-    setColumns((previous) => [...previous, createColumnState()]);
+    if (!activeBoard) {
+      return;
+    }
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      columns: [...board.columns, createColumnState()]
+    }));
   };
 
   const removeColumnAt = (indexToRemove: number): void => {
-    setColumns((previous) =>
-      previous.filter((_, index) => index !== indexToRemove)
-    );
+    if (!activeBoard) {
+      return;
+    }
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      columns: board.columns.filter((_, index) => index !== indexToRemove)
+    }));
   };
 
   const handleBulkAddConfirm = (): void => {
+    if (!activeBoard) {
+      return;
+    }
     const handles = parseBulkHandles(bulkInput);
     if (handles.length === 0) {
       setIsBulkModalOpen(false);
@@ -711,20 +970,29 @@ function App() {
     const created = handles.map((handle) =>
       createColumnState({ handleInput: handle })
     );
-    setColumns((previous) => [
-      ...previous,
-      ...created
-    ]);
-    setPendingBulkFetch(created.map((column) => ({ id: column.id, handle: column.handleInput })));
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      columns: [...board.columns, ...created]
+    }));
+    setPendingBulkFetch(
+      created.map((column) => ({
+        boardId: activeBoard.id,
+        id: column.id,
+        handle: column.handleInput
+      }))
+    );
     setIsBulkModalOpen(false);
     setBulkInput("");
   };
 
   const fetchAllColumns = (): void => {
+    if (!activeBoard) {
+      return;
+    }
     columns.forEach((column) => {
       try {
         normalizeHandle(column.handleInput);
-        runFetch(column.id, column.handleInput);
+        runFetch(activeBoard.id, column.id, column.handleInput);
       } catch {
         // Skip invalid or empty handles.
       }
@@ -757,8 +1025,14 @@ function App() {
   };
 
   const handlePlaybackRateClick = (rate: number): void => {
+    if (!activeBoard) {
+      return;
+    }
     setPlaybackRate(rate);
-    setPreferredPlaybackRate(rate);
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      defaultPlaybackRate: rate
+    }));
     if (!playerRef.current) {
       return;
     }
@@ -770,8 +1044,14 @@ function App() {
   };
 
   const handlePreferredPlaybackRateChange = (rate: number): void => {
-    setPreferredPlaybackRate(rate);
+    if (!activeBoard) {
+      return;
+    }
     setPlaybackRate(rate);
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      defaultPlaybackRate: rate
+    }));
     if (!playerRef.current) {
       return;
     }
@@ -783,32 +1063,98 @@ function App() {
   };
 
   const toggleWatched = (videoId: string): void => {
-    setWatchedVideos((previous) => {
-      const next = { ...previous };
+    if (!activeBoard) {
+      return;
+    }
+    setBoard(activeBoard.id, (board) => {
+      const next = { ...board.watchedVideos };
       if (next[videoId]) {
         delete next[videoId];
       } else {
         next[videoId] = true;
       }
-      return next;
+      return {
+        ...board,
+        watchedVideos: next
+      };
     });
+  };
+
+  const createBoard = (): string => {
+    const board = createBoardState(getNextBoardName(boards));
+    setBoards((previous) => [...previous, board]);
+    setActiveBoardId(board.id);
+    return board.id;
+  };
+
+  const handleBoardSelectChange = (value: string): void => {
+    if (value === NEW_BOARD_OPTION_VALUE) {
+      createBoard();
+      return;
+    }
+    setActiveBoardId(value);
+  };
+
+  const openRenameBoardModal = (): void => {
+    if (!activeBoard) {
+      return;
+    }
+    setRenameBoardInput(activeBoard.name);
+    setIsRenameBoardModalOpen(true);
+  };
+
+  const confirmRenameBoard = (): void => {
+    if (!activeBoard) {
+      return;
+    }
+    const nextName = renameBoardInput.trim();
+    if (nextName.length === 0) {
+      return;
+    }
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      name: nextName
+    }));
+    setIsRenameBoardModalOpen(false);
+  };
+
+  const confirmDeleteBoard = (): void => {
+    if (!activeBoard) {
+      return;
+    }
+
+    const removingBoardId = activeBoard.id;
+    let nextActiveBoardId = "";
+    setBoards((previous) => {
+      const filtered = previous.filter((board) => board.id !== removingBoardId);
+      if (filtered.length > 0) {
+        const activeIndex = previous.findIndex((board) => board.id === removingBoardId);
+        const fallbackIndex = Math.min(activeIndex, filtered.length - 1);
+        nextActiveBoardId = filtered[Math.max(0, fallbackIndex)].id;
+        return filtered;
+      }
+
+      const replacement = createBoardState("BOARD 1", { columns: [] });
+      nextActiveBoardId = replacement.id;
+      return [replacement];
+    });
+    setActiveBoardId(nextActiveBoardId);
+    setIsDeleteBoardModalOpen(false);
   };
 
   const handleExportBackup = (): void => {
     const payload: BackupPayload = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
-      columns: columns.map((column) => ({
-        id: column.id,
-        handleInput: column.handleInput,
-        currentHandle: column.currentHandle,
-        channelThumbnailUrl: column.channelThumbnailUrl,
-        videos: column.videos,
-        lastFetchAt: column.lastFetchAt
+      boards: boards.map((board) => ({
+        id: board.id,
+        name: board.name,
+        columns: toPersistedColumns(board.columns),
+        watchedVideos: board.watchedVideos,
+        videoFilter: board.videoFilter,
+        defaultPlaybackRate: board.defaultPlaybackRate
       })),
-      watchedVideos,
-      videoFilter,
-      defaultPlaybackRate: preferredPlaybackRate
+      activeBoardId
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -839,22 +1185,15 @@ function App() {
           throw new Error("Invalid backup file.");
         }
 
-        setColumns(
-          backup.columns.map((column) =>
-            createColumnState({
-              id: column.id,
-              handleInput: column.handleInput,
-              currentHandle: column.currentHandle,
-              channelThumbnailUrl: column.channelThumbnailUrl,
-              videos: column.videos,
-              lastFetchAt: column.lastFetchAt
-            })
-          )
-        );
-        setWatchedVideos(backup.watchedVideos);
-        setVideoFilter(backup.videoFilter);
-        setPreferredPlaybackRate(backup.defaultPlaybackRate);
-        setPlaybackRate(backup.defaultPlaybackRate);
+        const importedBoards = backup.boards.map((board) => fromPersistedBoard(board));
+        setBoards(importedBoards);
+        setActiveBoardId(backup.activeBoardId);
+        const importedActiveBoard =
+          importedBoards.find((board) => board.id === backup.activeBoardId) ??
+          importedBoards[0];
+        if (importedActiveBoard) {
+          setPlaybackRate(importedActiveBoard.defaultPlaybackRate);
+        }
       } catch {
         window.alert("Backup file could not be imported.");
       } finally {
@@ -867,6 +1206,22 @@ function App() {
   return (
     <main className="app-shell">
       <div className="columns-nav">
+        <Select<string>
+          value={activeBoard?.id}
+          onChange={handleBoardSelectChange}
+          aria-label="Board selector"
+          className="video-filter-select board-select"
+          options={[
+            ...boards.map((board) => ({
+              value: board.id,
+              label: board.name.toUpperCase()
+            })),
+            {
+              value: NEW_BOARD_OPTION_VALUE,
+              label: "NEW"
+            }
+          ]}
+        />
         <Button
           type="primary"
           htmlType="button"
@@ -886,7 +1241,15 @@ function App() {
         </Button>
         <Select<VideoFilter>
           value={videoFilter}
-          onChange={setVideoFilter}
+          onChange={(value) => {
+            if (!activeBoard) {
+              return;
+            }
+            setBoard(activeBoard.id, (board) => ({
+              ...board,
+              videoFilter: value
+            }));
+          }}
           aria-label="Video filter"
           className="video-filter-select"
           options={[
@@ -938,6 +1301,15 @@ function App() {
           className="nav-btn scroll-btn"
         >
           {">>"}
+        </Button>
+        <Button
+          htmlType="button"
+          className="board-name-btn"
+          aria-label="Edit board"
+          onClick={openRenameBoardModal}
+          disabled={!activeBoard}
+        >
+          {activeBoard?.name.toUpperCase() ?? "BOARD"}
         </Button>
       </div>
 
@@ -1066,7 +1438,7 @@ function App() {
                           alt={`Channel ${index + 1}`}
                           className="channel-avatar"
                           onError={() =>
-                            setColumn(column.id, (prev) => ({
+                            setColumn(activeBoardId, column.id, (prev) => ({
                               ...prev,
                               channelThumbnailUrl: ""
                             }))
@@ -1087,7 +1459,7 @@ function App() {
                         aria-label={`Channel ${index + 1} handle`}
                         onChange={(event) => {
                           const nextValue = event.target.value;
-                          setColumn(column.id, (prev) => ({
+                          setColumn(activeBoardId, column.id, (prev) => ({
                             ...prev,
                             handleInput: nextValue
                           }));
@@ -1100,7 +1472,9 @@ function App() {
                       />
                       <Button
                         htmlType="button"
-                        onClick={() => runFetch(column.id, column.handleInput)}
+                        onClick={() =>
+                          runFetch(activeBoardId, column.id, column.handleInput)
+                        }
                         disabled={!canSubmit || column.loading}
                         loading={column.loading}
                         aria-label={`Fetch column ${index + 1}`}
@@ -1222,6 +1596,63 @@ function App() {
           onChange={handleImportBackup}
         />
       </div>
+
+      <Modal
+        title="Edit Board"
+        open={isRenameBoardModalOpen}
+        onCancel={() => setIsRenameBoardModalOpen(false)}
+        onOk={confirmRenameBoard}
+        okText="Save"
+        cancelText="Cancel"
+        width={360}
+        footer={(_, { CancelBtn, OkBtn }) => (
+          <div className="board-edit-footer">
+            <Button
+              htmlType="button"
+              danger
+              className="board-delete-btn"
+              onClick={() => {
+                setIsRenameBoardModalOpen(false);
+                setIsDeleteBoardModalOpen(true);
+              }}
+              disabled={!activeBoard}
+            >
+              Delete
+            </Button>
+            <Space size={8}>
+              <CancelBtn />
+              <OkBtn />
+            </Space>
+          </div>
+        )}
+      >
+        <Input
+          value={renameBoardInput}
+          onChange={(event) => setRenameBoardInput(event.target.value)}
+          onPressEnter={(event) => {
+            event.preventDefault();
+            confirmRenameBoard();
+          }}
+          placeholder="Board name"
+          maxLength={40}
+          autoFocus
+        />
+      </Modal>
+
+      <Modal
+        title="Delete Board"
+        open={isDeleteBoardModalOpen}
+        onCancel={() => setIsDeleteBoardModalOpen(false)}
+        onOk={confirmDeleteBoard}
+        okText="Delete"
+        okButtonProps={{ danger: true }}
+        width={360}
+      >
+        <Text>
+          Delete board {activeBoard ? `"${activeBoard.name}"` : ""}? This cannot
+          be undone.
+        </Text>
+      </Modal>
     </main>
   );
 }

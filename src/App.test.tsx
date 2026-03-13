@@ -6,9 +6,12 @@ import * as youtubeApi from "./api/youtube";
 describe("App", () => {
   beforeEach(() => {
     if (typeof window.localStorage.removeItem === "function") {
+      window.localStorage.removeItem("youtube-watch:boards:v1");
+      window.localStorage.removeItem("youtube-watch:active-board-id:v1");
       window.localStorage.removeItem("youtube-watch:handles:v1");
       window.localStorage.removeItem("youtube-watch:columns:v2");
       window.localStorage.removeItem("youtube-watch:watched:v1");
+      window.localStorage.removeItem("youtube-watch:playback-rate:v1");
     }
   });
 
@@ -247,9 +250,10 @@ describe("App", () => {
       expect(screen.queryByText("Stored Video")).not.toBeInTheDocument();
     });
 
-    expect(window.localStorage.getItem("youtube-watch:watched:v1")).toContain(
-      "\"vid-1\":true"
-    );
+    const persistedBoards = JSON.parse(
+      window.localStorage.getItem("youtube-watch:boards:v1") ?? "[]"
+    ) as Array<{ watchedVideos?: Record<string, boolean> }>;
+    expect(persistedBoards[0]?.watchedVideos).toEqual({ "vid-1": true });
   });
 
   it("shows watched videos in Watched filter and allows restoring them to New", async () => {
@@ -292,6 +296,9 @@ describe("App", () => {
       expect(screen.queryByText("Stored Video")).not.toBeInTheDocument();
     });
 
-    expect(window.localStorage.getItem("youtube-watch:watched:v1")).toBe("{}");
+    const persistedBoards = JSON.parse(
+      window.localStorage.getItem("youtube-watch:boards:v1") ?? "[]"
+    ) as Array<{ watchedVideos?: Record<string, boolean> }>;
+    expect(persistedBoards[0]?.watchedVideos).toEqual({});
   });
 });
