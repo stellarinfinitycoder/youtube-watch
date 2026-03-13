@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import {
   Alert,
   Button,
@@ -27,6 +28,7 @@ const DEFAULT_COLUMN_COUNT = 3;
 const HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 const WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
+const PLAYBACK_RATE_STORAGE_KEY = "youtube-watch:playback-rate:v1";
 const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 
 type VideoFilter = "all" | "new" | "watched";
@@ -114,6 +116,15 @@ type PersistedColumnState = {
   lastFetchAt: string | null;
 };
 
+type BackupPayload = {
+  version: 1;
+  exportedAt: string;
+  columns: PersistedColumnState[];
+  watchedVideos: Record<string, boolean>;
+  videoFilter: VideoFilter;
+  defaultPlaybackRate: number;
+};
+
 function createColumnId(): string {
   return `col-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -188,6 +199,41 @@ function readStoredWatchedVideos(): Record<string, boolean> {
   }
 }
 
+function readStoredPlaybackRate(): number {
+  if (typeof window === "undefined") {
+    return 1.5;
+  }
+
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.getItem !== "function") {
+      return 1.5;
+    }
+
+    const raw = storage.getItem(PLAYBACK_RATE_STORAGE_KEY);
+    if (!raw) {
+      return 1.5;
+    }
+
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1.5;
+  } catch {
+    return 1.5;
+  }
+}
+
+function sanitizeWatchedVideos(raw: unknown): Record<string, boolean> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(raw).filter(
+      (entry): entry is [string, boolean] => typeof entry[1] === "boolean"
+    )
+  );
+}
+
 function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
   if (!raw || typeof raw !== "object") {
     return null;
@@ -258,6 +304,52 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
     channelThumbnailUrl: candidate.channelThumbnailUrl,
     videos,
     lastFetchAt: candidate.lastFetchAt
+  };
+}
+
+function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const candidate = raw as {
+    version?: unknown;
+    exportedAt?: unknown;
+    columns?: unknown;
+    watchedVideos?: unknown;
+    videoFilter?: unknown;
+    defaultPlaybackRate?: unknown;
+  };
+
+  if (
+    candidate.version !== 1 ||
+    typeof candidate.exportedAt !== "string" ||
+    !Array.isArray(candidate.columns)
+  ) {
+    return null;
+  }
+
+  const columns = candidate.columns
+    .map((item) => sanitizePersistedColumn(item))
+    .filter((item): item is PersistedColumnState => item !== null);
+
+  return {
+    version: 1,
+    exportedAt: candidate.exportedAt,
+    columns,
+    watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
+    videoFilter:
+      candidate.videoFilter === "all" ||
+      candidate.videoFilter === "new" ||
+      candidate.videoFilter === "watched"
+        ? candidate.videoFilter
+        : "new",
+    defaultPlaybackRate:
+      typeof candidate.defaultPlaybackRate === "number" &&
+      Number.isFinite(candidate.defaultPlaybackRate) &&
+      candidate.defaultPlaybackRate > 0
+        ? candidate.defaultPlaybackRate
+        : 1.5
   };
 }
 
@@ -344,6 +436,7 @@ function parseBulkHandles(raw: string): string[] {
 
 function App() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const playerHostRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerReadyRef = useRef(false);
@@ -351,7 +444,12 @@ function App() {
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [bulkInput, setBulkInput] = useState("");
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
-  const [playbackRate, setPlaybackRate] = useState(1.5);
+  const [preferredPlaybackRate, setPreferredPlaybackRate] = useState<number>(() =>
+    readStoredPlaybackRate()
+  );
+  const [playbackRate, setPlaybackRate] = useState<number>(() =>
+    readStoredPlaybackRate()
+  );
   const [availablePlaybackRates, setAvailablePlaybackRates] = useState<number[]>([
     0.5,
     1,
@@ -418,10 +516,14 @@ function App() {
       }
 
       storage.setItem(WATCHED_STORAGE_KEY, JSON.stringify(watchedVideos));
+      storage.setItem(
+        PLAYBACK_RATE_STORAGE_KEY,
+        String(preferredPlaybackRate)
+      );
     } catch {
       // Ignore write failures (private mode / restricted environments).
     }
-  }, [watchedVideos]);
+  }, [preferredPlaybackRate, watchedVideos]);
 
   useEffect(() => {
     columns.forEach((column) => {
@@ -479,7 +581,7 @@ function App() {
     let isCancelled = false;
     let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
     setAvailablePlaybackRates([0.5, 1, 1.5, 2]);
-    setPlaybackRate(1.5);
+    setPlaybackRate(preferredPlaybackRate);
     setIsPlayerReady(false);
     playerReadyRef.current = false;
     setUseIframeFallback(false);
@@ -511,8 +613,8 @@ function App() {
               const rates = event.target.getAvailablePlaybackRates();
               const normalizedRates = rates.length > 0 ? rates : [1];
               setAvailablePlaybackRates(normalizedRates);
-              const preferred = normalizedRates.includes(1.5)
-                ? 1.5
+              const preferred = normalizedRates.includes(preferredPlaybackRate)
+                ? preferredPlaybackRate
                 : normalizedRates.includes(1)
                 ? 1
                 : normalizedRates[0];
@@ -547,7 +649,7 @@ function App() {
       }
       playerReadyRef.current = false;
     };
-  }, [activeVideo, playerHostNode]);
+  }, [activeVideo, playerHostNode, preferredPlaybackRate]);
 
   const setPlayerHost = (node: HTMLDivElement | null): void => {
     playerHostRef.current = node;
@@ -656,6 +758,7 @@ function App() {
 
   const handlePlaybackRateClick = (rate: number): void => {
     setPlaybackRate(rate);
+    setPreferredPlaybackRate(rate);
     if (!playerRef.current) {
       return;
     }
@@ -676,6 +779,76 @@ function App() {
       }
       return next;
     });
+  };
+
+  const handleExportBackup = (): void => {
+    const payload: BackupPayload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      columns: columns.map((column) => ({
+        id: column.id,
+        handleInput: column.handleInput,
+        currentHandle: column.currentHandle,
+        channelThumbnailUrl: column.channelThumbnailUrl,
+        videos: column.videos,
+        lastFetchAt: column.lastFetchAt
+      })),
+      watchedVideos,
+      videoFilter,
+      defaultPlaybackRate: preferredPlaybackRate
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json"
+    });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `youtube-watch-backup-${new Date()
+      .toISOString()
+      .slice(0, 10)}.json`;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleImportBackup = (event: ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result)) as unknown;
+        const backup = sanitizeBackupPayload(parsed);
+        if (!backup) {
+          throw new Error("Invalid backup file.");
+        }
+
+        setColumns(
+          backup.columns.map((column) =>
+            createColumnState({
+              id: column.id,
+              handleInput: column.handleInput,
+              currentHandle: column.currentHandle,
+              channelThumbnailUrl: column.channelThumbnailUrl,
+              videos: column.videos,
+              lastFetchAt: column.lastFetchAt
+            })
+          )
+        );
+        setWatchedVideos(backup.watchedVideos);
+        setVideoFilter(backup.videoFilter);
+        setPreferredPlaybackRate(backup.defaultPlaybackRate);
+        setPlaybackRate(backup.defaultPlaybackRate);
+      } catch {
+        window.alert("Backup file could not be imported.");
+      } finally {
+        event.target.value = "";
+      }
+    };
+    reader.readAsText(file);
   };
 
   return (
@@ -998,6 +1171,31 @@ function App() {
             </Button>
           </aside>
         </div>
+      </div>
+      <div className="backup-actions">
+        <Button
+          htmlType="button"
+          onClick={handleExportBackup}
+          aria-label="Export backup"
+          className="backup-btn"
+        >
+          Export
+        </Button>
+        <Button
+          htmlType="button"
+          onClick={() => importInputRef.current?.click()}
+          aria-label="Import backup"
+          className="backup-btn"
+        >
+          Import
+        </Button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json"
+          className="backup-file-input"
+          onChange={handleImportBackup}
+        />
       </div>
     </main>
   );
