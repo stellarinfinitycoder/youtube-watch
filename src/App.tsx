@@ -17,7 +17,8 @@ import {
 import type { FetchState } from "./types/youtube";
 import {
   fetchViewCountsByVideoIds,
-  getLatestVideosAndChannelByHandle
+  getLatestVideosAndChannelByHandle,
+  resolveChannelByHandleWithThumbnail
 } from "./api/youtube";
 import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
@@ -654,6 +655,23 @@ function formatVideoMeta(video: VideoItem): string {
   return `${dateLabel}, ${formatViewCount(video.viewCount)}`;
 }
 
+function getLastWednesdayMidnight(now = new Date()): Date {
+  const result = new Date(now);
+  const dayOfWeek = result.getDay();
+  let daysSinceWednesday = (dayOfWeek - 3 + 7) % 7;
+  if (daysSinceWednesday === 0) {
+    daysSinceWednesday = 7;
+  }
+  result.setDate(result.getDate() - daysSinceWednesday);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function getVideoPublishedTime(video: VideoItem): number {
+  const parsed = Date.parse(video.publishedAt);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function parseBulkHandles(raw: string): string[] {
   const tokens = raw
     .split(/[\s,]+/)
@@ -701,10 +719,14 @@ function App() {
   ]);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [useIframeFallback, setUseIframeFallback] = useState(false);
+  const [brokenChannelThumbnailKeys, setBrokenChannelThumbnailKeys] = useState<string[]>(
+    []
+  );
   const [pendingBulkFetch, setPendingBulkFetch] = useState<
     Array<{ boardId: string; id: string; handle: string }>
   >([]);
   const [viewBackfillInFlight, setViewBackfillInFlight] = useState<string[]>([]);
+  const [thumbBackfillInFlight, setThumbBackfillInFlight] = useState<string[]>([]);
   const activeBoard =
     boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
   const editingBoard =
@@ -796,6 +818,59 @@ function App() {
         });
     });
   }, [activeBoard, columns, viewBackfillInFlight]);
+
+  useEffect(() => {
+    if (!activeBoard) {
+      return;
+    }
+
+    columns.forEach((column) => {
+      if (column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl) {
+        if (!column.channelThumbnailUrl && column.videos[0]?.thumbnailUrl) {
+          setColumn(activeBoard.id, column.id, (prev) => ({
+            ...prev,
+            channelThumbnailUrl: prev.channelThumbnailUrl || prev.videos[0]?.thumbnailUrl || ""
+          }));
+        }
+        return;
+      }
+
+      const rawHandle = column.currentHandle || column.handleInput;
+      let normalizedHandle = "";
+      try {
+        normalizedHandle = normalizeHandle(rawHandle);
+      } catch {
+        return;
+      }
+
+      const backfillKey = `${activeBoard.id}:${column.id}:${normalizedHandle}`;
+      if (thumbBackfillInFlight.includes(backfillKey)) {
+        return;
+      }
+
+      setThumbBackfillInFlight((prev) => [...prev, backfillKey]);
+      resolveChannelByHandleWithThumbnail(normalizedHandle)
+        .then(({ channelThumbnailUrl }) => {
+          if (!channelThumbnailUrl) {
+            return;
+          }
+          setColumn(activeBoard.id, column.id, (prev) => ({
+            ...prev,
+            channelThumbnailUrl
+          }));
+          const brokenKey = `${activeBoard.id}:${column.id}`;
+          setBrokenChannelThumbnailKeys((prev) =>
+            prev.filter((key) => key !== brokenKey)
+          );
+        })
+        .catch(() => {})
+        .finally(() => {
+          setThumbBackfillInFlight((prev) =>
+            prev.filter((key) => key !== backfillKey)
+          );
+        });
+    });
+  }, [activeBoard, columns, thumbBackfillInFlight]);
 
   useEffect(() => {
     if (pendingBulkFetch.length === 0) {
@@ -926,15 +1001,51 @@ function App() {
       const normalized = normalizeHandle(handle);
       const { videos, channelThumbnailUrl } =
         await getLatestVideosAndChannelByHandle(normalized, DEFAULT_LIMIT);
+      const boardWatchedVideos =
+        boards.find((board) => board.id === boardId)?.watchedVideos ?? {};
+      const nextChannelThumbnailUrl =
+        channelThumbnailUrl || videos[0]?.thumbnailUrl || "";
       setColumn(boardId, columnId, (prev) => ({
         ...prev,
         loading: false,
         error: null,
-        videos,
+        videos: (() => {
+          const sinceTime = getLastWednesdayMidnight().getTime();
+          const mergedById = new Map<string, VideoItem>();
+
+          videos.forEach((video) => {
+            mergedById.set(video.videoId, video);
+          });
+
+          prev.videos.forEach((video) => {
+            const isWatched = boardWatchedVideos[video.videoId] === true;
+            const isWithinStartDate = getVideoPublishedTime(video) >= sinceTime;
+            if (isWatched || !isWithinStartDate) {
+              return;
+            }
+            const existing = mergedById.get(video.videoId);
+            if (!existing) {
+              mergedById.set(video.videoId, video);
+              return;
+            }
+            if (existing.viewCount === null && video.viewCount !== null) {
+              mergedById.set(video.videoId, { ...existing, viewCount: video.viewCount });
+            }
+          });
+
+          return [...mergedById.values()].sort(
+            (a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a)
+          );
+        })(),
         currentHandle: normalized,
-        channelThumbnailUrl,
+        channelThumbnailUrl:
+          nextChannelThumbnailUrl || prev.channelThumbnailUrl || "",
         lastFetchAt: new Date().toLocaleString()
       }));
+      if (nextChannelThumbnailUrl) {
+        const brokenKey = `${boardId}:${columnId}`;
+        setBrokenChannelThumbnailKeys((prev) => prev.filter((key) => key !== brokenKey));
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to fetch videos.";
@@ -1428,6 +1539,11 @@ function App() {
         <div className="columns-layout">
           <section className="columns-grid">
             {columns.map((column, index) => {
+              const brokenThumbKey = `${activeBoardId}:${column.id}`;
+              const channelThumbToShow =
+                brokenChannelThumbnailKeys.includes(brokenThumbKey)
+                  ? column.videos[0]?.thumbnailUrl ?? ""
+                  : column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
               const canSubmit = (() => {
                 try {
                   normalizeHandle(column.handleInput);
@@ -1472,17 +1588,17 @@ function App() {
                     className="full-width"
                   >
                     <div className="column-header">
-                      {column.channelThumbnailUrl ? (
+                      {channelThumbToShow ? (
                         <img
-                          src={column.channelThumbnailUrl}
+                          src={channelThumbToShow}
                           alt={`Channel ${index + 1}`}
                           className="channel-avatar"
-                          onError={() =>
-                            setColumn(activeBoardId, column.id, (prev) => ({
-                              ...prev,
-                              channelThumbnailUrl: ""
-                            }))
-                          }
+                          onError={() => {
+                            const brokenKey = `${activeBoardId}:${column.id}`;
+                            setBrokenChannelThumbnailKeys((prev) =>
+                              prev.includes(brokenKey) ? prev : [...prev, brokenKey]
+                            );
+                          }}
                         />
                       ) : (
                         <div
