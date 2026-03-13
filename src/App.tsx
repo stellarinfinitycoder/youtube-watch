@@ -842,15 +842,6 @@ function App() {
                 <article key={column.id} className="channel-column">
                   <div className="column-actions">
                     <div className="column-actions-left">
-                      <Button
-                        htmlType="button"
-                        onClick={() => runFetch(column.id, column.handleInput)}
-                        disabled={!canSubmit || column.loading}
-                        loading={column.loading}
-                        aria-label={`Fetch column ${index + 1}`}
-                      >
-                        Fetch
-                      </Button>
                       <Text className="last-fetch-text">
                         {column.lastFetchAt ?? "-"}
                       </Text>
@@ -909,6 +900,16 @@ function App() {
                           }
                         }}
                       />
+                      <Button
+                        htmlType="button"
+                        onClick={() => runFetch(column.id, column.handleInput)}
+                        disabled={!canSubmit || column.loading}
+                        loading={column.loading}
+                        aria-label={`Fetch column ${index + 1}`}
+                        className="inline-fetch-btn"
+                      >
+                        F
+                      </Button>
                     </div>
 
                     {column.handleInput.length > 0 && !canSubmit ? (

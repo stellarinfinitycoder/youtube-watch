@@ -115,7 +115,15 @@ body {
 }
 
 .ant-select-dropdown .ant-select-item-option-active {
-  background: rgba(255, 143, 31, 0.12) !important;
+  background: #0b0b0d !important;
+  opacity: 0.92;
+}
+
+.ant-select-dropdown
+  .ant-select-item-option-selected.ant-select-item-option-active {
+  background: var(--amber) !important;
+  color: #18110a !important;
+  opacity: 0.92;
 }
 
 .scroll-btn.ant-btn {
@@ -172,7 +180,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  color: var(--cyan);
+  color: var(--amber);
 }
 
 .columns-grid {
@@ -230,6 +238,18 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.column-header .channel-handle-input {
+  min-width: 0;
+}
+
+.inline-fetch-btn.ant-btn {
+  min-width: 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  flex: 0 0 32px;
 }
 
 .channel-avatar {
@@ -478,8 +498,8 @@ body {
 }
 
 .ant-modal .ant-modal-header {
-  background: linear-gradient(180deg, var(--surface-2), var(--surface-3));
-  border-bottom: 1px solid var(--amber-soft);
+  background: transparent;
+  border-bottom: 0;
 }
 
 .ant-modal .ant-modal-title,
