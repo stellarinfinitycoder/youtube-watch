@@ -703,9 +703,9 @@ function App() {
           aria-label="Video filter"
           className="video-filter-select"
           options={[
-            { value: "all", label: "All" },
-            { value: "new", label: "New" },
-            { value: "watched", label: "Watched" }
+            { value: "all", label: "ALL" },
+            { value: "new", label: "NEW" },
+            { value: "watched", label: "WATCHED" }
           ]}
         />
         <Button
@@ -748,6 +748,7 @@ function App() {
         onCancel={() => setIsBulkModalOpen(false)}
         onOk={handleBulkAddConfirm}
         okText="Add"
+        className="add-channels-modal"
       >
         <Input.TextArea
           value={bulkInput}
@@ -767,8 +768,9 @@ function App() {
           setUseIframeFallback(false);
         }}
         footer={null}
-        width={900}
+        width={1125}
         destroyOnHidden
+        className="video-player-modal"
       >
         {activeVideo ? (
           <Space direction="vertical" size="middle" className="full-width">
@@ -961,7 +963,6 @@ function App() {
                                   />
                                 </button>
                               ) : null}
-                              <Text type="secondary">{video.channelTitle}</Text>
                               <div className="video-meta-row">
                                 <Text className="video-meta">{formatVideoMeta(video)}</Text>
                                 <Button

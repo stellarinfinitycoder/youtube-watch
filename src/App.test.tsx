@@ -283,7 +283,7 @@ describe("App", () => {
     render(<App />);
 
     fireEvent.mouseDown(screen.getByRole("combobox", { name: "Video filter" }));
-    fireEvent.click(await screen.findByText("Watched"));
+    fireEvent.click(await screen.findByText("WATCHED"));
 
     expect(screen.getByText("Stored Video")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Mark Stored Video as new" }));
