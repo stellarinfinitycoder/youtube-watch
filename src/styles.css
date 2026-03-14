@@ -223,11 +223,21 @@ body {
   transform: none;
 }
 
-.columns-nav .scroll-btn.ant-btn:nth-of-type(3),
-.columns-nav .scroll-btn.ant-btn:nth-of-type(4),
-.columns-nav .scroll-btn.ant-btn:nth-of-type(5),
-.columns-nav .scroll-btn.ant-btn:nth-of-type(6) {
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to first"] {
+  order: 8;
+  margin-left: auto;
+}
+
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns left"] {
+  order: 9;
+}
+
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] {
   order: 10;
+}
+
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] {
+  order: 11;
 }
 
 .columns-nav [aria-label="Board selector"] {
@@ -257,13 +267,6 @@ body {
 
 .columns-nav [aria-label="Bulk add channels"] {
   order: 7;
-}
-
-.columns-nav [aria-label="Scroll columns to first"],
-.columns-nav [aria-label="Scroll columns left"],
-.columns-nav [aria-label="Scroll columns right"],
-.columns-nav [aria-label="Scroll columns to last"] {
-  order: 8;
 }
 
 .columns-scroll {
