@@ -66,16 +66,33 @@ body {
 }
 
 .board-select {
-  min-width: 156px;
+  min-width: 240px;
 }
 
 .board-option-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
+  width: 100%;
 }
 
+.board-option-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-option-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.board-option-move-btn,
 .board-option-edit-btn {
   border: 1px solid var(--amber-soft);
   background: #0b0b0d;
@@ -88,6 +105,18 @@ body {
   cursor: pointer;
 }
 
+.board-option-move-btn {
+  width: 24px;
+  text-align: center;
+  padding: 2px 0;
+}
+
+.board-option-move-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.board-option-move-btn:hover:not(:disabled),
 .board-option-edit-btn:hover {
   opacity: 0.92;
 }

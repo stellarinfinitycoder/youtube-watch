@@ -1404,6 +1404,25 @@ function App() {
     return board.id;
   };
 
+  const moveBoard = (boardId: string, direction: "up" | "down"): void => {
+    setBoards((previous) => {
+      const index = previous.findIndex((board) => board.id === boardId);
+      if (index === -1) {
+        return previous;
+      }
+
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= previous.length) {
+        return previous;
+      }
+
+      const next = [...previous];
+      const [moved] = next.splice(index, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  };
+
   const handleBoardSelectChange = (value: string): void => {
     if (value === NEW_BOARD_OPTION_VALUE) {
       createBoard();
@@ -1538,29 +1557,65 @@ function App() {
           className="video-filter-select board-select"
           optionLabelProp="title"
         >
-          {boards.map((board) => (
+          {boards.map((board, boardIndex) => (
             <Select.Option
               key={board.id}
               value={board.id}
               title={board.name.toUpperCase()}
             >
               <div className="board-option-row">
-                <span>{board.name.toUpperCase()}</span>
-                <button
-                  type="button"
-                  className="board-option-edit-btn"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    openRenameBoardModal(board.id);
-                  }}
-                >
-                  E
-                </button>
+                <span className="board-option-name">{board.name.toUpperCase()}</span>
+                <div className="board-option-actions">
+                  <button
+                    type="button"
+                    className="board-option-move-btn"
+                    aria-label={`Move ${board.name} up`}
+                    disabled={boardIndex === 0}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      moveBoard(board.id, "up");
+                    }}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="board-option-move-btn"
+                    aria-label={`Move ${board.name} down`}
+                    disabled={boardIndex === boards.length - 1}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      moveBoard(board.id, "down");
+                    }}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="board-option-edit-btn"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      openRenameBoardModal(board.id);
+                    }}
+                  >
+                    E
+                  </button>
+                </div>
               </div>
             </Select.Option>
           ))}
