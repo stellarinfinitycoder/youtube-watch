@@ -1874,7 +1874,7 @@ function App() {
                 </Button>
                 {isPlaylistActive ? (
                   <Text className="playlist-progress-text">
-                    {playlistIndex + 1}/{playlistQueue.length}. ALL CHANNELS. NEWEST.
+                    {playlistIndex + 1} of {playlistQueue.length} | ALL CHANNELS | NEWEST
                   </Text>
                 ) : null}
               </div>

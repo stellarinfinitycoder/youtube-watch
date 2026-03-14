@@ -662,7 +662,7 @@ body {
 
 .playlist-progress-text.ant-typography {
   font-size: 12px;
-  color: var(--amber);
+  color: #c08f56;
   letter-spacing: 0.02em;
 }
 
