@@ -17,8 +17,7 @@ import {
 import type { FetchState } from "./types/youtube";
 import {
   fetchViewCountsByVideoIds,
-  getLatestVideosAndChannelByHandle,
-  resolveChannelByHandleWithThumbnail
+  getLatestVideosAndChannelByHandle
 } from "./api/youtube";
 import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
@@ -741,7 +740,6 @@ function App() {
     Array<{ boardId: string; id: string; handle: string }>
   >([]);
   const [viewBackfillInFlight, setViewBackfillInFlight] = useState<string[]>([]);
-  const [thumbBackfillInFlight, setThumbBackfillInFlight] = useState<string[]>([]);
   const activeBoard =
     boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
   const editingBoard =
@@ -836,59 +834,6 @@ function App() {
         });
     });
   }, [activeBoard, columns, viewBackfillInFlight]);
-
-  useEffect(() => {
-    if (!activeBoard) {
-      return;
-    }
-
-    columns.forEach((column) => {
-      if (column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl) {
-        if (!column.channelThumbnailUrl && column.videos[0]?.thumbnailUrl) {
-          setColumn(activeBoard.id, column.id, (prev) => ({
-            ...prev,
-            channelThumbnailUrl: prev.channelThumbnailUrl || prev.videos[0]?.thumbnailUrl || ""
-          }));
-        }
-        return;
-      }
-
-      const rawHandle = column.currentHandle || column.handleInput;
-      let normalizedHandle = "";
-      try {
-        normalizedHandle = normalizeHandle(rawHandle);
-      } catch {
-        return;
-      }
-
-      const backfillKey = `${activeBoard.id}:${column.id}:${normalizedHandle}`;
-      if (thumbBackfillInFlight.includes(backfillKey)) {
-        return;
-      }
-
-      setThumbBackfillInFlight((prev) => [...prev, backfillKey]);
-      resolveChannelByHandleWithThumbnail(normalizedHandle)
-        .then(({ channelThumbnailUrl }) => {
-          if (!channelThumbnailUrl) {
-            return;
-          }
-          setColumn(activeBoard.id, column.id, (prev) => ({
-            ...prev,
-            channelThumbnailUrl
-          }));
-          const brokenKey = `${activeBoard.id}:${column.id}`;
-          setBrokenChannelThumbnailKeys((prev) =>
-            prev.filter((key) => key !== brokenKey)
-          );
-        })
-        .catch(() => {})
-        .finally(() => {
-          setThumbBackfillInFlight((prev) =>
-            prev.filter((key) => key !== backfillKey)
-          );
-        });
-    });
-  }, [activeBoard, columns, thumbBackfillInFlight]);
 
   useEffect(() => {
     if (pendingBulkFetch.length === 0) {
@@ -1100,8 +1045,13 @@ function App() {
         setBrokenChannelThumbnailKeys((prev) => prev.filter((key) => key !== brokenKey));
       }
     } catch (error) {
-      const message =
+      const sourceMessage =
         error instanceof Error ? error.message : "Failed to fetch videos.";
+      const message = /handle must be in @name format|invalid handle format/i.test(
+        sourceMessage
+      )
+        ? "Channel not found."
+        : sourceMessage;
       setColumn(boardId, columnId, (prev) => ({
         ...prev,
         loading: false,
@@ -1195,11 +1145,9 @@ function App() {
       return;
     }
     columns.forEach((column) => {
-      try {
-        normalizeHandle(column.handleInput);
+      const rawHandle = column.handleInput.trim();
+      if (rawHandle.length > 0) {
         runFetch(activeBoard.id, column.id, column.handleInput);
-      } catch {
-        // Skip invalid or empty handles.
       }
     });
   };
@@ -1640,14 +1588,7 @@ function App() {
                 brokenChannelThumbnailKeys.includes(brokenThumbKey)
                   ? column.videos[0]?.thumbnailUrl ?? ""
                   : column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
-              const canSubmit = (() => {
-                try {
-                  normalizeHandle(column.handleInput);
-                  return true;
-                } catch {
-                  return false;
-                }
-              })();
+              const hasHandleInput = column.handleInput.trim().length > 0;
 
               const filteredVideos = column.videos.filter((video) => {
                 const isWatched = watchedVideos[video.videoId] === true;
@@ -1735,7 +1676,7 @@ function App() {
                           }));
                         }}
                         onPressEnter={(event) => {
-                          if (!canSubmit || column.loading) {
+                          if (!hasHandleInput || column.loading) {
                             event.preventDefault();
                           }
                         }}
@@ -1745,7 +1686,7 @@ function App() {
                         onClick={() =>
                           runFetch(activeBoardId, column.id, column.handleInput)
                         }
-                        disabled={!canSubmit || column.loading}
+                        disabled={!hasHandleInput || column.loading}
                         loading={column.loading}
                         aria-label={`Fetch column ${index + 1}`}
                         className="inline-fetch-btn"
@@ -1754,11 +1695,6 @@ function App() {
                       </Button>
                     </div>
 
-                    {column.handleInput.length > 0 && !canSubmit ? (
-                      <Text type="danger" className="input-hint">
-                        Use @name
-                      </Text>
-                    ) : null}
                   </Form>
 
                   {column.loading && (
@@ -1769,7 +1705,7 @@ function App() {
                     </Space>
                   )}
 
-                  {column.error && <Alert type="error" message={column.error} showIcon />}
+                  {column.error && <Alert type="error" message={column.error} showIcon={false} />}
 
                   {!column.loading && !column.error && filteredVideos.length === 0 && (
                     <Empty description="No data" image={Empty.PRESENTED_IMAGE_SIMPLE} />
