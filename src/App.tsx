@@ -25,6 +25,7 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
+const BUILD_INFO_LABEL = `${__APP_BUILD_ENV__}: ${__APP_COMMIT_SHA__}`;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
 const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
@@ -1754,7 +1755,7 @@ function App() {
           aria-label="Fetch all channels"
           className="nav-btn"
         >
-          Fetch All
+          Fetch
         </Button>
         <Button
           htmlType="button"
@@ -1762,7 +1763,7 @@ function App() {
           aria-label="Play all videos"
           className="nav-btn"
         >
-          Play All
+          Play
         </Button>
         <Button
           htmlType="button"
@@ -1770,7 +1771,7 @@ function App() {
           aria-label="Bulk add channels"
           className="nav-btn add-channels-btn"
         >
-          Add Channels
+          Add
         </Button>
         <Select<VideoFilter>
           value={videoFilter}
@@ -2171,19 +2172,22 @@ function App() {
         <Button
           htmlType="button"
           onClick={handleExportBackup}
-          aria-label="Export backup"
+          aria-label="Backup data"
           className="backup-btn"
         >
-          Export
+          Backup
         </Button>
         <Button
           htmlType="button"
           onClick={() => importInputRef.current?.click()}
-          aria-label="Import backup"
+          aria-label="Restore data"
           className="backup-btn"
         >
-          Import
+          Restore
         </Button>
+        <Text className="backup-limits-text">
+          MAX FETCH LIMIT: 50 VIDEOS | MAX VIDEO AGE: 180 DAYS | {BUILD_INFO_LABEL}
+        </Text>
         <input
           ref={importInputRef}
           type="file"
