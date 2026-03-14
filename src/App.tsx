@@ -1697,9 +1697,6 @@ function App() {
                       >
                         {">"}
                       </Button>
-                      <Text className="last-fetch-text">
-                        {column.lastFetchAt ?? "-"}
-                      </Text>
                     </div>
                     <Button
                       htmlType="button"
