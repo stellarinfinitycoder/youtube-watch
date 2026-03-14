@@ -385,6 +385,13 @@ body {
   min-width: 0;
 }
 
+.column-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
 .column-move-btn.ant-btn {
   min-width: 28px;
   width: 28px;
@@ -453,9 +460,16 @@ body {
   height: 28px;
   padding: 0;
   font-weight: 600;
-  border-color: rgba(204, 106, 106, 0.75) !important;
-  color: rgba(204, 106, 106, 0.88) !important;
+  border-color: rgba(204, 106, 106, 0.48) !important;
+  color: rgba(204, 106, 106, 0.58) !important;
   background: transparent !important;
+}
+
+.remove-column-btn.ant-btn:hover,
+.remove-column-btn.ant-btn:focus {
+  border-color: rgba(204, 106, 106, 0.62) !important;
+  color: rgba(204, 106, 106, 0.74) !important;
+  background: rgba(204, 106, 106, 0.08) !important;
 }
 
 .columns-nav .nav-btn.ant-btn {
@@ -761,16 +775,16 @@ body {
 
 .board-delete-btn.ant-btn.ant-btn-dangerous {
   background: transparent !important;
-  border-color: rgba(204, 106, 106, 0.78) !important;
-  color: rgba(204, 106, 106, 0.9) !important;
+  border-color: rgba(204, 106, 106, 0.48) !important;
+  color: rgba(204, 106, 106, 0.58) !important;
   font-weight: 600;
 }
 
 .board-delete-btn.ant-btn.ant-btn-dangerous:hover,
 .board-delete-btn.ant-btn.ant-btn-dangerous:focus {
-  background: rgba(204, 106, 106, 0.12) !important;
-  border-color: rgba(204, 106, 106, 0.86) !important;
-  color: rgba(214, 120, 120, 0.96) !important;
+  background: rgba(204, 106, 106, 0.08) !important;
+  border-color: rgba(204, 106, 106, 0.62) !important;
+  color: rgba(204, 106, 106, 0.74) !important;
 }
 
 .delete-confirm-ok.ant-btn.ant-btn-primary.ant-btn-dangerous,

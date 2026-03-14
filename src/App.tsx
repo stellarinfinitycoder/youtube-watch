@@ -26,7 +26,7 @@ import topBarLogo from "../youtube_plus_red.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "140326215936";
+const CHANGE_STAMP = "140326223243";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -1936,7 +1936,7 @@ function App() {
                     {playlistScope === "channel"
                       ? playlistChannelLabel || "@CHANNEL"
                       : "ALL CHANNELS"}{" "}
-                    | NEWEST
+                    | NEWEST FIRST
                   </Text>
                 ) : null}
               </div>
@@ -2011,6 +2011,8 @@ function App() {
                       >
                         {"›"}
                       </Button>
+                    </div>
+                    <div className="column-actions-right">
                       <Button
                         htmlType="button"
                         onClick={() => openMoveColumnModal(column.id)}
@@ -2033,16 +2035,16 @@ function App() {
                       >
                         P
                       </Button>
+                      <Button
+                        htmlType="button"
+                        onClick={() => setDeletingColumnId(column.id)}
+                        disabled={column.loading}
+                        aria-label={`Remove column ${index + 1}`}
+                        className="remove-column-btn"
+                      >
+                        x
+                      </Button>
                     </div>
-                    <Button
-                      htmlType="button"
-                      onClick={() => setDeletingColumnId(column.id)}
-                      disabled={column.loading}
-                      aria-label={`Remove column ${index + 1}`}
-                      className="remove-column-btn"
-                    >
-                      x
-                    </Button>
                   </div>
 
                   <Form
