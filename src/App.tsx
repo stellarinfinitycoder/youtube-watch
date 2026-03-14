@@ -1997,7 +1997,11 @@ function App() {
                       <Button
                         htmlType="button"
                         onClick={() => openMoveColumnModal(column.id)}
-                        disabled={column.loading || moveDestinationBoards.length === 0}
+                        disabled={
+                          column.loading ||
+                          moveDestinationBoards.length === 0 ||
+                          !hasChannelPlaylistVideos
+                        }
                         aria-label={`Move column ${index + 1} to board`}
                         className="column-move-btn"
                       >
