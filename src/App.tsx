@@ -758,6 +758,8 @@ function App() {
   const [isRenameBoardModalOpen, setIsRenameBoardModalOpen] = useState(false);
   const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
   const [deletingColumnId, setDeletingColumnId] = useState<string | null>(null);
+  const [movingColumnId, setMovingColumnId] = useState<string | null>(null);
+  const [moveTargetBoardId, setMoveTargetBoardId] = useState<string>("");
   const [renameBoardInput, setRenameBoardInput] = useState("");
   const [isDeleteBoardModalOpen, setIsDeleteBoardModalOpen] = useState(false);
   const [bulkInput, setBulkInput] = useState("");
@@ -791,6 +793,11 @@ function App() {
     (deletingColumnId
       ? columns.find((column) => column.id === deletingColumnId)
       : undefined) ?? null;
+  const movingColumn =
+    (movingColumnId
+      ? columns.find((column) => column.id === movingColumnId)
+      : undefined) ?? null;
+  const moveDestinationBoards = boards.filter((board) => board.id !== activeBoardId);
   const deletingChannelNameRaw =
     deletingColumn?.handleInput.trim() || deletingColumn?.currentHandle.trim() || "";
   const deletingChannelName = deletingChannelNameRaw
@@ -799,6 +806,14 @@ function App() {
       : `@${deletingChannelNameRaw}`
     : "";
   const deletingChannelNameDisplay = deletingChannelName.toUpperCase();
+  const movingChannelNameRaw =
+    movingColumn?.handleInput.trim() || movingColumn?.currentHandle.trim() || "";
+  const movingChannelName = movingChannelNameRaw
+    ? movingChannelNameRaw.startsWith("@")
+      ? movingChannelNameRaw
+      : `@${movingChannelNameRaw}`
+    : "";
+  const movingChannelNameDisplay = movingChannelName.toUpperCase();
   const watchedVideos = activeBoard?.watchedVideos ?? {};
   const isPlaylistActive =
     playlistIndex >= 0 &&
@@ -1431,6 +1446,44 @@ function App() {
     return board.id;
   };
 
+  const openMoveColumnModal = (columnId: string): void => {
+    setMovingColumnId(columnId);
+    const firstDestinationBoardId = boards.find((board) => board.id !== activeBoardId)?.id;
+    setMoveTargetBoardId(firstDestinationBoardId ?? "");
+  };
+
+  const confirmMoveColumnToBoard = (): void => {
+    if (!activeBoard || !movingColumn || !moveTargetBoardId) {
+      return;
+    }
+
+    const movingId = movingColumn.id;
+    const columnToMove = movingColumn;
+
+    setBoards((previous) =>
+      previous.map((board) => {
+        if (board.id === activeBoard.id) {
+          return {
+            ...board,
+            columns: board.columns.filter((column) => column.id !== movingId)
+          };
+        }
+        if (board.id === moveTargetBoardId) {
+          return {
+            ...board,
+            columns: [...board.columns, columnToMove]
+          };
+        }
+        return board;
+      })
+    );
+    setBrokenChannelThumbnailKeys((previous) =>
+      previous.filter((key) => !key.endsWith(`:${movingId}`))
+    );
+    setMovingColumnId(null);
+    setMoveTargetBoardId("");
+  };
+
   const moveBoard = (boardId: string, direction: "up" | "down"): void => {
     setBoards((previous) => {
       const index = previous.findIndex((board) => board.id === boardId);
@@ -1895,6 +1948,15 @@ function App() {
                       >
                         {"›"}
                       </Button>
+                      <Button
+                        htmlType="button"
+                        onClick={() => openMoveColumnModal(column.id)}
+                        disabled={column.loading || moveDestinationBoards.length === 0}
+                        aria-label={`Move column ${index + 1} to board`}
+                        className="column-move-btn"
+                      >
+                        M
+                      </Button>
                     </div>
                     <Button
                       htmlType="button"
@@ -2148,6 +2210,38 @@ function App() {
           Delete channel
           {deletingChannelNameDisplay ? ` ${deletingChannelNameDisplay}` : ""}?
         </Text>
+      </Modal>
+
+      <Modal
+        title="Move Channel"
+        open={movingColumnId !== null}
+        onCancel={() => {
+          setMovingColumnId(null);
+          setMoveTargetBoardId("");
+        }}
+        onOk={confirmMoveColumnToBoard}
+        okText="Move"
+        okButtonProps={{ disabled: !moveTargetBoardId }}
+        width={360}
+      >
+        <Space direction="vertical" size={10} className="full-width">
+          <Text>
+            Move channel
+            {movingChannelNameDisplay ? ` ${movingChannelNameDisplay}` : ""}
+            ?
+          </Text>
+          <Select<string>
+            value={moveTargetBoardId || undefined}
+            onChange={setMoveTargetBoardId}
+            aria-label="Move destination board"
+            className="video-filter-select full-width"
+            placeholder="Select board"
+            options={moveDestinationBoards.map((board) => ({
+              value: board.id,
+              label: board.name.toUpperCase()
+            }))}
+          />
+        </Space>
       </Modal>
     </main>
   );
