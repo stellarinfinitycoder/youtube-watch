@@ -1794,15 +1794,6 @@ function App() {
                         return (
                           <List.Item key={video.videoId}>
                             <Space direction="vertical" size="small" className="full-width">
-                              <button
-                                type="button"
-                                className="video-link-btn"
-                                onClick={() => setActiveVideo(video)}
-                              >
-                                <Title level={5} className="video-title">
-                                  {video.title}
-                                </Title>
-                              </button>
                               {video.thumbnailUrl ? (
                                 <button
                                   type="button"
@@ -1816,6 +1807,15 @@ function App() {
                                   />
                                 </button>
                               ) : null}
+                              <button
+                                type="button"
+                                className="video-link-btn"
+                                onClick={() => setActiveVideo(video)}
+                              >
+                                <Title level={5} className="video-title">
+                                  {video.title}
+                                </Title>
+                              </button>
                               <div className="video-meta-row">
                                 <Text className="video-meta">{formatVideoMeta(video)}</Text>
                                 <Button

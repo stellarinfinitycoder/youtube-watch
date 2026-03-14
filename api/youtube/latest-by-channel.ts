@@ -1,4 +1,4 @@
-import { fetchLatestVideos } from "../_lib/youtube";
+import { fetchLatestVideos } from "../_lib/youtube.js";
 
 function parseLimit(raw: unknown): number {
   const parsed = Number(raw ?? 25);

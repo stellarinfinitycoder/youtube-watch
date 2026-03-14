@@ -30,12 +30,16 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   const payload = (await response.json().catch(() => ({}))) as ApiErrorPayload;
 
   if (!response.ok) {
+    const backendError = payload.error?.trim();
+    if (response.status === 404 && backendError && /not found/i.test(backendError)) {
+      throw new Error("Channel not found.");
+    }
     if (response.status === 404 && input.startsWith("/api/")) {
       throw new Error(
         "API route unavailable. Deploy on Vercel or run with `vercel dev` for local API routes."
       );
     }
-    throw new Error(payload.error ?? `Request failed (${response.status})`);
+    throw new Error(backendError ?? `Request failed (${response.status})`);
   }
 
   return payload as T;

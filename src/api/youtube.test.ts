@@ -111,6 +111,16 @@ describe("youtube api client", () => {
     );
   });
 
+  it("throws clean channel-not-found message on 404 not found errors", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({ error: "Channel not found for handle @missing." }, false, 404)
+      ) as typeof fetch;
+
+    await expect(getLatestVideosByHandle("@missing")).rejects.toThrow("Channel not found.");
+  });
+
   it("throws backend error messages", async () => {
     global.fetch = vi
       .fn()

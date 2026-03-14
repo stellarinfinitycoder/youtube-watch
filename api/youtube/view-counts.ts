@@ -1,4 +1,4 @@
-import { fetchViewCountsByVideoIds } from "../_lib/youtube";
+import { fetchViewCountsByVideoIds } from "../_lib/youtube.js";
 
 function parseVideoIds(req: any): string[] {
   const bodyIds = Array.isArray(req.body?.videoIds) ? req.body.videoIds : null;

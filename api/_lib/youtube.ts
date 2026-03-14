@@ -45,6 +45,7 @@ type ChannelDetailsResponse = {
 
 type PlaylistItemsResponse = {
   items?: PlaylistItem[];
+  nextPageToken?: string;
 };
 
 type PlaylistSnippet = {
@@ -265,27 +266,46 @@ export async function fetchLatestVideos(channelId: string, limit = 25): Promise<
     throw new Error("Uploads playlist not found for this channel.");
   }
 
-  const playlistUrl = buildUrl("/playlistItems", {
-    part: "snippet",
-    playlistId: uploadsPlaylistId,
-    maxResults: Math.min(limit, 50),
-    key: apiKey
-  });
+  const videos: VideoItem[] = [];
+  const cappedLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+  let nextPageToken = "";
 
-  const playlistData = await fetchJson<PlaylistItemsResponse>(playlistUrl);
+  while (videos.length < cappedLimit) {
+    const params: Record<string, string | number> = {
+      part: "snippet",
+      playlistId: uploadsPlaylistId,
+      maxResults: Math.min(cappedLimit - videos.length, 50),
+      key: apiKey
+    };
+    if (nextPageToken) {
+      params.pageToken = nextPageToken;
+    }
 
-  const videos = (playlistData.items ?? [])
-    .map(mapPlaylistItemToVideoItem)
-    .filter((item): item is VideoItem => item !== null)
-    .slice(0, limit);
+    const playlistUrl = buildUrl("/playlistItems", params);
+    const playlistData = await fetchJson<PlaylistItemsResponse>(playlistUrl);
+    const batch = (playlistData.items ?? [])
+      .map(mapPlaylistItemToVideoItem)
+      .filter((item): item is VideoItem => item !== null);
 
-  if (videos.length === 0) {
-    return videos;
+    videos.push(...batch);
+    nextPageToken = playlistData.nextPageToken ?? "";
+
+    if (!nextPageToken || batch.length === 0) {
+      break;
+    }
   }
 
-  const viewCounts = await fetchViewCountsByVideoIds(videos.map((video) => video.videoId));
+  const limitedVideos = videos.slice(0, cappedLimit);
 
-  return videos.map((video) => ({
+  if (limitedVideos.length === 0) {
+    return limitedVideos;
+  }
+
+  const viewCounts = await fetchViewCountsByVideoIds(
+    limitedVideos.map((video) => video.videoId)
+  );
+
+  return limitedVideos.map((video) => ({
     ...video,
     viewCount: viewCounts[video.videoId] ?? null
   }));

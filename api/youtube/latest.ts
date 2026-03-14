@@ -1,4 +1,4 @@
-import { getLatestVideosAndChannelByHandle, normalizeHandle } from "../_lib/youtube";
+import { getLatestVideosAndChannelByHandle, normalizeHandle } from "../_lib/youtube.js";
 
 function parseLimit(raw: unknown): number {
   const parsed = Number(raw ?? 25);

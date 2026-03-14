@@ -1,4 +1,4 @@
-import { normalizeHandle, resolveChannelByHandleWithThumbnail } from "../_lib/youtube";
+import { normalizeHandle, resolveChannelByHandleWithThumbnail } from "../_lib/youtube.js";
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "GET") {
