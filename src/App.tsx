@@ -26,7 +26,7 @@ import topBarLogo from "../youtube_plus_red.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "140326210630";
+const CHANGE_STAMP = "140326215210";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -2125,7 +2125,7 @@ function App() {
                       renderItem={(video) => {
                         const isWatched = watchedVideos[video.videoId] === true;
                         return (
-                          <List.Item key={video.videoId}>
+                          <List.Item key={video.videoId} className="video-tile-item">
                             <Space direction="vertical" size="small" className="full-width">
                               {video.thumbnailUrl ? (
                                 <button
