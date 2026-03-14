@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { loadEnv } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -12,6 +13,24 @@ import {
   normalizeHandle,
   resolveChannelByHandleWithThumbnail
 } from "./api/_lib/youtube";
+
+function getShortCommitSha(): string {
+  const vercelSha =
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+    process.env.VITE_VERCEL_GIT_COMMIT_SHA ??
+    "";
+  if (vercelSha.trim().length > 0) {
+    return vercelSha.trim().slice(0, 7);
+  }
+
+  try {
+    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString("utf8")
+      .trim();
+  } catch {
+    return "";
+  }
+}
 
 function collectFilesRecursive(root: string): string[] {
   const entries = readdirSync(root);
@@ -94,7 +113,8 @@ export default defineConfig(({ mode }) => {
     process.env.YOUTUBE_API_KEY = env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY;
   }
   const buildEnv = mode === "production" ? "PROD" : "DEV";
-  const buildId = getSourceBuildFingerprint();
+  const buildCommitSha = getShortCommitSha();
+  const buildId = buildCommitSha || getSourceBuildFingerprint();
 
   return {
     define: {
