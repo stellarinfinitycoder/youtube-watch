@@ -47,7 +47,8 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Fetch column 2" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Fetch column 3" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove column 1" })).toBeInTheDocument();
-    expect(screen.getAllByText("-", { selector: ".last-fetch-text" })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /Move column \d+ left/i })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /Move column \d+ right/i })).toHaveLength(3);
     expect(
       screen.getByLabelText("Channel 1 placeholder")
     ).toBeInTheDocument();
@@ -156,9 +157,6 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByText("Demo Video")).toBeInTheDocument();
     });
-    expect(
-      screen.getAllByText("-", { selector: ".last-fetch-text" }).length
-    ).toBeLessThan(3);
     expect(screen.getByText((content) => content.includes(", 777"))).toBeInTheDocument();
     expect(screen.getByAltText("Channel 1")).toBeInTheDocument();
     expect(screen.getByLabelText("Channel 2 placeholder")).toBeInTheDocument();
@@ -209,15 +207,15 @@ describe("App", () => {
 
   it("adds and removes columns", () => {
     render(<App />);
-    expect(screen.getAllByText("-", { selector: ".last-fetch-text" })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /Fetch column/i })).toHaveLength(3);
 
     fireEvent.click(screen.getByRole("button", { name: "Add column" }));
-    expect(screen.getAllByText("-", { selector: ".last-fetch-text" })).toHaveLength(4);
+    expect(screen.getAllByRole("button", { name: /Fetch column/i })).toHaveLength(4);
     expect(screen.getByRole("button", { name: "Fetch column 4" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Remove column 4" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    expect(screen.getAllByText("-", { selector: ".last-fetch-text" })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /Fetch column/i })).toHaveLength(3);
 
     fireEvent.click(screen.getByRole("button", { name: "Remove column 1" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Video Board - Minimal Columns</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --line: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --surface: #fafafa;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: "Sora", "Segoe UI", sans-serif; }
+    .top { border-bottom: 1px solid var(--line); padding: 12px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .name { font-weight: 700; }
+    .ghost { border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; font-size: 12px; color: #4b5563; background: #fff; }
+    .clock { margin-left: auto; color: var(--muted); font-size: 12px; }
+    .wrap { padding: 12px; }
+    .cols { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 10px; overflow-x: auto; }
+    .col { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; min-height: 80vh; }
+    .head { padding: 10px; border-bottom: 1px solid var(--line); font: 700 12px/1 "IBM Plex Mono", monospace; color: #374151; }
+    .item { padding: 10px; border-bottom: 1px solid var(--line); }
+    .item:last-child { border-bottom: 0; }
+    .thumb { height: 102px; border: 1px solid var(--line); border-radius: 8px; background: linear-gradient(130deg,#eceff3,#f8fafc); display: grid; place-items: center; font-size: 11px; color: #6b7280; }
+    .title { margin: 8px 0 6px; font-size: 14px; line-height: 1.35; font-weight: 600; }
+    .meta { font-size: 12px; color: var(--muted); }
+    @media (max-width: 1100px) { .cols { grid-template-columns: repeat(2, minmax(220px,1fr)); } }
+    @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } .clock { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="name">Boardline</div>
+    <div class="ghost">Minimal mode</div>
+    <div class="ghost">5 channels</div>
+    <div class="ghost">Auto refresh</div>
+    <div class="clock">12 Mar 2026, 19:23 CET</div>
+  </header>
+  <div class="wrap">
+    <main class="cols">
+      <section class="col"><div class="head">@DAVIDONDREJ</div><article class="item"><div class="thumb">VIDEO</div><div class="title">OpenClaw 2.0 is here</div><div class="meta">11/03/2026 • 17k</div></article><article class="item"><div class="thumb">VIDEO</div><div class="title">GPT-5.4 hit a wall</div><div class="meta">06/03/2026 • 28k</div></article></section>
+      <section class="col"><div class="head">@MATTHEW_BERMAN</div><article class="item"><div class="thumb">VIDEO</div><div class="title">Self-driving cars and AI</div><div class="meta">12/03/2026 • 582</div></article><article class="item"><div class="thumb">VIDEO</div><div class="title">Claude just got caught</div><div class="meta">11/03/2026 • 43k</div></article></section>
+      <section class="col"><div class="head">@NATEBJONES</div><article class="item"><div class="thumb">VIDEO</div><div class="title">4,000 jobs lost at Block</div><div class="meta">12/03/2026 • 7k</div></article><article class="item"><div class="thumb">VIDEO</div><div class="title">Stop trusting agent guesses</div><div class="meta">11/03/2026 • 7k</div></article></section>
+      <section class="col"><div class="head">@MEETKEVIN</div><article class="item"><div class="thumb">VIDEO</div><div class="title">Iran risk escalates</div><div class="meta">12/03/2026 • 21k</div></article><article class="item"><div class="thumb">VIDEO</div><div class="title">Markets under pressure</div><div class="meta">11/03/2026 • 75k</div></article></section>
+      <section class="col"><div class="head">@ALEXFINNOFFICIAL</div><article class="item"><div class="thumb">VIDEO</div><div class="title">OpenClaw use cases</div><div class="meta">11/03/2026 • 14k</div></article><article class="item"><div class="thumb">VIDEO</div><div class="title">Mission Control tooling</div><div class="meta">03/03/2026 • 79k</div></article></section>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenClaw vs Claude Cowork</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --claw-color: #FF4D1C;
+    --claw-bg: #FFF5F2;
+    --work-color: #6C5CE7;
+    --work-bg: #F5F3FF;
+    --both-color: #00B37E;
+    --both-bg: #EDFAF4;
+    --bg: #FAF8F5;
+    --text: #1A1714;
+    --muted: #7A736A;
+    --border: #E8E2DA;
+    --cell-bg: #FDFCFA;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 48px 24px 80px;
+  }
+
+  header {
+    max-width: 900px;
+    margin: 0 auto 48px;
+  }
+
+  .eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(32px, 5vw, 52px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin-bottom: 20px;
+  }
+
+  h1 em {
+    font-style: italic;
+  }
+
+  .subtitle {
+    font-size: 15px;
+    color: var(--muted);
+    font-weight: 300;
+    max-width: 520px;
+    line-height: 1.6;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    max-width: 900px;
+    margin: 0 auto 32px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot-claw { background: var(--claw-color); }
+  .dot-work { background: var(--work-color); }
+  .dot-both { background: var(--both-color); }
+  .dot-none { background: var(--border); border: 1.5px solid #ccc; }
+
+  /* Table wrapper */
+  .table-wrap {
+    max-width: 900px;
+    margin: 0 auto;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 24px rgba(0,0,0,0.05);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--cell-bg);
+  }
+
+  /* Header row */
+  thead tr {
+    background: var(--text);
+  }
+
+  thead th {
+    padding: 20px 24px;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.5);
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  thead th:first-child { width: 38%; }
+  thead th:nth-child(2), thead th:nth-child(3) { width: 20%; text-align: center; }
+  thead th:last-child { width: 22%; }
+
+  .col-claw { color: #FF9476 !important; }
+  .col-work { color: #A89BF7 !important; }
+
+  /* Category rows */
+  .category-row td {
+    background: var(--text);
+    padding: 10px 24px;
+    color: rgba(255,255,255,0.4);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* Data rows */
+  tbody tr:not(.category-row) {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  tbody tr:not(.category-row):hover {
+    background: #F7F3EF;
+  }
+
+  tbody tr:not(.category-row):last-child {
+    border-bottom: none;
+  }
+
+  td {
+    padding: 14px 24px;
+    vertical-align: middle;
+  }
+
+  .task-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.4;
+  }
+
+  .task-desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-weight: 300;
+    line-height: 1.4;
+  }
+
+  /* Status badges */
+  .status-cell {
+    text-align: center;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: 'DM Mono', monospace;
+    white-space: nowrap;
+  }
+
+  .badge-claw {
+    background: var(--claw-bg);
+    color: var(--claw-color);
+    border: 1px solid rgba(255,77,28,0.15);
+  }
+
+  .badge-work {
+    background: var(--work-bg);
+    color: var(--work-color);
+    border: 1px solid rgba(108,92,231,0.15);
+  }
+
+  .badge-both {
+    background: var(--both-bg);
+    color: var(--both-color);
+    border: 1px solid rgba(0,179,126,0.15);
+  }
+
+  .badge-neither {
+    background: #F4F2EF;
+    color: #B0A89E;
+    border: 1px solid var(--border);
+  }
+
+  .badge-partial-claw {
+    background: var(--claw-bg);
+    color: var(--claw-color);
+    border: 1px dashed rgba(255,77,28,0.3);
+  }
+
+  .badge-partial-work {
+    background: var(--work-bg);
+    color: var(--work-color);
+    border: 1px dashed rgba(108,92,231,0.3);
+  }
+
+  /* Notes column */
+  .note {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    font-style: italic;
+  }
+
+  .note strong {
+    font-style: normal;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  /* Footer note */
+  .footer-note {
+    max-width: 900px;
+    margin: 24px auto 0;
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+    padding-left: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Task Capability Comparison · Feb 2026</div>
+  <h1>OpenClaw <em>vs</em><br>Claude Cowork</h1>
+  <p class="subtitle">A task-by-task breakdown of what each AI agent can handle, and where they overlap.</p>
+</header>
+
+<div class="legend">
+  <div class="legend-item"><div class="dot dot-claw"></div> OpenClaw only</div>
+  <div class="legend-item"><div class="dot dot-work"></div> Cowork only</div>
+  <div class="legend-item"><div class="dot dot-both"></div> Both can do it</div>
+  <div class="legend-item"><div class="dot dot-none"></div> Neither / Limited</div>
+</div>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Task</th>
+      <th class="col-claw">OpenClaw</th>
+      <th class="col-work">Cowork</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+
+    <!-- MESSAGING & COMMUNICATION -->
+    <tr class="category-row"><td colspan="4">Messaging & Communication</td></tr>
+
+    <tr>
+      <td><div class="task-name">Chat via WhatsApp / Telegram / Signal</div><div class="task-desc">Receive tasks and reply through messaging apps</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">OpenClaw's defining feature. Cowork lives in the desktop app only.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Draft & send emails</div><div class="task-desc">Compose and dispatch emails autonomously</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-partial-work">~ Partial</span></td>
+      <td class="note">OpenClaw via email skills. Cowork can draft but requires connectors + user confirmation to send.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Reply in Slack / Discord</div><div class="task-desc">Respond to messages in team chat tools</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">OpenClaw is a first-class Slack/Discord agent. Cowork has no direct messaging integration.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Always-on / proactive messaging</div><div class="task-desc">Sends reminders, heartbeats, and updates unprompted</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">OpenClaw runs 24/7 with cron jobs. Cowork requires the desktop app to stay open.</td>
+    </tr>
+
+    <!-- FILE & DOCUMENT WORK -->
+    <tr class="category-row"><td colspan="4">File & Document Work</td></tr>
+
+    <tr>
+      <td><div class="task-name">Organize & rename files</div><div class="task-desc">Sort folders, clean up downloads, rename by content</div></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="note">Core use case for both. Cowork has a safer sandbox; OpenClaw can reach broader filesystem.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Generate reports from files</div><div class="task-desc">Turn notes, data, or receipts into structured documents</div></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="note">Flagship use case for Cowork (e.g. expense reports from receipt photos). OpenClaw can do the same.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Create Word / PDF / spreadsheet files</div><div class="task-desc">Produce formatted documents and save to disk</div></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="note">Both can write and save files. Cowork does so in a VM sandbox; OpenClaw uses shell tools.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Delete files</div><div class="task-desc">Permanently remove files from disk</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-partial-work">~ Guarded</span></td>
+      <td class="note">Cowork requires explicit user confirmation before any deletion. OpenClaw can do it autonomously.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Access files outside granted folder</div><div class="task-desc">Reach arbitrary paths on the system</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">Cowork is sandboxed to user-designated folders only. OpenClaw has broader filesystem access.</td>
+    </tr>
+
+    <!-- WEB & RESEARCH -->
+    <tr class="category-row"><td colspan="4">Web & Research</td></tr>
+
+    <tr>
+      <td><div class="task-name">Browse the web autonomously</div><div class="task-desc">Navigate sites, click, fill forms, extract data</div></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="note">OpenClaw has built-in browser control. Cowork pairs with Claude in Chrome extension.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Scrape & monitor websites</div><div class="task-desc">Watch pages for changes, pull structured data on a schedule</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">OpenClaw's cron + browser tools enable persistent monitoring. Cowork has no background scheduling.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Research & summarize topics</div><div class="task-desc">Search web, read articles, produce summaries</div></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="note">Both can search and synthesize. OpenClaw can deliver results to your phone; Cowork saves to files.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Book appointments / fill web forms</div><div class="task-desc">Interact with web-based booking and form systems</div></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="note">Both agents can navigate and interact with web pages via browser integration.</td>
+    </tr>
+
+    <!-- AUTOMATION & CODING -->
+    <tr class="category-row"><td colspan="4">Automation & Coding</td></tr>
+
+    <tr>
+      <td><div class="task-name">Run shell commands & scripts</div><div class="task-desc">Execute bash, Python, and system-level commands</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">OpenClaw has direct shell access. Cowork runs code in an isolated VM; no arbitrary shell commands.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Manage code repos / open PRs</div><div class="task-desc">Interact with GitHub, resolve errors, open pull requests</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">OpenClaw can autonomously fix bugs and open PRs via GitHub integration. Cowork is non-technical.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Scheduled / cron-based tasks</div><div class="task-desc">Run recurring automated jobs on a schedule</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">OpenClaw has native cron support. Cowork is session-based and requires the app to stay open.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Build & install new skills/plugins</div><div class="task-desc">Extend capabilities with community or custom tools</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-partial-work">~ Limited</span></td>
+      <td class="note">OpenClaw has 100+ community skills and can write new ones itself. Cowork has a curated connector catalog.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Use local / open-source models</div><div class="task-desc">Run inference via Ollama or self-hosted endpoints</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">OpenClaw is model-agnostic. Cowork is tied to Claude (Opus 4.6) on Anthropic's infrastructure.</td>
+    </tr>
+
+    <!-- PRODUCTIVITY & PERSONAL -->
+    <tr class="category-row"><td colspan="4">Productivity & Personal</td></tr>
+
+    <tr>
+      <td><div class="task-name">Manage calendar & reminders</div><div class="task-desc">Create events, set alerts, check schedule</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-partial-work">~ Via connectors</span></td>
+      <td class="note">OpenClaw has calendar skills. Cowork can connect to calendar services via MCP connectors.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Sync with Notion / Obsidian / notes</div><div class="task-desc">Read and write to personal knowledge bases</div></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="note">Both support Notion via connectors. OpenClaw also has deep Obsidian and local notes integration.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Persistent memory across sessions</div><div class="task-desc">Remember context, preferences, and prior work</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">OpenClaw maintains long-term memory. Cowork explicitly states no memory across sessions.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Voice interaction</div><div class="task-desc">Speak to the agent and hear responses</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">OpenClaw has always-on voice wake + talk mode via ElevenLabs. Cowork is text/desktop only.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Smart home & IoT control</div><div class="task-desc">Interact with home automation, devices, sensors</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">OpenClaw has smart home skills. Cowork has no IoT integrations.</td>
+    </tr>
+
+    <!-- ENTERPRISE & SAFETY -->
+    <tr class="category-row"><td colspan="4">Enterprise & Safety</td></tr>
+
+    <tr>
+      <td><div class="task-name">Audit logs & compliance</div><div class="task-desc">Track agent actions for governance and review</div></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ Limited</span></td>
+      <td class="note">Cowork explicitly notes activity is not captured in Audit Logs or Compliance API (research preview).</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Multi-agent orchestration</div><div class="task-desc">Spawn and coordinate parallel sub-agents on a task</div></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="status-cell"><span class="badge badge-both">✓ Both</span></td>
+      <td class="note">Both support parallel sub-agents. Cowork's VM sandbox keeps them isolated. OpenClaw is more open.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">Cross-device / mobile access</div><div class="task-desc">Use the agent from phone, tablet, or remote device</div></td>
+      <td class="status-cell"><span class="badge badge-claw">✓ Yes</span></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="note">OpenClaw has iOS/Android companion apps. Cowork is desktop-only with no cross-device sync.</td>
+    </tr>
+
+    <tr>
+      <td><div class="task-name">No-code setup</div><div class="task-desc">Works without terminal or CLI knowledge</div></td>
+      <td class="status-cell"><span class="badge badge-neither">✗ No</span></td>
+      <td class="status-cell"><span class="badge badge-work">✓ Yes</span></td>
+      <td class="note">Cowork is built for non-technical users. OpenClaw explicitly warns it requires command-line comfort.</td>
+    </tr>
+
+  </tbody>
+</table>
+</div>
+
+<p class="footer-note">~ Partial = capability exists but with caveats or additional setup required. As of February 2026; both products are in active development.</p>
+
+</body>
+</html>

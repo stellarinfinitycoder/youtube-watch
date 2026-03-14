@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Video Board - Asana Style</title>
+  <style>
+    :root {
+      --bg: #fbfbfc;
+      --surface: #ffffff;
+      --line: #e8e8ed;
+      --text: #191919;
+      --muted: #6c6f7a;
+      --pink: #f06a6a;
+      --gold: #f2b35d;
+      --green: #58b97c;
+      --blue: #5a8df0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top right, rgba(240,106,106,.08), transparent 30%),
+        linear-gradient(180deg, #fefefe, #fbfbfc);
+      color: var(--text);
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+    }
+    .page { padding: 20px; }
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .title { font-size: 30px; font-weight: 700; letter-spacing: -.03em; }
+    .tab {
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+    }
+    .tab.active { background: #fff4f4; color: #c44c4c; border-color: #ffd8d8; }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(248px, 1fr));
+      gap: 14px;
+      overflow-x: auto;
+    }
+    .col {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 4px 18px rgba(0,0,0,.04);
+    }
+    .head {
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .mark {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+    }
+    .pink { background: var(--pink); }
+    .gold { background: var(--gold); }
+    .green { background: var(--green); }
+    .blue { background: var(--blue); }
+    .handle { font-size: 13px; font-weight: 700; }
+    .list { padding: 10px; display: grid; gap: 10px; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .thumb {
+      height: 124px;
+      background: linear-gradient(135deg, #f6f0f0, #faf7f2, #f8f9fd);
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      color: #8a8e99;
+      font-size: 11px;
+      letter-spacing: .08em;
+    }
+    .body { padding: 11px; }
+    h3 { margin: 0 0 8px; font-size: 15px; line-height: 1.32; }
+    .meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .tag {
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 11px;
+      color: #694f2f;
+      background: #fff1d9;
+    }
+    @media (max-width: 1100px) { .board { grid-template-columns: repeat(2, minmax(248px,1fr)); } }
+    @media (max-width: 760px) { .board { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="top">
+      <div class="title">Creator board</div>
+      <div class="tab active">Board</div>
+      <div class="tab">Timeline</div>
+      <div class="tab">Calendar</div>
+      <div class="tab">Reports</div>
+    </header>
+    <main class="board">
+      <section class="col"><div class="head"><div class="mark pink"></div><div class="handle">@DAVIDONDREJ</div></div><div class="list"><article class="card"><div class="thumb">VIDEO CARD</div><div class="body"><h3>OpenClaw 2.0 is here</h3><div class="meta"><span class="tag">AI</span><span>17k views</span></div></div></article><article class="card"><div class="thumb">VIDEO CARD</div><div class="body"><h3>GPT-5.4 hit a wall</h3><div class="meta"><span class="tag">Opinion</span><span>28k views</span></div></div></article></div></section>
+      <section class="col"><div class="head"><div class="mark gold"></div><div class="handle">@MATTHEW_BERMAN</div></div><div class="list"><article class="card"><div class="thumb">VIDEO CARD</div><div class="body"><h3>Self-driving cars and AI</h3><div class="meta"><span class="tag">Auto</span><span>582 views</span></div></div></article><article class="card"><div class="thumb">VIDEO CARD</div><div class="body"><h3>Claude just got caught</h3><div class="meta"><span class="tag">Tools</span><span>43k views</span></div></div></article></div></section>
+      <section class="col"><div class="head"><div class="mark green"></div><div class="handle">@NATEBJONES</div></div><div class="list"><article class="card"><div class="thumb">VIDEO CARD</div><div class="body"><h3>4,000 jobs lost at Block</h3><div class="meta"><span class="tag">Macro</span><span>7k views</span></div></div></article><article class="card"><div class="thumb">VIDEO CARD</div><div class="body"><h3>Stop trusting agent guesses</h3><div class="meta"><span class="tag">AI</span><span>7k views</span></div></div></article></div></section>
+      <section class="col"><div class="head"><div class="mark blue"></div><div class="handle">@MEETKEVIN</div></div><div class="list"><article class="card"><div class="thumb">VIDEO CARD</div><div class="body"><h3>Iran risk escalates</h3><div class="meta"><span class="tag">Geo</span><span>21k views</span></div></div></article><article class="card"><div class="thumb">VIDEO CARD</div><div class="body"><h3>Markets under pressure</h3><div class="meta"><span class="tag">Markets</span><span>75k views</span></div></div></article></div></section>
+      <section class="col"><div class="head"><div class="mark pink"></div><div class="handle">@ALEXFINNOFFICIAL</div></div><div class="list"><article class="card"><div class="thumb">VIDEO CARD</div><div class="body"><h3>OpenClaw use cases</h3><div class="meta"><span class="tag">Product</span><span>14k views</span></div></div></article><article class="card"><div class="thumb">VIDEO CARD</div><div class="body"><h3>Mission Control tooling</h3><div class="meta"><span class="tag">Workflow</span><span>79k views</span></div></div></article></div></section>
+    </main>
+  </div>
+</body>
+</html>

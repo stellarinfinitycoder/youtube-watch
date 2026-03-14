@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Board - skills.sh Style</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #FAF8F5;
+    --text: #1A1714;
+    --muted: #7A736A;
+    --border: #E8E2DA;
+    --surface: #FDFCFA;
+    --hover: #F7F3EF;
+    --accent: #FF4D1C;
+    --accent-bg: #FFF5F2;
+    --alt: #6C5CE7;
+    --alt-bg: #F5F3FF;
+    --good: #00B37E;
+    --good-bg: #EDFAF4;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 48px 24px 80px;
+  }
+
+  .page {
+    max-width: 1120px;
+    margin: 0 auto;
+  }
+
+  .nav {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    margin-bottom: 36px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+  }
+
+  .nav a {
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .hero {
+    margin-bottom: 28px;
+  }
+
+  h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(34px, 5vw, 54px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin-bottom: 18px;
+  }
+
+  .ascii {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: pre;
+    margin-bottom: 22px;
+    color: var(--text);
+  }
+
+  .subtitle {
+    max-width: 660px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--muted);
+    font-weight: 300;
+  }
+
+  .search-wrap {
+    margin: 0 0 18px;
+  }
+
+  .search {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    padding: 16px 18px;
+    font-size: 15px;
+    color: var(--text);
+    outline: none;
+    box-shadow: 0 2px 24px rgba(0,0,0,0.05);
+  }
+
+  .tabs {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+  }
+
+  .tab.active {
+    background: var(--accent-bg);
+    color: var(--accent);
+    border-color: rgba(255,77,28,0.15);
+  }
+
+  .table-wrap {
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 24px rgba(0,0,0,0.05);
+    background: var(--surface);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+  }
+
+  thead tr {
+    background: var(--text);
+  }
+
+  thead th {
+    padding: 20px 24px;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.5);
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  thead th:first-child { width: 7%; }
+  thead th:nth-child(2) { width: 38%; }
+  thead th:nth-child(3) { width: 25%; }
+  thead th:nth-child(4) { width: 13%; }
+  thead th:last-child { width: 17%; }
+
+  .category-row td {
+    background: var(--text);
+    padding: 10px 24px;
+    color: rgba(255,255,255,0.4);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  tbody tr:not(.category-row) {
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr:not(.category-row):hover {
+    background: var(--hover);
+  }
+
+  tbody tr:not(.category-row):last-child {
+    border-bottom: none;
+  }
+
+  td {
+    padding: 14px 24px;
+    vertical-align: middle;
+  }
+
+  .rank {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .channel {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: linear-gradient(135deg, #f0ece6, #fcfbf8);
+    flex-shrink: 0;
+  }
+
+  .channel-name {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+
+  .channel-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-weight: 300;
+  }
+
+  .video-title {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.45;
+  }
+
+  .video-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-weight: 300;
+    line-height: 1.45;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: 'DM Mono', monospace;
+    white-space: nowrap;
+  }
+
+  .badge-accent {
+    background: var(--accent-bg);
+    color: var(--accent);
+    border: 1px solid rgba(255,77,28,0.15);
+  }
+
+  .badge-alt {
+    background: var(--alt-bg);
+    color: var(--alt);
+    border: 1px solid rgba(108,92,231,0.15);
+  }
+
+  .badge-good {
+    background: var(--good-bg);
+    color: var(--good);
+    border: 1px solid rgba(0,179,126,0.15);
+  }
+
+  .note {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    font-style: italic;
+  }
+
+  .foot {
+    margin-top: 20px;
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  @media (max-width: 960px) {
+    body { padding: 28px 14px 60px; }
+    .table-wrap { overflow-x: auto; }
+    table { min-width: 940px; }
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <nav class="nav">
+      <a href="#">Skills</a>
+      <a href="#">Audits</a>
+      <a href="#">Docs</a>
+    </nav>
+
+    <section class="hero">
+      <h1>Skills-style<br>Video Directory</h1>
+      <div class="ascii">███████╗██╗  ██╗██╗██╗     ██╗     ███████╗
+██╔════╝██║ ██╔╝██║██║     ██║     ██╔════╝
+███████╗█████╔╝ ██║██║     ██║     ███████╗
+╚════██║██╔═██╗ ██║██║     ██║     ╚════██║
+███████║██║  ██╗██║███████╗███████╗███████║
+╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚══════╝</div>
+      <p class="subtitle">A warm editorial directory inspired by <a href="https://skills.sh/" target="_blank" rel="noreferrer" style="color:inherit;">skills.sh</a>, adapted as a leaderboard-style watch surface for tracked video channels and their latest uploads.</p>
+    </section>
+
+    <div class="search-wrap">
+      <input class="search" type="text" value="Search channels..." aria-label="Search channels" />
+    </div>
+
+    <div class="tabs">
+      <div class="tab active">All Channels (5)</div>
+      <div class="tab">Trending Today</div>
+      <div class="tab">AI Coverage</div>
+      <div class="tab">Markets</div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Channel</th>
+            <th>Latest Video</th>
+            <th>Views</th>
+            <th>Signal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="category-row"><td colspan="5">AI Product Narratives</td></tr>
+
+          <tr>
+            <td class="rank">1</td>
+            <td><div class="channel"><div class="avatar"></div><div><div class="channel-name">David Ondrej</div><div class="channel-sub">@DavidOndrej</div></div></div></td>
+            <td><div class="video-title">OpenClaw 2.0 is here</div><div class="video-sub">Launch framing, creator commentary, product momentum</div></td>
+            <td><span class="badge badge-accent">17k</span></td>
+            <td><div class="note">Strong release-day signal with clear product positioning.</div></td>
+          </tr>
+
+          <tr>
+            <td class="rank">2</td>
+            <td><div class="channel"><div class="avatar"></div><div><div class="channel-name">Alex Finn</div><div class="channel-sub">@AlexFinnOfficial</div></div></div></td>
+            <td><div class="video-title">OpenClaw use cases</div><div class="video-sub">Workflow demos and practical operator angles</div></td>
+            <td><span class="badge badge-good">14k</span></td>
+            <td><div class="note">Utility-driven coverage rather than pure opinion or hype.</div></td>
+          </tr>
+
+          <tr class="category-row"><td colspan="5">AI Commentary & Analysis</td></tr>
+
+          <tr>
+            <td class="rank">3</td>
+            <td><div class="channel"><div class="avatar"></div><div><div class="channel-name">Matthew Berman</div><div class="channel-sub">@matthew_berman</div></div></div></td>
+            <td><div class="video-title">Self-driving cars and AI</div><div class="video-sub">Fast explainer with emerging early traction</div></td>
+            <td><span class="badge badge-alt">582</span></td>
+            <td><div class="note">Lower current views, but useful for early narrative detection.</div></td>
+          </tr>
+
+          <tr>
+            <td class="rank">4</td>
+            <td><div class="channel"><div class="avatar"></div><div><div class="channel-name">Nate B Jones</div><div class="channel-sub">@NateBJones</div></div></div></td>
+            <td><div class="video-title">4,000 jobs lost at Block</div><div class="video-sub">Labor and macro framing around AI consequences</div></td>
+            <td><span class="badge badge-good">7k</span></td>
+            <td><div class="note">Best when you want a strategy and policy-adjacent angle.</div></td>
+          </tr>
+
+          <tr class="category-row"><td colspan="5">Macro & Geopolitics</td></tr>
+
+          <tr>
+            <td class="rank">5</td>
+            <td><div class="channel"><div class="avatar"></div><div><div class="channel-name">Meet Kevin</div><div class="channel-sub">@MeetKevin</div></div></div></td>
+            <td><div class="video-title">Iran risk escalates</div><div class="video-sub">Crisis-driven market coverage and urgency</div></td>
+            <td><span class="badge badge-accent">21k</span></td>
+            <td><div class="note">Separate cluster from AI creator coverage to keep signals clean.</div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="foot">Mockup only. Style reference: [skills.sh](https://skills.sh/), adapted into a video monitoring directory rather than a skills leaderboard.</p>
+  </div>
+</body>
+</html>

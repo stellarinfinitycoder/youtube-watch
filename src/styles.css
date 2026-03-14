@@ -251,15 +251,19 @@ body {
   order: 5;
 }
 
-.columns-nav [aria-label="Bulk add channels"] {
+.columns-nav [aria-label="Play all videos"] {
   order: 6;
+}
+
+.columns-nav [aria-label="Bulk add channels"] {
+  order: 7;
 }
 
 .columns-nav [aria-label="Scroll columns to first"],
 .columns-nav [aria-label="Scroll columns left"],
 .columns-nav [aria-label="Scroll columns right"],
 .columns-nav [aria-label="Scroll columns to last"] {
-  order: 7;
+  order: 8;
 }
 
 .columns-scroll {
@@ -629,6 +633,12 @@ body {
 
 .speed-controls-right {
   justify-content: flex-end;
+}
+
+.playlist-progress-text.ant-typography {
+  font-size: 12px;
+  color: var(--amber);
+  letter-spacing: 0.02em;
 }
 
 .speed-btn.ant-btn {

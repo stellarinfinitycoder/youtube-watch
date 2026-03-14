@@ -51,6 +51,11 @@ type YouTubePlayerEvent = {
   target: YouTubePlayer;
 };
 
+type YouTubePlayerStateChangeEvent = {
+  target: YouTubePlayer;
+  data: number;
+};
+
 type YouTubeNamespace = {
   Player: new (
     element: HTMLElement,
@@ -59,6 +64,7 @@ type YouTubeNamespace = {
       playerVars?: Record<string, number>;
       events?: {
         onReady?: (event: YouTubePlayerEvent) => void;
+        onStateChange?: (event: YouTubePlayerStateChangeEvent) => void;
       };
     }
   ) => YouTubePlayer;
@@ -737,6 +743,8 @@ function App() {
   const [isDeleteBoardModalOpen, setIsDeleteBoardModalOpen] = useState(false);
   const [bulkInput, setBulkInput] = useState("");
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
+  const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
+  const [playlistIndex, setPlaylistIndex] = useState<number>(-1);
   const [playbackRate, setPlaybackRate] = useState<number>(1.5);
   const [availablePlaybackRates, setAvailablePlaybackRates] = useState<number[]>([
     0.5,
@@ -765,9 +773,10 @@ function App() {
       ? columns.find((column) => column.id === deletingColumnId)
       : undefined) ?? null;
   const watchedVideos = activeBoard?.watchedVideos ?? {};
-  const isActiveVideoWatched = activeVideo
-    ? watchedVideos[activeVideo.videoId] === true
-    : false;
+  const isPlaylistActive =
+    playlistIndex >= 0 &&
+    playlistQueue.length > 0 &&
+    playlistIndex < playlistQueue.length;
   const videoFilter = activeBoard?.videoFilter ?? "new";
   const videoWindowDays = activeBoard?.videoWindowDays ?? DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
@@ -947,6 +956,12 @@ function App() {
                 clearTimeout(fallbackTimer);
                 fallbackTimer = null;
               }
+            },
+            onStateChange: (event) => {
+              if (event.data !== 0 || !activeVideo) {
+                return;
+              }
+              markWatchedAndAdvanceOrClose();
             }
           }
         });
@@ -969,7 +984,14 @@ function App() {
       }
       playerReadyRef.current = false;
     };
-  }, [activeVideo, playerHostNode, preferredPlaybackRate]);
+  }, [
+    activeVideo,
+    isPlaylistActive,
+    playerHostNode,
+    playlistIndex,
+    playlistQueue,
+    preferredPlaybackRate
+  ]);
 
   useEffect(() => {
     if (!activeVideo) {
@@ -1266,6 +1288,60 @@ function App() {
     }
   };
 
+  const markWatched = (videoId: string): void => {
+    if (!activeBoard) {
+      return;
+    }
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      watchedVideos: {
+        ...board.watchedVideos,
+        [videoId]: true
+      }
+    }));
+  };
+
+  const stopPlaylist = (): void => {
+    setPlaylistQueue([]);
+    setPlaylistIndex(-1);
+  };
+
+  const closeVideoModal = (): void => {
+    setActiveVideo(null);
+    setIsPlayerReady(false);
+    playerReadyRef.current = false;
+    setUseIframeFallback(false);
+  };
+
+  const markWatchedAndAdvanceOrClose = (): void => {
+    if (!activeVideo) {
+      return;
+    }
+
+    markWatched(activeVideo.videoId);
+
+    if (!isPlaylistActive) {
+      stopPlaylist();
+      closeVideoModal();
+      return;
+    }
+
+    const nextIndex = playlistIndex + 1;
+    if (nextIndex >= playlistQueue.length) {
+      stopPlaylist();
+      closeVideoModal();
+      return;
+    }
+
+    setPlaylistIndex(nextIndex);
+    setActiveVideo(playlistQueue[nextIndex]);
+  };
+
+  const openVideo = (video: VideoItem): void => {
+    stopPlaylist();
+    setActiveVideo(video);
+  };
+
   const toggleWatched = (videoId: string): void => {
     if (!activeBoard) {
       return;
@@ -1282,6 +1358,43 @@ function App() {
         watchedVideos: next
       };
     });
+  };
+
+  const playAllVideos = (): void => {
+    if (!activeBoard) {
+      return;
+    }
+
+    const cutoffTime = getWindowCutoffTime(videoWindowDays);
+    const mergedById = new Map<string, VideoItem>();
+    columns.forEach((column) => {
+      column.videos.forEach((video) => {
+        if (getVideoPublishedTime(video) >= cutoffTime) {
+          mergedById.set(video.videoId, video);
+        }
+      });
+    });
+
+    const queue = [...mergedById.values()]
+      .filter((video) => {
+        const isWatched = watchedVideos[video.videoId] === true;
+        if (videoFilter === "all") {
+          return true;
+        }
+        if (videoFilter === "watched") {
+          return isWatched;
+        }
+        return !isWatched;
+      })
+      .sort((a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a));
+
+    if (queue.length === 0) {
+      return;
+    }
+
+    setPlaylistQueue(queue);
+    setPlaylistIndex(0);
+    setActiveVideo(queue[0]);
   };
 
   const createBoard = (): string => {
@@ -1469,6 +1582,14 @@ function App() {
         </Button>
         <Button
           htmlType="button"
+          onClick={playAllVideos}
+          aria-label="Play all videos"
+          className="nav-btn"
+        >
+          Play All
+        </Button>
+        <Button
+          htmlType="button"
           onClick={() => setIsBulkModalOpen(true)}
           aria-label="Bulk add channels"
           className="nav-btn add-channels-btn"
@@ -1578,10 +1699,8 @@ function App() {
         title={activeVideo?.title ?? "Video"}
         open={activeVideo !== null}
         onCancel={() => {
-          setActiveVideo(null);
-          setIsPlayerReady(false);
-          playerReadyRef.current = false;
-          setUseIframeFallback(false);
+          stopPlaylist();
+          closeVideoModal();
         }}
         footer={null}
         width={1125}
@@ -1613,19 +1732,16 @@ function App() {
                 <Button
                   htmlType="button"
                   className="video-watch-btn modal-watch-btn"
-                  aria-label={`Mark ${activeVideo.title} as ${
-                    isActiveVideoWatched ? "new" : "watched"
-                  }`}
-                  onClick={() => {
-                    toggleWatched(activeVideo.videoId);
-                    setActiveVideo(null);
-                    setIsPlayerReady(false);
-                    playerReadyRef.current = false;
-                    setUseIframeFallback(false);
-                  }}
+                  aria-label={`Mark ${activeVideo.title} as watched`}
+                  onClick={markWatchedAndAdvanceOrClose}
                 >
-                  {isActiveVideoWatched ? "U" : "W"}
+                  W
                 </Button>
+                {isPlaylistActive ? (
+                  <Text className="playlist-progress-text">
+                    {playlistIndex + 1}/{playlistQueue.length}. ALL CHANNELS. NEWEST.
+                  </Text>
+                ) : null}
               </div>
               <div className="speed-controls-right">
                 {availablePlaybackRates.map((rate) => (
@@ -1795,7 +1911,7 @@ function App() {
                                 <button
                                   type="button"
                                   className="video-thumb-btn"
-                                  onClick={() => setActiveVideo(video)}
+                                  onClick={() => openVideo(video)}
                                 >
                                   <img
                                     src={video.thumbnailUrl}
@@ -1807,7 +1923,7 @@ function App() {
                               <button
                                 type="button"
                                 className="video-link-btn"
-                                onClick={() => setActiveVideo(video)}
+                                onClick={() => openVideo(video)}
                               >
                                 <Title level={5} className="video-title">
                                   {video.title}

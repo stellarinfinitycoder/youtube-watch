@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Terminal Light Amber</title>
+  <style>
+    :root {
+      --bg: #f4f1eb;
+      --panel: #fbf9f4;
+      --line: #d08111;
+      --line-soft: #d9b78a;
+      --text: #2b2116;
+      --muted: #69533a;
+      --cyan: #0a6780;
+      --good: #0d7a38;
+      --bad: #b2352a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        repeating-linear-gradient(90deg, rgba(208,129,17,.06) 0 1px, transparent 1px 14px),
+        linear-gradient(180deg,#f8f4ed,#efe9de);
+      color: var(--text);
+      font-family: "IBM Plex Mono", "Consolas", monospace;
+      padding: 14px;
+    }
+    .frame { border: 2px solid var(--line); background: var(--bg); }
+    .toolbar {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+      border-bottom: 2px solid var(--line); padding: 10px;
+      background: linear-gradient(180deg,#faf4e8,#f1e8da);
+    }
+    .key {
+      padding: 6px 12px; border: 1px solid var(--line); background: #ffe4be;
+      color: #3d280f; font-weight: 700; letter-spacing: .3px;
+    }
+    .chip {
+      margin-left: auto; border: 1px solid #88b29d; padding: 6px 10px;
+      background: #ecfff3; color: var(--good); font-size: 12px;
+    }
+    .columns {
+      display: grid; gap: 10px; padding: 10px;
+      grid-template-columns: repeat(5, minmax(280px, 1fr));
+      overflow-x: auto;
+    }
+    .col { border: 1px solid var(--line); background: var(--panel); min-height: 760px; }
+    .head {
+      display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+      padding: 8px; border-bottom: 1px solid var(--line-soft);
+      background: #f7efe3;
+    }
+    .fetch { border: 1px solid var(--line); padding: 5px 10px; color: #5c3a0f; background:#ffe6c4; font-weight:700; }
+    .time { color: var(--cyan); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .close { border: 1px solid var(--bad); color: var(--bad); width: 28px; height: 28px; display: grid; place-items: center; background:#fff4f1; }
+    .handle { margin: 8px; border: 1px solid var(--line-soft); padding: 7px; background: #fff7eb; }
+    .feed { padding: 0 8px 8px; }
+    .story { border-top: 1px solid var(--line-soft); padding: 10px 0; }
+    .story:first-child { border-top: 0; }
+    h2 { margin: 0 0 8px; font-size: 20px; line-height: 1.28; font-weight: 700; }
+    .thumb {
+      height: 150px; border: 1px solid var(--line-soft);
+      background: linear-gradient(130deg,#dbeaf0,#f7f0e1 60%,#ffe8c9);
+      display: grid; place-items: center; color: #526677; letter-spacing: .8px;
+    }
+    .meta { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+    @media (max-width:1200px){ .columns{ grid-template-columns:repeat(2,minmax(280px,1fr)); } }
+    @media (max-width:720px){ .columns{ grid-template-columns:1fr; } .chip{ margin-left:0; } }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <div class="toolbar">
+      <div class="key">&lt;&lt;</div><div class="key">&lt;</div><div class="key">&gt;</div><div class="key">&gt;&gt;</div>
+      <div class="key">ADD CHANNEL</div><div class="key">FETCH ALL</div>
+      <div class="chip">LIVE 12/03/2026 19:23:47 CET</div>
+    </div>
+    <div class="columns">
+      <section class="col"><div class="head"><div class="fetch">FETCH</div><div class="time">12/03/2026 19:23:47</div><div class="close">X</div></div><div class="handle">@DAVIDONDREJ</div><div class="feed"><article class="story"><h2>OPENCLAW 2.0 IS HERE</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">DAVID ONDREJ | 11/03/2026 | 17K</div></article><article class="story"><h2>GPT-5.4 HIT A WALL</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">DAVID ONDREJ | 06/03/2026 | 28K</div></article></div></section>
+      <section class="col"><div class="head"><div class="fetch">FETCH</div><div class="time">12/03/2026 19:23:47</div><div class="close">X</div></div><div class="handle">@MATTHEW_BERMAN</div><div class="feed"><article class="story"><h2>SELF-DRIVING CARS</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">MATTHEW BERMAN | 12/03/2026 | 582</div></article><article class="story"><h2>CLAUDE GOT CAUGHT</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">MATTHEW BERMAN | 11/03/2026 | 43K</div></article></div></section>
+      <section class="col"><div class="head"><div class="fetch">FETCH</div><div class="time">12/03/2026 19:23:47</div><div class="close">X</div></div><div class="handle">@NATEBJONES</div><div class="feed"><article class="story"><h2>4,000 JOBS LOST AT BLOCK</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">NATE B JONES | 12/03/2026 | 7K</div></article><article class="story"><h2>AGENTS SHOULD NOT GUESS</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">NATE B JONES | 11/03/2026 | 7K</div></article></div></section>
+      <section class="col"><div class="head"><div class="fetch">FETCH</div><div class="time">12/03/2026 19:23:47</div><div class="close">X</div></div><div class="handle">@MEETKEVIN</div><div class="feed"><article class="story"><h2>IRAN RISK ESCALATES</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">MEET KEVIN | 12/03/2026 | 21K</div></article><article class="story"><h2>MARKETS UNDER PRESSURE</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">MEET KEVIN | 11/03/2026 | 75K</div></article></div></section>
+      <section class="col"><div class="head"><div class="fetch">FETCH</div><div class="time">12/03/2026 19:23:47</div><div class="close">X</div></div><div class="handle">@ALEXFINNOFFICIAL</div><div class="feed"><article class="story"><h2>OPENCLAW USE CASES</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">ALEX FINN | 11/03/2026 | 14K</div></article><article class="story"><h2>MISSION CONTROL TOOLING</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">ALEX FINN | 03/03/2026 | 79K</div></article></div></section>
+    </div>
+  </div>
+</body>
+</html>

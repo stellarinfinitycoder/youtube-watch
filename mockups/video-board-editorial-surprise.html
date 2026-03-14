@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Video Board - Editorial Surprise</title>
+  <style>
+    :root {
+      --paper: #f4ead8;
+      --ink: #201712;
+      --line: #b98d57;
+      --surface: rgba(255,248,236,.72);
+      --muted: #765a40;
+      --red: #b4452e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Iowan Old Style", "Georgia", serif;
+      background:
+        radial-gradient(circle at top right, rgba(180,69,46,.08), transparent 26%),
+        linear-gradient(180deg, #f7efdf, #efe1cb);
+    }
+    .sheet { max-width: 1520px; margin: 0 auto; padding: 18px; }
+    .masthead {
+      border-top: 4px solid var(--ink);
+      border-bottom: 1px solid var(--line);
+      padding: 14px 0 18px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: end;
+    }
+    .name { font-size: 44px; line-height: .95; letter-spacing: -.04em; font-weight: 700; }
+    .edition { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); text-align: right; }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(238px, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+      overflow-x: auto;
+    }
+    .col {
+      border: 1px solid var(--line);
+      background: var(--surface);
+      backdrop-filter: blur(8px);
+      padding: 10px;
+      min-height: 78vh;
+    }
+    .head {
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .handle {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      letter-spacing: .06em;
+      color: var(--red);
+    }
+    .story {
+      border-top: 1px solid rgba(185,141,87,.7);
+      padding: 10px 0;
+    }
+    .story:first-of-type { border-top: 0; padding-top: 0; }
+    .thumb {
+      height: 126px;
+      border: 1px solid rgba(185,141,87,.75);
+      background: linear-gradient(135deg, #ead9be, #f7efe0);
+      display: grid;
+      place-items: center;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    h3 { margin: 0 0 8px; font-size: 22px; line-height: 1.15; font-weight: 700; }
+    .meta {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    @media (max-width: 1100px) { .board { grid-template-columns: repeat(2, minmax(238px,1fr)); } }
+    @media (max-width: 760px) {
+      .board { grid-template-columns: 1fr; }
+      .masthead { grid-template-columns: 1fr; }
+      .edition { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <header class="masthead">
+      <div class="name">Signal Ledger</div>
+      <div class="edition">EUROPE EDITION<br />FRIDAY, MARCH 13, 2026</div>
+    </header>
+    <main class="board">
+      <section class="col"><div class="head"><div class="handle">@DAVIDONDREJ</div></div><article class="story"><div class="thumb">PLATE 01</div><h3>OpenClaw 2.0 is here</h3><div class="meta">11/03/2026 • 17k views</div></article><article class="story"><div class="thumb">PLATE 02</div><h3>GPT-5.4 hit a wall</h3><div class="meta">06/03/2026 • 28k views</div></article></section>
+      <section class="col"><div class="head"><div class="handle">@MATTHEW_BERMAN</div></div><article class="story"><div class="thumb">PLATE 03</div><h3>Self-driving cars and AI</h3><div class="meta">12/03/2026 • 582 views</div></article><article class="story"><div class="thumb">PLATE 04</div><h3>Claude just got caught</h3><div class="meta">11/03/2026 • 43k views</div></article></section>
+      <section class="col"><div class="head"><div class="handle">@NATEBJONES</div></div><article class="story"><div class="thumb">PLATE 05</div><h3>4,000 jobs lost at Block</h3><div class="meta">12/03/2026 • 7k views</div></article><article class="story"><div class="thumb">PLATE 06</div><h3>Stop trusting agent guesses</h3><div class="meta">11/03/2026 • 7k views</div></article></section>
+      <section class="col"><div class="head"><div class="handle">@MEETKEVIN</div></div><article class="story"><div class="thumb">PLATE 07</div><h3>Iran risk escalates</h3><div class="meta">12/03/2026 • 21k views</div></article><article class="story"><div class="thumb">PLATE 08</div><h3>Markets under pressure</h3><div class="meta">11/03/2026 • 75k views</div></article></section>
+      <section class="col"><div class="head"><div class="handle">@ALEXFINNOFFICIAL</div></div><article class="story"><div class="thumb">PLATE 09</div><h3>OpenClaw use cases</h3><div class="meta">11/03/2026 • 14k views</div></article><article class="story"><div class="thumb">PLATE 10</div><h3>Mission Control tooling</h3><div class="meta">03/03/2026 • 79k views</div></article></section>
+    </main>
+  </div>
+</body>
+</html>

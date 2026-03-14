@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Terminal Light Monochrome</title>
+  <style>
+    :root {
+      --bg: #f5f5f5;
+      --panel: #fcfcfc;
+      --line: #262626;
+      --line-soft: #d4d4d4;
+      --text: #111111;
+      --muted: #555555;
+      --good: #0c6b2f;
+      --bad: #8a2121;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: transparent;
+      color: var(--text);
+      font-family: "JetBrains Mono", "Consolas", monospace;
+      padding: 14px;
+    }
+    .frame { border: 2px solid var(--line); background: transparent; }
+    .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; border-bottom:2px solid var(--line); padding:10px; background:#ececec; }
+    .key { padding:6px 12px; border:1px solid var(--line); background:#ffffff; color:#111; font-weight:700; }
+    .chip { margin-left:auto; border:1px solid #89b59a; padding:6px 10px; background:#eefbf2; color:var(--good); font-size:12px; }
+    .columns { display:grid; gap:10px; padding:10px; grid-template-columns:repeat(5,minmax(220px,240px)); justify-content:start; overflow-x:auto; }
+    .col { border:1px solid var(--line); background:var(--panel); min-height:760px; }
+    .head { display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:center; padding:8px; border-bottom:1px solid var(--line-soft); background:#f1f1f1; }
+    .fetch { border:1px solid var(--line); padding:5px 10px; color:#111; background:#fff; font-weight:700; }
+    .time { color:#222; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .close { border:1px solid var(--bad); color:var(--bad); width:28px; height:28px; display:grid; place-items:center; background:#fff3f3; }
+    .channel-id {
+      margin: 8px;
+      border: 1px solid var(--line-soft);
+      padding: 6px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border: 1px solid #9a9a9a;
+      background: linear-gradient(135deg, #efefef, #dcdcdc);
+      display: grid;
+      place-items: center;
+      font-size: 10px;
+      color: #666;
+      font-weight: 700;
+      letter-spacing: .2px;
+      flex: 0 0 30px;
+    }
+    .handle {
+      border: 1px solid var(--line-soft);
+      background: #fcfcfc;
+      padding: 6px 8px;
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .feed { padding:0 8px 8px; }
+    .story { border-top:1px solid var(--line-soft); padding:10px 0; }
+    .story:first-child { border-top:0; }
+    h2 { margin:0 0 8px; font-size:19px; line-height:1.3; font-weight:700; }
+    .thumb { height:150px; border:1px solid var(--line-soft); background:linear-gradient(130deg,#e8e8e8,#f5f5f5,#ececec); display:grid; place-items:center; color:#555; letter-spacing:.8px; }
+    .meta { margin-top:8px; font-size:12px; color:var(--muted); line-height:1.5; }
+    @media (max-width:1200px){ .columns{ grid-template-columns:repeat(2,minmax(220px,240px)); } }
+    @media (max-width:720px){ .columns{ grid-template-columns:1fr; } .chip{ margin-left:0; } }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <div class="toolbar">
+      <div class="key">&lt;&lt;</div><div class="key">&lt;</div><div class="key">&gt;</div><div class="key">&gt;&gt;</div>
+      <div class="key">ADD CHANNEL</div><div class="key">FETCH ALL</div>
+      <div class="chip">LIVE 12/03/2026 19:23:47 CET</div>
+    </div>
+    <div class="columns">
+      <section class="col"><div class="head"><div class="fetch">FETCH</div><div class="time">12/03/2026 19:23:47</div><div class="close">X</div></div><div class="channel-id"><div class="avatar">CH</div><div class="handle">@DAVIDONDREJ</div></div><div class="feed"><article class="story"><h2>OPENCLAW 2.0 IS HERE</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">DAVID ONDREJ | 11/03/2026 | 17K</div></article><article class="story"><h2>GPT-5.4 HIT A WALL</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">DAVID ONDREJ | 06/03/2026 | 28K</div></article></div></section>
+      <section class="col"><div class="head"><div class="fetch">FETCH</div><div class="time">12/03/2026 19:23:47</div><div class="close">X</div></div><div class="channel-id"><div class="avatar">CH</div><div class="handle">@MATTHEW_BERMAN</div></div><div class="feed"><article class="story"><h2>SELF-DRIVING CARS</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">MATTHEW BERMAN | 12/03/2026 | 582</div></article><article class="story"><h2>CLAUDE GOT CAUGHT</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">MATTHEW BERMAN | 11/03/2026 | 43K</div></article></div></section>
+      <section class="col"><div class="head"><div class="fetch">FETCH</div><div class="time">12/03/2026 19:23:47</div><div class="close">X</div></div><div class="channel-id"><div class="avatar">CH</div><div class="handle">@NATEBJONES</div></div><div class="feed"><article class="story"><h2>4,000 JOBS LOST AT BLOCK</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">NATE B JONES | 12/03/2026 | 7K</div></article><article class="story"><h2>AGENTS SHOULD NOT GUESS</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">NATE B JONES | 11/03/2026 | 7K</div></article></div></section>
+      <section class="col"><div class="head"><div class="fetch">FETCH</div><div class="time">12/03/2026 19:23:47</div><div class="close">X</div></div><div class="channel-id"><div class="avatar">CH</div><div class="handle">@MEETKEVIN</div></div><div class="feed"><article class="story"><h2>IRAN RISK ESCALATES</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">MEET KEVIN | 12/03/2026 | 21K</div></article><article class="story"><h2>MARKETS UNDER PRESSURE</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">MEET KEVIN | 11/03/2026 | 75K</div></article></div></section>
+      <section class="col"><div class="head"><div class="fetch">FETCH</div><div class="time">12/03/2026 19:23:47</div><div class="close">X</div></div><div class="channel-id"><div class="avatar">CH</div><div class="handle">@ALEXFINNOFFICIAL</div></div><div class="feed"><article class="story"><h2>OPENCLAW USE CASES</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">ALEX FINN | 11/03/2026 | 14K</div></article><article class="story"><h2>MISSION CONTROL TOOLING</h2><div class="thumb">VIDEO PREVIEW</div><div class="meta">ALEX FINN | 03/03/2026 | 79K</div></article></div></section>
+    </div>
+  </div>
+</body>
+</html>
