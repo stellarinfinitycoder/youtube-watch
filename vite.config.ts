@@ -4,7 +4,7 @@ import { loadEnv } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import {
   fetchLatestVideos,
   fetchViewCountsByVideoIds,
@@ -18,9 +18,21 @@ function collectFilesRecursive(root: string): string[] {
   const result: string[] = [];
 
   for (const entry of entries) {
+    if (entry.startsWith(".")) {
+      continue;
+    }
     const fullPath = join(root, entry);
     const info = statSync(fullPath);
     if (info.isDirectory()) {
+      if (
+        entry === "node_modules" ||
+        entry === "dist" ||
+        entry === ".git" ||
+        entry === ".vercel" ||
+        entry === "mockups"
+      ) {
+        continue;
+      }
       result.push(...collectFilesRecursive(fullPath));
       continue;
     }
@@ -58,8 +70,23 @@ function getSourceBuildFingerprint(): string {
   });
 
   files.sort();
+  const allowedExtensions = new Set([
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".css",
+    ".html",
+    ".json",
+    ".svg"
+  ]);
   files.forEach((filePath) => {
-    hash.update(filePath);
+    const extension = filePath.slice(filePath.lastIndexOf("."));
+    if (!allowedExtensions.has(extension)) {
+      return;
+    }
+    const normalizedPath = relative(process.cwd(), filePath).split("\\").join("/");
+    hash.update(normalizedPath);
     hash.update(readFileSync(filePath));
   });
 
