@@ -144,7 +144,7 @@ describe("App", () => {
         {
           videoId: "abc123",
           title: "Demo Video",
-          publishedAt: "2026-01-01T12:00:00Z",
+          publishedAt: "2026-03-13T12:00:00Z",
           thumbnailUrl: "https://img.test/demo.jpg",
           channelTitle: "Demo Channel",
           videoUrl: "https://www.youtube.com/watch?v=abc123",
@@ -164,7 +164,7 @@ describe("App", () => {
     expect(screen.getByLabelText("Channel 2 placeholder")).toBeInTheDocument();
     expect(screen.getByLabelText("Channel 3 placeholder")).toBeInTheDocument();
 
-    expect(spy).toHaveBeenCalledWith("@validhandle", 25);
+    expect(spy).toHaveBeenCalledWith("@validhandle", 50);
   });
 
   it("shows error alert on request failure", async () => {
@@ -204,7 +204,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fetch column 1" }));
 
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
-    expect(spy).toHaveBeenNthCalledWith(1, "@validone", 25);
+    expect(spy).toHaveBeenNthCalledWith(1, "@validone", 50);
   });
 
   it("adds and removes columns", () => {

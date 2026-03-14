@@ -23,7 +23,7 @@ import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
 
 const { Title, Text } = Typography;
-const DEFAULT_LIMIT = 25;
+const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -34,6 +34,10 @@ const LEGACY_PLAYBACK_RATE_STORAGE_KEY = "youtube-watch:playback-rate:v1";
 const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 
 type VideoFilter = "all" | "new" | "watched";
+type VideoWindowDays = 1 | 7 | 30 | 60 | 90 | 120 | 180;
+const VIDEO_WINDOW_OPTIONS: VideoWindowDays[] = [1, 7, 30, 60, 90, 120, 180];
+const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowDays = 30;
+const STORAGE_VIDEO_WINDOW_DAYS: VideoWindowDays = 180;
 
 type YouTubePlayer = {
   destroy: () => void;
@@ -126,6 +130,7 @@ type BoardState = {
   columns: ColumnState[];
   watchedVideos: Record<string, boolean>;
   videoFilter: VideoFilter;
+  videoWindowDays: VideoWindowDays;
   defaultPlaybackRate: number;
 };
 
@@ -135,6 +140,7 @@ type PersistedBoardState = {
   columns: PersistedColumnState[];
   watchedVideos: Record<string, boolean>;
   videoFilter: VideoFilter;
+  videoWindowDays: VideoWindowDays;
   defaultPlaybackRate: number;
 };
 
@@ -346,6 +352,7 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
     columns?: unknown;
     watchedVideos?: unknown;
     videoFilter?: unknown;
+    videoWindowDays?: unknown;
     defaultPlaybackRate?: unknown;
   };
 
@@ -392,6 +399,11 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
         candidate.videoFilter === "watched"
           ? candidate.videoFilter
           : "new",
+      videoWindowDays:
+        typeof candidate.videoWindowDays === "number" &&
+        VIDEO_WINDOW_OPTIONS.includes(candidate.videoWindowDays as VideoWindowDays)
+          ? (candidate.videoWindowDays as VideoWindowDays)
+          : DEFAULT_VIDEO_WINDOW_DAYS,
       defaultPlaybackRate:
         typeof candidate.defaultPlaybackRate === "number" &&
         Number.isFinite(candidate.defaultPlaybackRate) &&
@@ -462,6 +474,7 @@ function createBoardState(name: string, overrides?: Partial<BoardState>): BoardS
     columns: Array.from({ length: DEFAULT_COLUMN_COUNT }, () => createColumnState()),
     watchedVideos: {},
     videoFilter: "new",
+    videoWindowDays: DEFAULT_VIDEO_WINDOW_DAYS,
     defaultPlaybackRate: 1.5,
     ...overrides
   };
@@ -497,6 +510,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     columns?: unknown;
     watchedVideos?: unknown;
     videoFilter?: unknown;
+    videoWindowDays?: unknown;
     defaultPlaybackRate?: unknown;
   };
 
@@ -523,6 +537,11 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
       candidate.videoFilter === "watched"
         ? candidate.videoFilter
         : "new",
+    videoWindowDays:
+      typeof candidate.videoWindowDays === "number" &&
+      VIDEO_WINDOW_OPTIONS.includes(candidate.videoWindowDays as VideoWindowDays)
+        ? (candidate.videoWindowDays as VideoWindowDays)
+        : DEFAULT_VIDEO_WINDOW_DAYS,
     defaultPlaybackRate:
       typeof candidate.defaultPlaybackRate === "number" &&
       Number.isFinite(candidate.defaultPlaybackRate) &&
@@ -547,6 +566,7 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
     ),
     watchedVideos: board.watchedVideos,
     videoFilter: board.videoFilter,
+    videoWindowDays: board.videoWindowDays,
     defaultPlaybackRate: board.defaultPlaybackRate
   });
 }
@@ -632,6 +652,7 @@ function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string 
     ),
     watchedVideos: legacyWatchedVideos,
     videoFilter: "new",
+    videoWindowDays: DEFAULT_VIDEO_WINDOW_DAYS,
     defaultPlaybackRate: legacyPlaybackRate
   });
 
@@ -656,21 +677,13 @@ function formatVideoMeta(video: VideoItem): string {
   return `${dateLabel}, ${formatViewCount(video.viewCount)}`;
 }
 
-function getLastWednesdayMidnight(now = new Date()): Date {
-  const result = new Date(now);
-  const dayOfWeek = result.getDay();
-  let daysSinceWednesday = (dayOfWeek - 3 + 7) % 7;
-  if (daysSinceWednesday === 0) {
-    daysSinceWednesday = 7;
-  }
-  result.setDate(result.getDate() - daysSinceWednesday);
-  result.setHours(0, 0, 0, 0);
-  return result;
-}
-
 function getVideoPublishedTime(video: VideoItem): number {
   const parsed = Date.parse(video.publishedAt);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getWindowCutoffTime(days: VideoWindowDays, now = Date.now()): number {
+  return now - days * 24 * 60 * 60 * 1000;
 }
 
 function shouldIgnoreShortcutTarget(target: EventTarget | null): boolean {
@@ -756,6 +769,7 @@ function App() {
     ? watchedVideos[activeVideo.videoId] === true
     : false;
   const videoFilter = activeBoard?.videoFilter ?? "new";
+  const videoWindowDays = activeBoard?.videoWindowDays ?? DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
 
   useEffect(() => {
@@ -772,6 +786,38 @@ function App() {
   }, [preferredPlaybackRate]);
 
   useEffect(() => {
+    const cutoffTime = getWindowCutoffTime(STORAGE_VIDEO_WINDOW_DAYS);
+    setBoards((previous) => {
+      let changed = false;
+      const next = previous.map((board) => {
+        let boardChanged = false;
+        const nextColumns = board.columns.map((column) => {
+          const nextVideos = column.videos.filter(
+            (video) => getVideoPublishedTime(video) >= cutoffTime
+          );
+          if (nextVideos.length === column.videos.length) {
+            return column;
+          }
+          boardChanged = true;
+          changed = true;
+          return {
+            ...column,
+            videos: nextVideos
+          };
+        });
+        if (!boardChanged) {
+          return board;
+        }
+        return {
+          ...board,
+          columns: nextColumns
+        };
+      });
+      return changed ? next : previous;
+    });
+  }, []);
+
+  useEffect(() => {
     try {
       const storage = window.localStorage;
       if (!storage || typeof storage.setItem !== "function") {
@@ -784,6 +830,7 @@ function App() {
         columns: toPersistedColumns(board.columns),
         watchedVideos: board.watchedVideos,
         videoFilter: board.videoFilter,
+        videoWindowDays: board.videoWindowDays,
         defaultPlaybackRate: board.defaultPlaybackRate
       }));
       storage.setItem(BOARDS_STORAGE_KEY, JSON.stringify(persistedBoards));
@@ -997,10 +1044,13 @@ function App() {
 
     try {
       const normalized = normalizeHandle(handle);
-      const { videos, channelThumbnailUrl } =
-        await getLatestVideosAndChannelByHandle(normalized, DEFAULT_LIMIT);
-      const boardWatchedVideos =
-        boards.find((board) => board.id === boardId)?.watchedVideos ?? {};
+      const { videos, channelThumbnailUrl } = await getLatestVideosAndChannelByHandle(
+        normalized,
+        DEFAULT_LIMIT
+      );
+      const boardState = boards.find((board) => board.id === boardId);
+      const boardWatchedVideos = boardState?.watchedVideos ?? {};
+      const cutoffTime = getWindowCutoffTime(STORAGE_VIDEO_WINDOW_DAYS);
       const nextChannelThumbnailUrl =
         channelThumbnailUrl || videos[0]?.thumbnailUrl || "";
       setColumn(boardId, columnId, (prev) => ({
@@ -1008,17 +1058,18 @@ function App() {
         loading: false,
         error: null,
         videos: (() => {
-          const sinceTime = getLastWednesdayMidnight().getTime();
           const mergedById = new Map<string, VideoItem>();
 
           videos.forEach((video) => {
-            mergedById.set(video.videoId, video);
+            if (getVideoPublishedTime(video) >= cutoffTime) {
+              mergedById.set(video.videoId, video);
+            }
           });
 
           prev.videos.forEach((video) => {
             const isWatched = boardWatchedVideos[video.videoId] === true;
-            const isWithinStartDate = getVideoPublishedTime(video) >= sinceTime;
-            if (isWatched || !isWithinStartDate) {
+            const isWithinWindow = getVideoPublishedTime(video) >= cutoffTime;
+            if (isWatched || !isWithinWindow) {
               return;
             }
             const existing = mergedById.get(video.videoId);
@@ -1312,6 +1363,7 @@ function App() {
         columns: toPersistedColumns(board.columns),
         watchedVideos: board.watchedVideos,
         videoFilter: board.videoFilter,
+        videoWindowDays: board.videoWindowDays,
         defaultPlaybackRate: board.defaultPlaybackRate
       })),
       activeBoardId
@@ -1441,6 +1493,24 @@ function App() {
             { value: "new", label: "NEW" },
             { value: "watched", label: "WATCHED" }
           ]}
+        />
+        <Select<VideoWindowDays>
+          value={videoWindowDays}
+          onChange={(value) => {
+            if (!activeBoard) {
+              return;
+            }
+            setBoard(activeBoard.id, (board) => ({
+              ...board,
+              videoWindowDays: value
+            }));
+          }}
+          aria-label="Video age window"
+          className="video-filter-select"
+          options={VIDEO_WINDOW_OPTIONS.map((days) => ({
+            value: days,
+            label: `${days}D`
+          }))}
         />
         <Select<number>
           value={preferredPlaybackRate}
@@ -1583,6 +1653,7 @@ function App() {
         <div className="columns-layout">
           <section className="columns-grid">
             {columns.map((column, index) => {
+              const cutoffTime = getWindowCutoffTime(videoWindowDays);
               const brokenThumbKey = `${activeBoardId}:${column.id}`;
               const channelThumbToShow =
                 brokenChannelThumbnailKeys.includes(brokenThumbKey)
@@ -1591,6 +1662,9 @@ function App() {
               const hasHandleInput = column.handleInput.trim().length > 0;
 
               const filteredVideos = column.videos.filter((video) => {
+                if (getVideoPublishedTime(video) < cutoffTime) {
+                  return false;
+                }
                 const isWatched = watchedVideos[video.videoId] === true;
                 if (videoFilter === "all") {
                   return true;
