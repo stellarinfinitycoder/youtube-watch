@@ -55,6 +55,14 @@ body {
   box-shadow: inset 0 -1px 0 rgba(255, 143, 31, 0.14);
 }
 
+.top-bar-logo {
+  width: 48px;
+  height: 48px;
+  display: block;
+  object-fit: contain;
+  flex: 0 0 48px;
+}
+
 .columns-nav .nav-btn.ant-btn,
 .video-filter-select .ant-select-selector {
   height: 32px !important;
@@ -307,7 +315,6 @@ body {
   padding: 8px 0 10px 10px;
   border: 0;
   background: var(--shell);
-  box-shadow: inset 0 1px 0 rgba(255, 143, 31, 0.14);
 }
 
 .columns-layout {

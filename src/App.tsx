@@ -21,11 +21,12 @@ import {
 } from "./api/youtube";
 import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
+import topBarLogo from "../youtube_plus_red.svg";
 
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "140326205341";
+const CHANGE_STAMP = "140326210630";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -1681,6 +1682,11 @@ function App() {
   return (
     <main className="app-shell">
       <div className="columns-nav">
+        <img
+          src={topBarLogo}
+          alt="Logo"
+          className="top-bar-logo"
+        />
         <Select<string>
           value={activeBoard?.id}
           onChange={handleBoardSelectChange}
