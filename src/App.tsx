@@ -35,6 +35,7 @@ const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 
 type VideoFilter = "all" | "new" | "watched";
 type VideoWindowDays = 1 | 7 | 30 | 60 | 90 | 120 | 180;
+type PlaylistScope = "all" | "channel";
 const VIDEO_WINDOW_OPTIONS: VideoWindowDays[] = [1, 7, 30, 60, 90, 120, 180];
 const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowDays = 30;
 const STORAGE_VIDEO_WINDOW_DAYS: VideoWindowDays = 180;
@@ -766,6 +767,8 @@ function App() {
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
   const [playlistIndex, setPlaylistIndex] = useState<number>(-1);
+  const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
+  const [playlistChannelLabel, setPlaylistChannelLabel] = useState<string>("");
   const [playbackRate, setPlaybackRate] = useState<number>(1.5);
   const [availablePlaybackRates, setAvailablePlaybackRates] = useState<number[]>([
     0.5,
@@ -1346,6 +1349,8 @@ function App() {
   const stopPlaylist = (): void => {
     setPlaylistQueue([]);
     setPlaylistIndex(-1);
+    setPlaylistScope("all");
+    setPlaylistChannelLabel("");
   };
 
   const closeVideoModal = (): void => {
@@ -1436,6 +1441,42 @@ function App() {
 
     setPlaylistQueue(queue);
     setPlaylistIndex(0);
+    setPlaylistScope("all");
+    setPlaylistChannelLabel("");
+    setActiveVideo(queue[0]);
+  };
+
+  const playChannelVideos = (column: ColumnState): void => {
+    const cutoffTime = getWindowCutoffTime(videoWindowDays);
+    const queue = [...column.videos]
+      .filter((video) => {
+        if (getVideoPublishedTime(video) < cutoffTime) {
+          return false;
+        }
+        const isWatched = watchedVideos[video.videoId] === true;
+        if (videoFilter === "all") {
+          return true;
+        }
+        if (videoFilter === "watched") {
+          return isWatched;
+        }
+        return !isWatched;
+      })
+      .sort((a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a));
+
+    if (queue.length === 0) {
+      return;
+    }
+
+    const channelRaw = column.currentHandle.trim() || column.handleInput.trim();
+    const channelLabel = channelRaw
+      ? (channelRaw.startsWith("@") ? channelRaw : `@${channelRaw}`).toUpperCase()
+      : "@CHANNEL";
+
+    setPlaylistQueue(queue);
+    setPlaylistIndex(0);
+    setPlaylistScope("channel");
+    setPlaylistChannelLabel(channelLabel);
     setActiveVideo(queue[0]);
   };
 
@@ -1874,7 +1915,11 @@ function App() {
                 </Button>
                 {isPlaylistActive ? (
                   <Text className="playlist-progress-text">
-                    {playlistIndex + 1} of {playlistQueue.length} | ALL CHANNELS | NEWEST
+                    {playlistIndex + 1} of {playlistQueue.length} |{" "}
+                    {playlistScope === "channel"
+                      ? playlistChannelLabel || "@CHANNEL"
+                      : "ALL CHANNELS"}{" "}
+                    | NEWEST
                   </Text>
                 ) : null}
               </div>
@@ -1925,6 +1970,7 @@ function App() {
                 }
                 return !isWatched;
               });
+              const hasChannelPlaylistVideos = filteredVideos.length > 0;
 
               return (
                 <article key={column.id} className="channel-column">
@@ -1956,6 +2002,15 @@ function App() {
                         className="column-move-btn"
                       >
                         M
+                      </Button>
+                      <Button
+                        htmlType="button"
+                        onClick={() => playChannelVideos(column)}
+                        disabled={column.loading || !hasChannelPlaylistVideos}
+                        aria-label={`Play channel ${index + 1} playlist`}
+                        className="column-move-btn"
+                      >
+                        P
                       </Button>
                     </div>
                     <Button
