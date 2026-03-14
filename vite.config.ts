@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react";
 import { loadEnv } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import {
   fetchLatestVideos,
   fetchViewCountsByVideoIds,
@@ -25,8 +28,61 @@ function getShortCommitSha(): string {
       .toString("utf8")
       .trim();
   } catch {
-    return "unknown";
+    return "";
   }
+}
+
+function collectFilesRecursive(root: string): string[] {
+  const entries = readdirSync(root);
+  const result: string[] = [];
+
+  for (const entry of entries) {
+    const fullPath = join(root, entry);
+    const info = statSync(fullPath);
+    if (info.isDirectory()) {
+      result.push(...collectFilesRecursive(fullPath));
+      continue;
+    }
+    result.push(fullPath);
+  }
+
+  return result;
+}
+
+function getSourceBuildFingerprint(): string {
+  const hash = createHash("sha256");
+  const roots = ["src", "api", "public"];
+  const directFiles = [
+    "package.json",
+    "package-lock.json",
+    "vite.config.ts",
+    "index.html"
+  ];
+
+  const files: string[] = [];
+  roots.forEach((root) => {
+    try {
+      files.push(...collectFilesRecursive(root));
+    } catch {
+      // Ignore missing directories.
+    }
+  });
+  directFiles.forEach((file) => {
+    try {
+      statSync(file);
+      files.push(file);
+    } catch {
+      // Ignore missing files.
+    }
+  });
+
+  files.sort();
+  files.forEach((filePath) => {
+    hash.update(filePath);
+    hash.update(readFileSync(filePath));
+  });
+
+  return hash.digest("hex").slice(0, 8);
 }
 
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
@@ -58,11 +114,12 @@ export default defineConfig(({ mode }) => {
   }
   const buildEnv = mode === "production" ? "PROD" : "DEV";
   const buildCommitSha = getShortCommitSha();
+  const buildId = buildCommitSha || getSourceBuildFingerprint();
 
   return {
     define: {
       __APP_BUILD_ENV__: JSON.stringify(buildEnv),
-      __APP_COMMIT_SHA__: JSON.stringify(buildCommitSha)
+      __APP_COMMIT_SHA__: JSON.stringify(buildId)
     },
     plugins: [
       react(),
