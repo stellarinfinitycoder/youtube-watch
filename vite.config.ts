@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { loadEnv } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -93,6 +94,18 @@ function getSourceBuildFingerprint(): string {
   return hash.digest("hex").slice(0, 8);
 }
 
+function getGitBuildId(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", {
+      stdio: ["ignore", "pipe", "ignore"]
+    })
+      .toString("utf8")
+      .trim();
+  } catch {
+    return "";
+  }
+}
+
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -121,7 +134,8 @@ export default defineConfig(({ mode }) => {
     process.env.YOUTUBE_API_KEY = env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY;
   }
   const buildEnv = mode === "production" ? "PROD" : "DEV";
-  const buildId = getSourceBuildFingerprint();
+  const stampedBuildId = env.APP_BUILD_ID || process.env.APP_BUILD_ID || "";
+  const buildId = stampedBuildId || getGitBuildId() || getSourceBuildFingerprint();
 
   return {
     define: {
