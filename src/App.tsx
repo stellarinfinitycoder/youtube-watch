@@ -26,7 +26,7 @@ import topBarLogo from "../youtube_plus_red.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "140326223243";
+const CHANGE_STAMP = "140326231435";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -40,7 +40,7 @@ type VideoFilter = "all" | "new" | "watched";
 type VideoWindowDays = 1 | 7 | 30 | 60 | 90 | 120 | 180;
 type PlaylistScope = "all" | "channel";
 const VIDEO_WINDOW_OPTIONS: VideoWindowDays[] = [1, 7, 30, 60, 90, 120, 180];
-const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowDays = 30;
+const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowDays = 180;
 const STORAGE_VIDEO_WINDOW_DAYS: VideoWindowDays = 180;
 const BOARD_DROPDOWN_MAX_VISIBLE = 25;
 const BOARD_DROPDOWN_ITEM_HEIGHT = 36;
@@ -2129,6 +2129,19 @@ function App() {
                         return (
                           <List.Item key={video.videoId} className="video-tile-item">
                             <Space direction="vertical" size="small" className="full-width">
+                              <div className="video-meta-row">
+                                <Text className="video-meta">{formatVideoMeta(video)}</Text>
+                                <Button
+                                  htmlType="button"
+                                  className="video-watch-btn"
+                                  aria-label={`Mark ${video.title} as ${
+                                    isWatched ? "new" : "watched"
+                                  }`}
+                                  onClick={() => toggleWatched(video.videoId)}
+                                >
+                                  {isWatched ? "U" : "W"}
+                                </Button>
+                              </div>
                               {video.thumbnailUrl ? (
                                 <button
                                   type="button"
@@ -2151,19 +2164,6 @@ function App() {
                                   {video.title}
                                 </Title>
                               </button>
-                              <div className="video-meta-row">
-                                <Text className="video-meta">{formatVideoMeta(video)}</Text>
-                                <Button
-                                  htmlType="button"
-                                  className="video-watch-btn"
-                                  aria-label={`Mark ${video.title} as ${
-                                    isWatched ? "new" : "watched"
-                                  }`}
-                                  onClick={() => toggleWatched(video.videoId)}
-                                >
-                                  {isWatched ? "U" : "W"}
-                                </Button>
-                              </div>
                             </Space>
                           </List.Item>
                         );
