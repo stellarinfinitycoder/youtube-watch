@@ -65,6 +65,10 @@ body {
   min-width: 110px;
 }
 
+.video-status-select {
+  min-width: 132px;
+}
+
 .board-select {
   min-width: 240px;
 }
@@ -122,6 +126,10 @@ body {
 }
 
 .playback-speed-select {
+  min-width: 88px;
+}
+
+.video-window-select {
   min-width: 88px;
 }
 
@@ -219,7 +227,7 @@ body {
 .scroll-btn.ant-btn {
   width: 44px;
   padding: 0;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
   position: relative;
   text-align: center;
@@ -235,21 +243,6 @@ body {
   height: 100%;
   line-height: 1;
   letter-spacing: 0;
-  transform: translateX(2px);
-}
-
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to first"] > span,
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns left"] > span {
-  justify-content: flex-start;
-  padding-left: 10px;
-  transform: none;
-}
-
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] > span,
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] > span {
-  justify-content: flex-end;
-  padding-right: 10px;
-  transform: none;
 }
 
 .columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to first"] {
@@ -568,7 +561,7 @@ body {
 }
 
 .ant-list-item {
-  border-block-end: 1px solid rgba(255, 143, 31, 0.28) !important;
+  border-block-end: 1px solid rgba(255, 143, 31, 0.14) !important;
   padding: 12px 0 !important;
 }
 
@@ -699,6 +692,10 @@ body {
 .ant-modal .ant-modal-title,
 .ant-modal .ant-modal-close {
   color: var(--text);
+}
+
+.ant-modal .ant-modal-title {
+  text-transform: uppercase;
 }
 
 .ant-modal .ant-modal-close:hover {

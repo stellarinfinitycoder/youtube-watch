@@ -473,11 +473,15 @@ function hasLegacyStoredColumnsState(): boolean {
   }
 }
 
-function createBoardState(name: string, overrides?: Partial<BoardState>): BoardState {
+function createBoardState(
+  name: string,
+  overrides?: Partial<BoardState>,
+  initialColumnCount = DEFAULT_COLUMN_COUNT
+): BoardState {
   return {
     id: createBoardId(),
     name,
-    columns: Array.from({ length: DEFAULT_COLUMN_COUNT }, () => createColumnState()),
+    columns: Array.from({ length: initialColumnCount }, () => createColumnState()),
     watchedVideos: {},
     videoFilter: "new",
     videoWindowDays: DEFAULT_VIDEO_WINDOW_DAYS,
@@ -676,11 +680,26 @@ function formatViewCount(viewCount: number | null): string {
   return compact.toLowerCase();
 }
 
+function formatPublishedDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "--.--.-- | --:--";
+  }
+
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yy = String(date.getFullYear()).slice(-2);
+  const hh = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+
+  return `${dd}.${mm}.${yy} | ${hh}:${min}`;
+}
+
 function formatVideoMeta(video: VideoItem): string {
-  const dateLabel = video.publishedAt
-    ? new Date(video.publishedAt).toLocaleString()
-    : "Unknown date";
-  return `${dateLabel}, ${formatViewCount(video.viewCount)}`;
+  const dateTimeLabel = video.publishedAt
+    ? formatPublishedDateTime(video.publishedAt)
+    : "--.--.-- | --:--";
+  return `${dateTimeLabel} | ${formatViewCount(video.viewCount)}`;
 }
 
 function getVideoPublishedTime(video: VideoItem): number {
@@ -772,6 +791,14 @@ function App() {
     (deletingColumnId
       ? columns.find((column) => column.id === deletingColumnId)
       : undefined) ?? null;
+  const deletingChannelNameRaw =
+    deletingColumn?.handleInput.trim() || deletingColumn?.currentHandle.trim() || "";
+  const deletingChannelName = deletingChannelNameRaw
+    ? deletingChannelNameRaw.startsWith("@")
+      ? deletingChannelNameRaw
+      : `@${deletingChannelNameRaw}`
+    : "";
+  const deletingChannelNameDisplay = deletingChannelName.toUpperCase();
   const watchedVideos = activeBoard?.watchedVideos ?? {};
   const isPlaylistActive =
     playlistIndex >= 0 &&
@@ -1398,7 +1425,7 @@ function App() {
   };
 
   const createBoard = (): string => {
-    const board = createBoardState(getNextBoardName(boards));
+    const board = createBoardState(getNextBoardName(boards), undefined, 1);
     setBoards((previous) => [...previous, board]);
     setActiveBoardId(board.id);
     return board.id;
@@ -1663,7 +1690,7 @@ function App() {
             }));
           }}
           aria-label="Video filter"
-          className="video-filter-select"
+          className="video-filter-select video-status-select"
           options={[
             { value: "all", label: "ALL" },
             { value: "new", label: "NEW" },
@@ -1682,7 +1709,7 @@ function App() {
             }));
           }}
           aria-label="Video age window"
-          className="video-filter-select"
+          className="video-filter-select video-window-select"
           options={VIDEO_WINDOW_OPTIONS.map((days) => ({
             value: days,
             label: `${days}D`
@@ -1706,7 +1733,7 @@ function App() {
           aria-label="Scroll columns to first"
           className="nav-btn scroll-btn"
         >
-          {"<<"}
+          {"«"}
         </Button>
         <Button
           htmlType="button"
@@ -1714,7 +1741,7 @@ function App() {
           aria-label="Scroll columns left"
           className="nav-btn scroll-btn"
         >
-          {"<"}
+          {"‹"}
         </Button>
         <Button
           htmlType="button"
@@ -1722,7 +1749,7 @@ function App() {
           aria-label="Scroll columns right"
           className="nav-btn scroll-btn"
         >
-          {">"}
+          {"›"}
         </Button>
         <Button
           htmlType="button"
@@ -1730,7 +1757,7 @@ function App() {
           aria-label="Scroll columns to last"
           className="nav-btn scroll-btn"
         >
-          {">>"}
+          {"»"}
         </Button>
       </div>
 
@@ -1857,7 +1884,7 @@ function App() {
                         aria-label={`Move column ${index + 1} left`}
                         className="column-move-btn"
                       >
-                        {"<"}
+                        {"‹"}
                       </Button>
                       <Button
                         htmlType="button"
@@ -1866,7 +1893,7 @@ function App() {
                         aria-label={`Move column ${index + 1} right`}
                         className="column-move-btn"
                       >
-                        {">"}
+                        {"›"}
                       </Button>
                     </div>
                     <Button
@@ -1950,7 +1977,7 @@ function App() {
                   {column.error && <Alert type="error" message={column.error} showIcon={false} />}
 
                   {!column.loading && !column.error && filteredVideos.length === 0 && (
-                    <Empty description="No data" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    <Empty description="Empty" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                   )}
 
                   {!column.loading && filteredVideos.length > 0 && (
@@ -2104,7 +2131,7 @@ function App() {
         className="delete-board-modal"
       >
         <Text>
-          Delete board {editingBoard ? `"${editingBoard.name}"` : ""}?
+          Delete board {editingBoard ? editingBoard.name : ""}?
         </Text>
       </Modal>
 
@@ -2119,7 +2146,7 @@ function App() {
       >
         <Text>
           Delete channel
-          {deletingColumn?.handleInput ? ` "${deletingColumn.handleInput}"` : ""}?
+          {deletingChannelNameDisplay ? ` ${deletingChannelNameDisplay}` : ""}?
         </Text>
       </Modal>
     </main>
