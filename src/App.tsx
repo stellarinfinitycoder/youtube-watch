@@ -25,7 +25,7 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "140326204259";
+const CHANGE_STAMP = "140326205341";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -41,6 +41,9 @@ type PlaylistScope = "all" | "channel";
 const VIDEO_WINDOW_OPTIONS: VideoWindowDays[] = [1, 7, 30, 60, 90, 120, 180];
 const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowDays = 30;
 const STORAGE_VIDEO_WINDOW_DAYS: VideoWindowDays = 180;
+const BOARD_DROPDOWN_MAX_VISIBLE = 25;
+const BOARD_DROPDOWN_ITEM_HEIGHT = 36;
+const BOARD_DROPDOWN_PADDING = 8;
 
 type YouTubePlayer = {
   destroy: () => void;
@@ -820,6 +823,11 @@ function App() {
     : "";
   const movingChannelNameDisplay = movingChannelName.toUpperCase();
   const watchedVideos = activeBoard?.watchedVideos ?? {};
+  const boardDropdownListHeight = Math.max(
+    BOARD_DROPDOWN_ITEM_HEIGHT + BOARD_DROPDOWN_PADDING,
+    Math.min(boards.length + 1, BOARD_DROPDOWN_MAX_VISIBLE) * BOARD_DROPDOWN_ITEM_HEIGHT +
+      BOARD_DROPDOWN_PADDING
+  );
   const isPlaylistActive =
     playlistIndex >= 0 &&
     playlistQueue.length > 0 &&
@@ -1679,6 +1687,7 @@ function App() {
           aria-label="Board selector"
           className="video-filter-select board-select"
           optionLabelProp="title"
+          listHeight={boardDropdownListHeight}
         >
           {boards.map((board, boardIndex) => (
             <Select.Option

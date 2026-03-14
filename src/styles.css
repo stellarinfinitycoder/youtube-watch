@@ -162,6 +162,15 @@ body {
   justify-content: flex-start;
 }
 
+.backup-limits-text.ant-typography {
+  margin-left: auto;
+  margin-bottom: 0;
+  font-size: 12px;
+  color: #c08f56;
+  text-transform: uppercase;
+  text-align: right;
+}
+
 .video-filter-select.ant-select-single {
   font-size: 13px;
 }
@@ -213,8 +222,8 @@ body {
 }
 
 .ant-select-dropdown .ant-select-item-option-active {
-  background: #0b0b0d !important;
-  opacity: 0.92;
+  background: rgba(255, 143, 31, 0.12) !important;
+  opacity: 1;
 }
 
 .ant-select-dropdown
