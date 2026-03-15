@@ -27,7 +27,7 @@ import savedListPlaceholderIcon from "../lists_black.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326123545";
+const CHANGE_STAMP = "150326130757";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -42,7 +42,21 @@ type VideoFilter = "all" | "new" | "watched";
 type VideoWindowDays = 1 | 3 | 7 | 30 | 60 | 90 | 120 | 180;
 type PlaylistScope = "all" | "channel";
 type BoardKind = "channels" | "saved";
+type SavedSortMode =
+  | "time_asc"
+  | "time_desc"
+  | "added_asc"
+  | "added_desc"
+  | "manual";
 const VIDEO_WINDOW_OPTIONS: VideoWindowDays[] = [1, 3, 7, 30, 60, 90, 120, 180];
+const SAVED_SORT_MODE_OPTIONS: Array<{ value: SavedSortMode; label: string }> = [
+  { value: "time_asc", label: "TIME ↑" },
+  { value: "time_desc", label: "TIME ↓" },
+  { value: "added_asc", label: "ADDED ↑" },
+  { value: "added_desc", label: "ADDED ↓" },
+  { value: "manual", label: "MANUAL" }
+];
+const DEFAULT_SAVED_SORT_MODE: SavedSortMode = "added_desc";
 const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowDays = 180;
 const STORAGE_VIDEO_WINDOW_DAYS: VideoWindowDays = 180;
 const BOARD_DROPDOWN_MAX_VISIBLE = 25;
@@ -131,6 +145,9 @@ type ColumnState = FetchState & {
   handleInput: string;
   channelThumbnailUrl: string;
   lastFetchAt: string | null;
+  savedSortMode: SavedSortMode;
+  savedAddedAtByVideoId: Record<string, number>;
+  savedManualOrder: string[];
 };
 
 type PersistedColumnState = {
@@ -140,6 +157,9 @@ type PersistedColumnState = {
   channelThumbnailUrl: string;
   videos: VideoItem[];
   lastFetchAt: string | null;
+  savedSortMode?: SavedSortMode;
+  savedAddedAtByVideoId?: Record<string, number>;
+  savedManualOrder?: string[];
 };
 
 type BoardState = {
@@ -200,8 +220,93 @@ function createColumnState(overrides?: Partial<ColumnState>): ColumnState {
     error: null,
     videos: [],
     currentHandle: "",
+    savedSortMode: DEFAULT_SAVED_SORT_MODE,
+    savedAddedAtByVideoId: {},
+    savedManualOrder: [],
     ...overrides
   };
+}
+
+function normalizeSavedColumnOrderData(
+  videos: VideoItem[],
+  savedAddedAtByVideoId: Record<string, number> | undefined,
+  savedManualOrder: string[] | undefined
+): { savedAddedAtByVideoId: Record<string, number>; savedManualOrder: string[] } {
+  const videoIds = videos.map((video) => video.videoId);
+  const idSet = new Set(videoIds);
+  const nextAdded: Record<string, number> = {};
+  if (savedAddedAtByVideoId) {
+    for (const [videoId, value] of Object.entries(savedAddedAtByVideoId)) {
+      if (!idSet.has(videoId) || !Number.isFinite(value)) {
+        continue;
+      }
+      nextAdded[videoId] = value;
+    }
+  }
+
+  // Preserve existing list order when backfilling missing "added at" values.
+  const base = Date.now();
+  videoIds.forEach((videoId, index) => {
+    if (typeof nextAdded[videoId] === "number") {
+      return;
+    }
+    nextAdded[videoId] = base - index;
+  });
+
+  const manualUnique = new Set<string>();
+  const nextManual = (savedManualOrder ?? []).filter((videoId) => {
+    if (!idSet.has(videoId) || manualUnique.has(videoId)) {
+      return false;
+    }
+    manualUnique.add(videoId);
+    return true;
+  });
+  videoIds.forEach((videoId) => {
+    if (!manualUnique.has(videoId)) {
+      nextManual.push(videoId);
+    }
+  });
+
+  return {
+    savedAddedAtByVideoId: nextAdded,
+    savedManualOrder: nextManual
+  };
+}
+
+function sortSavedVideosByMode(column: ColumnState): VideoItem[] {
+  const videos = [...column.videos];
+  const { savedSortMode, savedAddedAtByVideoId, savedManualOrder } = column;
+  if (savedSortMode === "manual") {
+    const orderById = new Map(savedManualOrder.map((videoId, index) => [videoId, index]));
+    return videos.sort((a, b) => {
+      const aIndex = orderById.get(a.videoId);
+      const bIndex = orderById.get(b.videoId);
+      if (typeof aIndex === "number" && typeof bIndex === "number") {
+        return aIndex - bIndex;
+      }
+      if (typeof aIndex === "number") {
+        return -1;
+      }
+      if (typeof bIndex === "number") {
+        return 1;
+      }
+      return 0;
+    });
+  }
+
+  if (savedSortMode === "time_asc" || savedSortMode === "time_desc") {
+    return videos.sort((a, b) => {
+      const delta = getVideoPublishedTime(a) - getVideoPublishedTime(b);
+      return savedSortMode === "time_asc" ? delta : -delta;
+    });
+  }
+
+  return videos.sort((a, b) => {
+    const aAdded = savedAddedAtByVideoId[a.videoId] ?? 0;
+    const bAdded = savedAddedAtByVideoId[b.videoId] ?? 0;
+    const delta = aAdded - bAdded;
+    return savedSortMode === "added_asc" ? delta : -delta;
+  });
 }
 
 function readLegacyStoredHandles(): string[] {
@@ -307,6 +412,9 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
     channelThumbnailUrl?: unknown;
     videos?: unknown;
     lastFetchAt?: unknown;
+    savedSortMode?: unknown;
+    savedAddedAtByVideoId?: unknown;
+    savedManualOrder?: unknown;
   };
 
   if (
@@ -358,13 +466,47 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
     })
     .filter((video): video is VideoItem => video !== null);
 
+  const savedSortMode: SavedSortMode =
+    candidate.savedSortMode === "time_asc" ||
+    candidate.savedSortMode === "time_desc" ||
+    candidate.savedSortMode === "added_asc" ||
+    candidate.savedSortMode === "added_desc" ||
+    candidate.savedSortMode === "manual"
+      ? candidate.savedSortMode
+      : DEFAULT_SAVED_SORT_MODE;
+
+  const rawAddedMap =
+    candidate.savedAddedAtByVideoId &&
+    typeof candidate.savedAddedAtByVideoId === "object" &&
+    !Array.isArray(candidate.savedAddedAtByVideoId)
+      ? Object.fromEntries(
+          Object.entries(candidate.savedAddedAtByVideoId).filter(
+            (entry): entry is [string, number] =>
+              typeof entry[0] === "string" &&
+              typeof entry[1] === "number" &&
+              Number.isFinite(entry[1])
+          )
+        )
+      : undefined;
+  const rawManualOrder = Array.isArray(candidate.savedManualOrder)
+    ? candidate.savedManualOrder.filter((item): item is string => typeof item === "string")
+    : undefined;
+  const normalizedSavedOrderData = normalizeSavedColumnOrderData(
+    videos,
+    rawAddedMap,
+    rawManualOrder
+  );
+
   return {
     id: candidate.id ?? createColumnId(),
     handleInput: candidate.handleInput,
     currentHandle: candidate.currentHandle,
     channelThumbnailUrl: candidate.channelThumbnailUrl,
     videos,
-    lastFetchAt: candidate.lastFetchAt
+    lastFetchAt: candidate.lastFetchAt,
+    savedSortMode,
+    savedAddedAtByVideoId: normalizedSavedOrderData.savedAddedAtByVideoId,
+    savedManualOrder: normalizedSavedOrderData.savedManualOrder
   };
 }
 
@@ -545,11 +687,22 @@ function normalizeSavedBoard(board: BoardState): BoardState {
     ? board.columns
     : [createSavedListColumn([])];
   const namedColumns = withColumns.map((column, index) => {
+    const normalizedOrderData = normalizeSavedColumnOrderData(
+      column.videos,
+      column.savedAddedAtByVideoId,
+      column.savedManualOrder
+    );
+    const normalizedColumn: ColumnState = {
+      ...column,
+      savedSortMode: column.savedSortMode ?? DEFAULT_SAVED_SORT_MODE,
+      savedAddedAtByVideoId: normalizedOrderData.savedAddedAtByVideoId,
+      savedManualOrder: normalizedOrderData.savedManualOrder
+    };
     if (column.handleInput.trim().length > 0) {
-      return column;
+      return normalizedColumn;
     }
     return {
-      ...column,
+      ...normalizedColumn,
       handleInput: `LIST ${index + 1}`
     };
   });
@@ -587,7 +740,10 @@ function toPersistedColumns(columns: ColumnState[]): PersistedColumnState[] {
     currentHandle: column.currentHandle,
     channelThumbnailUrl: column.channelThumbnailUrl,
     videos: column.videos,
-    lastFetchAt: column.lastFetchAt
+    lastFetchAt: column.lastFetchAt,
+    savedSortMode: column.savedSortMode,
+    savedAddedAtByVideoId: column.savedAddedAtByVideoId,
+    savedManualOrder: column.savedManualOrder
   }));
 }
 
@@ -656,7 +812,10 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
         currentHandle: column.currentHandle,
         channelThumbnailUrl: column.channelThumbnailUrl,
         videos: column.videos,
-        lastFetchAt: column.lastFetchAt
+        lastFetchAt: column.lastFetchAt,
+        savedSortMode: column.savedSortMode ?? DEFAULT_SAVED_SORT_MODE,
+        savedAddedAtByVideoId: column.savedAddedAtByVideoId ?? {},
+        savedManualOrder: column.savedManualOrder ?? []
       })
     ),
     watchedVideos: board.watchedVideos,
@@ -743,7 +902,10 @@ function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string 
         currentHandle: legacyColumns[index]?.currentHandle ?? "",
         channelThumbnailUrl: legacyColumns[index]?.channelThumbnailUrl ?? "",
         videos: legacyColumns[index]?.videos ?? [],
-        lastFetchAt: legacyColumns[index]?.lastFetchAt ?? null
+        lastFetchAt: legacyColumns[index]?.lastFetchAt ?? null,
+        savedSortMode: legacyColumns[index]?.savedSortMode ?? DEFAULT_SAVED_SORT_MODE,
+        savedAddedAtByVideoId: legacyColumns[index]?.savedAddedAtByVideoId ?? {},
+        savedManualOrder: legacyColumns[index]?.savedManualOrder ?? []
       })
     ),
     watchedVideos: legacyWatchedVideos,
@@ -1705,9 +1867,13 @@ function App() {
     const cutoffTime = getWindowCutoffTime(videoWindowDays);
     const mergedById = new Map<string, VideoItem>();
     columns.forEach((column) => {
-      column.videos.forEach((video) => {
+      const sourceVideos =
+        activeBoard.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
+      sourceVideos.forEach((video) => {
         if (getVideoPublishedTime(video) >= cutoffTime) {
-          mergedById.set(video.videoId, video);
+          if (!mergedById.has(video.videoId)) {
+            mergedById.set(video.videoId, video);
+          }
         }
       });
     });
@@ -1722,8 +1888,10 @@ function App() {
           return isWatched;
         }
         return !isWatched;
-      })
-      .sort((a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a));
+      });
+    if (activeBoard.kind !== "saved") {
+      queue.sort((a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a));
+    }
 
     if (queue.length === 0) {
       return;
@@ -1733,13 +1901,17 @@ function App() {
     setPlaylistIndex(0);
     setPlaylistScope("all");
     setPlaylistChannelLabel("");
-    setPlaylistOrderLabel("NEWEST FIRST");
+    setPlaylistOrderLabel(
+      activeBoard.kind === "saved" ? "FROM LEFT TO RIGHT AS SORTED" : "NEWEST FIRST"
+    );
     setActiveVideo(queue[0]);
   };
 
   const playChannelVideos = (column: ColumnState): void => {
     const cutoffTime = getWindowCutoffTime(videoWindowDays);
-    const queue = [...column.videos]
+    const sourceVideos =
+      activeBoard?.kind === "saved" ? sortSavedVideosByMode(column) : [...column.videos];
+    const queue = sourceVideos
       .filter((video) => {
         if (getVideoPublishedTime(video) < cutoffTime) {
           return false;
@@ -1752,8 +1924,10 @@ function App() {
           return isWatched;
         }
         return !isWatched;
-      })
-      .sort((a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a));
+      });
+    if (activeBoard?.kind !== "saved") {
+      queue.sort((a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a));
+    }
 
     if (queue.length === 0) {
       return;
@@ -1771,7 +1945,7 @@ function App() {
     setPlaylistIndex(0);
     setPlaylistScope("channel");
     setPlaylistChannelLabel(channelLabel);
-    setPlaylistOrderLabel(activeBoard?.kind === "saved" ? "IN ORDER" : "NEWEST FIRST");
+    setPlaylistOrderLabel(activeBoard?.kind === "saved" ? "AS SORTED" : "NEWEST FIRST");
     setActiveVideo(queue[0]);
   };
 
@@ -1994,12 +2168,20 @@ function App() {
         if (exists) {
           return column;
         }
-        const nextVideos = [...column.videos, savingVideo].sort(
-          (a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a)
-        );
+        const now = Date.now();
+        const nextVideos = [savingVideo, ...column.videos];
+        const nextManualOrder = [
+          savingVideo.videoId,
+          ...column.savedManualOrder.filter((videoId) => videoId !== savingVideo.videoId)
+        ];
         return {
           ...column,
-          videos: nextVideos
+          videos: nextVideos,
+          savedAddedAtByVideoId: {
+            ...column.savedAddedAtByVideoId,
+            [savingVideo.videoId]: now
+          },
+          savedManualOrder: nextManualOrder
         };
       }),
       watchedVideos: {
@@ -2081,7 +2263,13 @@ function App() {
         column.id === columnId
           ? {
               ...column,
-              videos: column.videos.filter((video) => video.videoId !== videoId)
+              videos: column.videos.filter((video) => video.videoId !== videoId),
+              savedAddedAtByVideoId: Object.fromEntries(
+                Object.entries(column.savedAddedAtByVideoId).filter(
+                  (entry) => entry[0] !== videoId
+                )
+              ),
+              savedManualOrder: column.savedManualOrder.filter((id) => id !== videoId)
             }
           : column
       )
@@ -2120,7 +2308,13 @@ function App() {
         if (column.id === sourceColumnId) {
           return {
             ...column,
-            videos: column.videos.filter((video) => video.videoId !== videoId)
+            videos: column.videos.filter((video) => video.videoId !== videoId),
+            savedAddedAtByVideoId: Object.fromEntries(
+              Object.entries(column.savedAddedAtByVideoId).filter(
+                (entry) => entry[0] !== videoId
+              )
+            ),
+            savedManualOrder: column.savedManualOrder.filter((id) => id !== videoId)
           };
         }
         if (column.id === moveSavedVideoTargetColumnId) {
@@ -2128,11 +2322,18 @@ function App() {
           if (exists) {
             return column;
           }
+          const now = Date.now();
           return {
             ...column,
-            videos: [...column.videos, videoToMove].sort(
-              (a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a)
-            )
+            videos: [videoToMove, ...column.videos],
+            savedAddedAtByVideoId: {
+              ...column.savedAddedAtByVideoId,
+              [videoId]: now
+            },
+            savedManualOrder: [
+              videoId,
+              ...column.savedManualOrder.filter((id) => id !== videoId)
+            ]
           };
         }
         return column;
@@ -2141,6 +2342,43 @@ function App() {
 
     setMovingSavedVideo(null);
     setMoveSavedVideoTargetColumnId("");
+  };
+
+  const moveSavedVideoInManualOrder = (
+    columnId: string,
+    videoId: string,
+    direction: "up" | "down"
+  ): void => {
+    if (!activeBoard || activeBoard.kind !== "saved") {
+      return;
+    }
+    setColumn(activeBoard.id, columnId, (column) => {
+      if (column.savedSortMode !== "manual") {
+        return column;
+      }
+      const normalizedOrderData = normalizeSavedColumnOrderData(
+        column.videos,
+        column.savedAddedAtByVideoId,
+        column.savedManualOrder
+      );
+      const nextOrder = [...normalizedOrderData.savedManualOrder];
+      const index = nextOrder.indexOf(videoId);
+      if (index === -1) {
+        return column;
+      }
+      const swapIndex = direction === "up" ? index - 1 : index + 1;
+      if (swapIndex < 0 || swapIndex >= nextOrder.length) {
+        return {
+          ...column,
+          savedManualOrder: nextOrder
+        };
+      }
+      [nextOrder[index], nextOrder[swapIndex]] = [nextOrder[swapIndex], nextOrder[index]];
+      return {
+        ...column,
+        savedManualOrder: nextOrder
+      };
+    });
   };
 
   return (
@@ -2450,8 +2688,10 @@ function App() {
                   ? column.videos[0]?.thumbnailUrl ?? ""
                   : column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
               const hasHandleInput = column.handleInput.trim().length > 0;
+              const sortedColumnVideos =
+                isSavedBoardActive ? sortSavedVideosByMode(column) : column.videos;
 
-              const filteredVideos = column.videos.filter((video) => {
+              const filteredVideos = sortedColumnVideos.filter((video) => {
                 if (getVideoPublishedTime(video) < cutoffTime) {
                   return false;
                 }
@@ -2464,6 +2704,10 @@ function App() {
                 }
                 return !isWatched;
               });
+              const manualOrderIndexByVideoId =
+                isSavedBoardActive && column.savedSortMode === "manual"
+                  ? new Map(filteredVideos.map((video, index) => [video.videoId, index]))
+                  : new Map<string, number>();
               const hasChannelPlaylistVideos = filteredVideos.length > 0;
 
               return (
@@ -2504,6 +2748,20 @@ function App() {
                         >
                           M
                         </Button>
+                      ) : null}
+                      {isSavedBoardActive ? (
+                        <Select<SavedSortMode>
+                          value={column.savedSortMode}
+                          onChange={(value) => {
+                            setColumn(activeBoardId, column.id, (prev) => ({
+                              ...prev,
+                              savedSortMode: value
+                            }));
+                          }}
+                          aria-label={`Sort list ${index + 1}`}
+                          className="video-filter-select saved-sort-select"
+                          options={SAVED_SORT_MODE_OPTIONS}
+                        />
                       ) : null}
                       <Button
                         htmlType="button"
@@ -2623,6 +2881,41 @@ function App() {
                                 <Text className="video-meta">{formatVideoMeta(video)}</Text>
                                 {isSavedBoardActive ? (
                                   <>
+                                    {column.savedSortMode === "manual" ? (
+                                      <>
+                                        <Button
+                                          htmlType="button"
+                                          className="column-move-btn"
+                                          aria-label={`Move ${video.title} up`}
+                                          onClick={() =>
+                                            moveSavedVideoInManualOrder(column.id, video.videoId, "up")
+                                          }
+                                          disabled={
+                                            (manualOrderIndexByVideoId.get(video.videoId) ?? 0) === 0
+                                          }
+                                        >
+                                          ↑
+                                        </Button>
+                                        <Button
+                                          htmlType="button"
+                                          className="column-move-btn"
+                                          aria-label={`Move ${video.title} down`}
+                                          onClick={() =>
+                                            moveSavedVideoInManualOrder(
+                                              column.id,
+                                              video.videoId,
+                                              "down"
+                                            )
+                                          }
+                                          disabled={
+                                            (manualOrderIndexByVideoId.get(video.videoId) ?? 0) ===
+                                            filteredVideos.length - 1
+                                          }
+                                        >
+                                          ↓
+                                        </Button>
+                                      </>
+                                    ) : null}
                                     <Button
                                       htmlType="button"
                                       className="column-move-btn"

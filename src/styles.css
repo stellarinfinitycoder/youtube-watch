@@ -409,6 +409,16 @@ body {
   margin-left: auto;
 }
 
+.saved-sort-select {
+  width: 96px;
+}
+
+.saved-sort-select .ant-select-selector {
+  height: 28px !important;
+  min-height: 28px !important;
+  padding: 0 8px !important;
+}
+
 .column-move-btn.ant-btn {
   min-width: 28px;
   width: 28px;
