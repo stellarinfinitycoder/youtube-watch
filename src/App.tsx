@@ -28,7 +28,7 @@ import channelPlaceholderIcon from "../youtube.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326183226";
+const CHANGE_STAMP = "150326184439";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/favicon-prod.svg" : "/favicon-dev.svg";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
