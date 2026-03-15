@@ -28,7 +28,7 @@ import playlistAddIcon from "../playlist_add.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326134036";
+const CHANGE_STAMP = "150326151622";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -2632,7 +2632,7 @@ function App() {
                   aria-label={`Mark ${activeVideo.title} as watched`}
                   onClick={markWatchedAndAdvanceOrClose}
                 >
-                  W
+                  <span className="btn-icon btn-icon-check" aria-hidden />
                 </Button>
                 {isPlaylistActive ? (
                   <Text className="playlist-progress-text">
@@ -2734,7 +2734,7 @@ function App() {
                         aria-label={`Play channel ${index + 1} playlist`}
                         className="column-move-btn"
                       >
-                        P
+                        <span className="btn-icon btn-icon-play" aria-hidden />
                       </Button>
                       {!isSavedBoardActive ? (
                         <Button
@@ -2748,7 +2748,7 @@ function App() {
                           aria-label={`Move column ${index + 1} to board`}
                           className="column-move-btn"
                         >
-                          M
+                          <span className="btn-icon btn-icon-move" aria-hidden />
                         </Button>
                       ) : null}
                       {isSavedBoardActive ? (
@@ -2772,7 +2772,7 @@ function App() {
                         aria-label={`Remove column ${index + 1}`}
                         className="remove-column-btn"
                       >
-                        x
+                        <span className="btn-icon btn-icon-delete" aria-hidden />
                       </Button>
                     </div>
                   </div>
@@ -2841,7 +2841,7 @@ function App() {
                         aria-label={`Fetch column ${index + 1}`}
                         className="inline-fetch-btn"
                       >
-                        F
+                        <span className="btn-icon btn-icon-fetch" aria-hidden />
                       </Button>
                     </div>
 
@@ -2918,7 +2918,7 @@ function App() {
                                       }
                                       disabled={savedBoardColumns.length <= 1}
                                     >
-                                      M
+                                      <span className="btn-icon btn-icon-move" aria-hidden />
                                     </Button>
                                     <Button
                                       htmlType="button"
@@ -2931,7 +2931,7 @@ function App() {
                                         })
                                       }
                                     >
-                                      D
+                                      <span className="btn-icon btn-icon-remove" aria-hidden />
                                     </Button>
                                   </>
                                 ) : (
@@ -2943,7 +2943,7 @@ function App() {
                                       onClick={() => openSaveVideoModal(video)}
                                       disabled={saveDestinationColumns.length === 0}
                                     >
-                                      S
+                                      <span className="btn-icon btn-icon-star" aria-hidden />
                                     </Button>
                                     <Button
                                       htmlType="button"
@@ -2953,7 +2953,7 @@ function App() {
                                       }`}
                                       onClick={() => toggleWatched(video.videoId)}
                                     >
-                                      {isWatched ? "U" : "W"}
+                                      {isWatched ? "U" : <span className="btn-icon btn-icon-check" aria-hidden />}
                                     </Button>
                                   </>
                                 )}
