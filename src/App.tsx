@@ -28,7 +28,7 @@ import channelPlaceholderIcon from "../youtube.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326184439";
+const CHANGE_STAMP = "150326205955";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/favicon-prod.svg" : "/favicon-dev.svg";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
@@ -894,7 +894,7 @@ function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string 
   const legacyPlaybackRate = readLegacyStoredPlaybackRate();
   const resolvedCount = legacyColumnsExists
     ? legacyColumns.length
-    : Math.max(DEFAULT_COLUMN_COUNT, legacyHandles.length);
+    : Math.max(1, legacyHandles.length);
 
   const board = createBoardState("BOARD 1", {
     columns: Array.from({ length: resolvedCount }, (_, index) =>
@@ -2998,25 +2998,25 @@ function App() {
                 </article>
               );
             })}
+            <aside className="add-column-rail">
+              <Button
+                htmlType="button"
+                onClick={addColumn}
+                aria-label="Add column"
+                className="add-column-btn add-column-plus-btn"
+              >
+                +
+              </Button>
+              <Button
+                htmlType="button"
+                onClick={() => setIsBulkModalOpen(true)}
+                aria-label="Bulk add channels"
+                className="add-column-btn add-column-bulk-btn"
+              >
+                <img src={playlistAddIcon} alt="" className="add-column-bulk-icon" />
+              </Button>
+            </aside>
           </section>
-          <aside className="add-column-rail">
-            <Button
-              htmlType="button"
-              onClick={addColumn}
-              aria-label="Add column"
-              className="add-column-btn add-column-plus-btn"
-            >
-              +
-            </Button>
-            <Button
-              htmlType="button"
-              onClick={() => setIsBulkModalOpen(true)}
-              aria-label="Bulk add channels"
-              className="add-column-btn add-column-bulk-btn"
-            >
-              <img src={playlistAddIcon} alt="" className="add-column-bulk-icon" />
-            </Button>
-          </aside>
         </div>
       </div>
       <div className="backup-actions">
