@@ -27,7 +27,7 @@ import savedListPlaceholderIcon from "../lists_black.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326130757";
+const CHANGE_STAMP = "150326132205";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -63,7 +63,7 @@ const BOARD_DROPDOWN_MAX_VISIBLE = 25;
 const BOARD_DROPDOWN_ITEM_HEIGHT = 36;
 const BOARD_DROPDOWN_PADDING = 8;
 const SAVED_BOARD_ID = "saved-board-system";
-const SAVED_BOARD_NAME = "SAVED";
+const SAVED_BOARD_NAME = "SAVED LISTS";
 
 type YouTubePlayer = {
   destroy: () => void;
@@ -2463,9 +2463,9 @@ function App() {
           ))}
           <Select.Option
             value={NEW_BOARD_OPTION_VALUE}
-            title="NEW"
+            title="NEW BOARD"
           >
-            NEW
+            NEW BOARD
           </Select.Option>
         </Select>
         <Button
@@ -2484,14 +2484,6 @@ function App() {
           className="nav-btn"
         >
           Play
-        </Button>
-        <Button
-          htmlType="button"
-          onClick={() => setIsBulkModalOpen(true)}
-          aria-label="Bulk add channels"
-          className="nav-btn add-channels-btn"
-        >
-          Add
         </Button>
         {!isSavedBoardActive ? (
           <Select<VideoFilter>
@@ -2734,6 +2726,15 @@ function App() {
                       </Button>
                     </div>
                     <div className="column-actions-right">
+                      <Button
+                        htmlType="button"
+                        onClick={() => playChannelVideos(column)}
+                        disabled={column.loading || !hasChannelPlaylistVideos}
+                        aria-label={`Play channel ${index + 1} playlist`}
+                        className="column-move-btn"
+                      >
+                        P
+                      </Button>
                       {!isSavedBoardActive ? (
                         <Button
                           htmlType="button"
@@ -2763,15 +2764,6 @@ function App() {
                           options={SAVED_SORT_MODE_OPTIONS}
                         />
                       ) : null}
-                      <Button
-                        htmlType="button"
-                        onClick={() => playChannelVideos(column)}
-                        disabled={column.loading || !hasChannelPlaylistVideos}
-                        aria-label={`Play channel ${index + 1} playlist`}
-                        className="column-move-btn"
-                      >
-                        P
-                      </Button>
                       <Button
                         htmlType="button"
                         onClick={() => setDeletingColumnId(column.id)}
@@ -3002,9 +2994,17 @@ function App() {
               htmlType="button"
               onClick={addColumn}
               aria-label="Add column"
-              className="add-column-btn"
+              className="add-column-btn add-column-plus-btn"
             >
               +
+            </Button>
+            <Button
+              htmlType="button"
+              onClick={() => setIsBulkModalOpen(true)}
+              aria-label="Bulk add channels"
+              className="add-column-btn add-column-bulk-btn"
+            >
+              A
             </Button>
           </aside>
         </div>

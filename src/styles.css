@@ -362,13 +362,24 @@ body {
 
 .add-column-rail {
   flex: 0 0 46px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .add-column-btn.ant-btn {
   width: 46px;
   height: 46px;
   padding: 0;
+}
+
+.add-column-plus-btn.ant-btn {
   font-size: 28px;
+  line-height: 1;
+}
+
+.add-column-bulk-btn.ant-btn {
+  font-size: 22px;
   line-height: 1;
 }
 
