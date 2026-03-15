@@ -26,7 +26,7 @@ import topBarLogo from "../youtube_plus_red.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326094305";
+const CHANGE_STAMP = "150326105441";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -849,10 +849,20 @@ function App() {
     columnId: string;
     videoId: string;
   } | null>(null);
+  const [movingSavedVideo, setMovingSavedVideo] = useState<{
+    columnId: string;
+    videoId: string;
+  } | null>(null);
+  const [moveSavedVideoTargetColumnId, setMoveSavedVideoTargetColumnId] =
+    useState<string>("");
   const [editingSavedListColumnId, setEditingSavedListColumnId] = useState<string | null>(
     null
   );
+  const [editingChannelColumnId, setEditingChannelColumnId] = useState<string | null>(
+    null
+  );
   const [savedListNameInput, setSavedListNameInput] = useState("");
+  const [channelNameInput, setChannelNameInput] = useState("");
   const [renameBoardInput, setRenameBoardInput] = useState("");
   const [isDeleteBoardModalOpen, setIsDeleteBoardModalOpen] = useState(false);
   const [bulkInput, setBulkInput] = useState("");
@@ -907,6 +917,10 @@ function App() {
       activeBoard?.kind === "channels"
   );
   const saveDestinationColumns = savedBoardColumns;
+  const moveSavedVideoDestinationColumns =
+    movingSavedVideo && savedBoard
+      ? savedBoard.columns.filter((column) => column.id !== movingSavedVideo.columnId)
+      : [];
   const deletingChannelNameRaw =
     deletingColumn?.handleInput.trim() || deletingColumn?.currentHandle.trim() || "";
   const deletingChannelName = deletingChannelNameRaw
@@ -1916,6 +1930,11 @@ function App() {
     setSavedListNameInput(column.handleInput);
   };
 
+  const openEditChannelModal = (column: ColumnState): void => {
+    setEditingChannelColumnId(column.id);
+    setChannelNameInput(column.handleInput);
+  };
+
   const confirmEditSavedListName = (): void => {
     if (!activeBoard || activeBoard.kind !== "saved" || !editingSavedListColumnId) {
       return;
@@ -1930,6 +1949,22 @@ function App() {
     }));
     setEditingSavedListColumnId(null);
     setSavedListNameInput("");
+  };
+
+  const confirmEditChannelName = (): void => {
+    if (!activeBoard || activeBoard.kind !== "channels" || !editingChannelColumnId) {
+      return;
+    }
+    const nextName = channelNameInput.trim();
+    if (nextName.length === 0) {
+      return;
+    }
+    setColumn(activeBoard.id, editingChannelColumnId, (prev) => ({
+      ...prev,
+      handleInput: nextName
+    }));
+    setEditingChannelColumnId(null);
+    setChannelNameInput("");
   };
 
   const openSaveVideoModal = (video: VideoItem): void => {
@@ -1957,6 +1992,60 @@ function App() {
       )
     }));
     setDeletingSavedVideo(null);
+  };
+
+  const openMoveSavedVideoModal = (columnId: string, videoId: string): void => {
+    if (!savedBoard) {
+      return;
+    }
+    const destinationColumns = savedBoard.columns.filter((column) => column.id !== columnId);
+    if (destinationColumns.length === 0) {
+      return;
+    }
+    setMovingSavedVideo({ columnId, videoId });
+    setMoveSavedVideoTargetColumnId(destinationColumns[0].id);
+  };
+
+  const moveSavedVideo = (): void => {
+    if (!savedBoard || !movingSavedVideo || !moveSavedVideoTargetColumnId) {
+      return;
+    }
+    const { columnId: sourceColumnId, videoId } = movingSavedVideo;
+    const sourceColumn = savedBoard.columns.find((column) => column.id === sourceColumnId);
+    const videoToMove = sourceColumn?.videos.find((video) => video.videoId === videoId);
+    if (!videoToMove) {
+      setMovingSavedVideo(null);
+      setMoveSavedVideoTargetColumnId("");
+      return;
+    }
+
+    setBoard(savedBoard.id, (board) => ({
+      ...board,
+      columns: board.columns.map((column) => {
+        if (column.id === sourceColumnId) {
+          return {
+            ...column,
+            videos: column.videos.filter((video) => video.videoId !== videoId)
+          };
+        }
+        if (column.id === moveSavedVideoTargetColumnId) {
+          const exists = column.videos.some((video) => video.videoId === videoId);
+          if (exists) {
+            return column;
+          }
+          return {
+            ...column,
+            videos: [...column.videos, videoToMove].sort(
+              (a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a)
+            )
+          };
+        }
+        return column;
+      })
+    }));
+
+    setMovingSavedVideo(null);
+    setMoveSavedVideoTargetColumnId("");
   };
 
   return (
@@ -2371,26 +2460,16 @@ function App() {
                         value={column.handleInput}
                         className="channel-handle-input"
                         aria-label={`Channel ${index + 1} handle`}
-                        onChange={(event) => {
-                          if (isSavedBoardActive) {
-                            return;
-                          }
-                          const nextValue = event.target.value;
-                          setColumn(activeBoardId, column.id, (prev) => ({
-                            ...prev,
-                            handleInput: nextValue
-                          }));
-                        }}
-                        readOnly={isSavedBoardActive}
+                        readOnly
                         onClick={() => {
                           if (isSavedBoardActive) {
                             openEditSavedListModal(column);
+                            return;
                           }
+                          openEditChannelModal(column);
                         }}
                         onPressEnter={(event) => {
-                          if (!hasHandleInput || column.loading || isSavedBoardActive) {
-                            event.preventDefault();
-                          }
+                          event.preventDefault();
                         }}
                       />
                       <Button
@@ -2439,19 +2518,32 @@ function App() {
                               <div className="video-meta-row">
                                 <Text className="video-meta">{formatVideoMeta(video)}</Text>
                                 {isSavedBoardActive ? (
-                                  <Button
-                                    htmlType="button"
-                                    className="remove-column-btn video-delete-btn"
-                                    aria-label={`Delete ${video.title}`}
-                                    onClick={() =>
-                                      setDeletingSavedVideo({
-                                        columnId: column.id,
-                                        videoId: video.videoId
-                                      })
-                                    }
-                                  >
-                                    D
-                                  </Button>
+                                  <>
+                                    <Button
+                                      htmlType="button"
+                                      className="column-move-btn"
+                                      aria-label={`Move ${video.title}`}
+                                      onClick={() =>
+                                        openMoveSavedVideoModal(column.id, video.videoId)
+                                      }
+                                      disabled={savedBoardColumns.length <= 1}
+                                    >
+                                      M
+                                    </Button>
+                                    <Button
+                                      htmlType="button"
+                                      className="remove-column-btn video-delete-btn"
+                                      aria-label={`Delete ${video.title}`}
+                                      onClick={() =>
+                                        setDeletingSavedVideo({
+                                          columnId: column.id,
+                                          videoId: video.videoId
+                                        })
+                                      }
+                                    >
+                                      D
+                                    </Button>
+                                  </>
                                 ) : (
                                   <>
                                     <Button
@@ -2613,7 +2705,7 @@ function App() {
       </Modal>
 
       <Modal
-        title={isSavedBoardActive ? "Delete Save List" : "Delete Channel"}
+        title={isSavedBoardActive ? "Delete List" : "Delete Channel"}
         open={deletingColumnId !== null}
         onCancel={() => setDeletingColumnId(null)}
         onOk={confirmDeleteColumn}
@@ -2629,7 +2721,7 @@ function App() {
       </Modal>
 
       <Modal
-        title="Edit Save List"
+        title="Edit List"
         open={editingSavedListColumnId !== null}
         onCancel={() => {
           setEditingSavedListColumnId(null);
@@ -2647,6 +2739,30 @@ function App() {
             confirmEditSavedListName();
           }}
           placeholder="List name"
+          maxLength={30}
+          autoFocus
+        />
+      </Modal>
+
+      <Modal
+        title="Edit Channel"
+        open={editingChannelColumnId !== null}
+        onCancel={() => {
+          setEditingChannelColumnId(null);
+          setChannelNameInput("");
+        }}
+        onOk={confirmEditChannelName}
+        okText="Save"
+        width={360}
+      >
+        <Input
+          value={channelNameInput}
+          onChange={(event) => setChannelNameInput(event.target.value)}
+          onPressEnter={(event) => {
+            event.preventDefault();
+            confirmEditChannelName();
+          }}
+          placeholder="@channel"
           maxLength={30}
           autoFocus
         />
@@ -2690,6 +2806,34 @@ function App() {
         width={360}
       >
         <Text>Delete video?</Text>
+      </Modal>
+
+      <Modal
+        title="Move Video"
+        open={movingSavedVideo !== null}
+        onCancel={() => {
+          setMovingSavedVideo(null);
+          setMoveSavedVideoTargetColumnId("");
+        }}
+        onOk={moveSavedVideo}
+        okText="Move"
+        okButtonProps={{ disabled: !moveSavedVideoTargetColumnId }}
+        width={360}
+      >
+        <Space direction="vertical" size={10} className="full-width">
+          <Text>Move video to list?</Text>
+          <Select<string>
+            value={moveSavedVideoTargetColumnId || undefined}
+            onChange={setMoveSavedVideoTargetColumnId}
+            aria-label="Move video destination list"
+            className="video-filter-select full-width"
+            placeholder="Select list"
+            options={moveSavedVideoDestinationColumns.map((column) => ({
+              value: column.id,
+              label: column.handleInput.toUpperCase()
+            }))}
+          />
+        </Space>
       </Modal>
 
       <Modal
