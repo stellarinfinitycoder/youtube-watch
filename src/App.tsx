@@ -26,7 +26,7 @@ import topBarLogo from "../youtube_plus_red.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326055603";
+const CHANGE_STAMP = "150326094305";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -39,12 +39,15 @@ const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 type VideoFilter = "all" | "new" | "watched";
 type VideoWindowDays = 1 | 3 | 7 | 30 | 60 | 90 | 120 | 180;
 type PlaylistScope = "all" | "channel";
+type BoardKind = "channels" | "saved";
 const VIDEO_WINDOW_OPTIONS: VideoWindowDays[] = [1, 3, 7, 30, 60, 90, 120, 180];
 const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowDays = 180;
 const STORAGE_VIDEO_WINDOW_DAYS: VideoWindowDays = 180;
 const BOARD_DROPDOWN_MAX_VISIBLE = 25;
 const BOARD_DROPDOWN_ITEM_HEIGHT = 36;
 const BOARD_DROPDOWN_PADDING = 8;
+const SAVED_BOARD_ID = "saved-board-system";
+const SAVED_BOARD_NAME = "SAVED";
 
 type YouTubePlayer = {
   destroy: () => void;
@@ -140,6 +143,7 @@ type PersistedColumnState = {
 type BoardState = {
   id: string;
   name: string;
+  kind: BoardKind;
   columns: ColumnState[];
   watchedVideos: Record<string, boolean>;
   videoFilter: VideoFilter;
@@ -150,6 +154,7 @@ type BoardState = {
 type PersistedBoardState = {
   id: string;
   name: string;
+  kind?: BoardKind;
   columns: PersistedColumnState[];
   watchedVideos: Record<string, boolean>;
   videoFilter: VideoFilter;
@@ -488,6 +493,7 @@ function createBoardState(
   return {
     id: createBoardId(),
     name,
+    kind: "channels",
     columns: Array.from({ length: initialColumnCount }, () => createColumnState()),
     watchedVideos: {},
     videoFilter: "new",
@@ -495,6 +501,64 @@ function createBoardState(
     defaultPlaybackRate: 1.5,
     ...overrides
   };
+}
+
+function createSavedBoardState(overrides?: Partial<BoardState>): BoardState {
+  return createBoardState(SAVED_BOARD_NAME, {
+    id: SAVED_BOARD_ID,
+    kind: "saved",
+    videoFilter: "all",
+    ...overrides
+  }, 1);
+}
+
+function getNextSavedListName(columns: ColumnState[]): string {
+  let index = 1;
+  const used = new Set(
+    columns
+      .map((column) => column.handleInput.trim().toUpperCase())
+      .filter((name) => /^LIST \d+$/.test(name))
+  );
+  while (used.has(`LIST ${index}`)) {
+    index += 1;
+  }
+  return `LIST ${index}`;
+}
+
+function createSavedListColumn(existing: ColumnState[]): ColumnState {
+  return createColumnState({ handleInput: getNextSavedListName(existing) });
+}
+
+function normalizeSavedBoard(board: BoardState): BoardState {
+  const withColumns = board.columns.length > 0
+    ? board.columns
+    : [createSavedListColumn([])];
+  const namedColumns = withColumns.map((column, index) => {
+    if (column.handleInput.trim().length > 0) {
+      return column;
+    }
+    return {
+      ...column,
+      handleInput: `LIST ${index + 1}`
+    };
+  });
+  return {
+    ...board,
+    id: SAVED_BOARD_ID,
+    name: SAVED_BOARD_NAME,
+    kind: "saved",
+    columns: namedColumns
+  };
+}
+
+function ensureSavedBoard(boards: BoardState[]): BoardState[] {
+  const saved = boards.find((board) => board.kind === "saved");
+  if (saved) {
+    return boards.map((board) =>
+      board.id === saved.id ? normalizeSavedBoard(board) : board
+    );
+  }
+  return [...boards, normalizeSavedBoard(createSavedBoardState())];
 }
 
 function getNextBoardName(boards: BoardState[]): string {
@@ -524,6 +588,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
   const candidate = raw as {
     id?: unknown;
     name?: unknown;
+    kind?: unknown;
     columns?: unknown;
     watchedVideos?: unknown;
     videoFilter?: unknown;
@@ -546,6 +611,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
   return {
     id: candidate.id,
     name: candidate.name,
+    kind: candidate.kind === "saved" ? "saved" : "channels",
     columns,
     watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
     videoFilter:
@@ -571,6 +637,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
 function fromPersistedBoard(board: PersistedBoardState): BoardState {
   return createBoardState(board.name, {
     id: board.id,
+    kind: board.kind === "saved" ? "saved" : "channels",
     columns: board.columns.map((column) =>
       createColumnState({
         id: column.id,
@@ -609,10 +676,11 @@ function readStoredBoards(): BoardState[] {
       return [];
     }
 
-    return parsed
+    const boards = parsed
       .map((item) => sanitizePersistedBoard(item))
       .filter((item): item is PersistedBoardState => item !== null)
       .map((board) => fromPersistedBoard(board));
+    return ensureSavedBoard(boards);
   } catch {
     return [];
   }
@@ -673,7 +741,7 @@ function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string 
     defaultPlaybackRate: legacyPlaybackRate
   });
 
-  return { boards: [board], activeBoardId: board.id };
+  return { boards: ensureSavedBoard([board]), activeBoardId: board.id };
 }
 
 function formatViewCount(viewCount: number | null): string {
@@ -749,6 +817,14 @@ function parseBulkHandles(raw: string): string[] {
   return [...unique];
 }
 
+function parseBulkListNames(raw: string): string[] {
+  const tokens = raw
+    .split(/\n+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+  return [...new Set(tokens)];
+}
+
 function App() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -767,6 +843,16 @@ function App() {
   const [deletingColumnId, setDeletingColumnId] = useState<string | null>(null);
   const [movingColumnId, setMovingColumnId] = useState<string | null>(null);
   const [moveTargetBoardId, setMoveTargetBoardId] = useState<string>("");
+  const [savingVideo, setSavingVideo] = useState<VideoItem | null>(null);
+  const [saveTargetColumnId, setSaveTargetColumnId] = useState<string>("");
+  const [deletingSavedVideo, setDeletingSavedVideo] = useState<{
+    columnId: string;
+    videoId: string;
+  } | null>(null);
+  const [editingSavedListColumnId, setEditingSavedListColumnId] = useState<string | null>(
+    null
+  );
+  const [savedListNameInput, setSavedListNameInput] = useState("");
   const [renameBoardInput, setRenameBoardInput] = useState("");
   const [isDeleteBoardModalOpen, setIsDeleteBoardModalOpen] = useState(false);
   const [bulkInput, setBulkInput] = useState("");
@@ -775,6 +861,7 @@ function App() {
   const [playlistIndex, setPlaylistIndex] = useState<number>(-1);
   const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
   const [playlistChannelLabel, setPlaylistChannelLabel] = useState<string>("");
+  const [playlistOrderLabel, setPlaylistOrderLabel] = useState<string>("NEWEST FIRST");
   const [playbackRate, setPlaybackRate] = useState<number>(1.5);
   const [availablePlaybackRates, setAvailablePlaybackRates] = useState<number[]>([
     0.5,
@@ -793,6 +880,13 @@ function App() {
   const [viewBackfillInFlight, setViewBackfillInFlight] = useState<string[]>([]);
   const activeBoard =
     boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
+  const displayedBoards = [
+    ...boards.filter((board) => board.kind !== "saved"),
+    ...boards.filter((board) => board.kind === "saved")
+  ];
+  const savedBoard = boards.find((board) => board.kind === "saved") ?? null;
+  const isSavedBoardActive = activeBoard?.kind === "saved";
+  const savedBoardColumns = savedBoard?.columns ?? [];
   const editingBoard =
     (editingBoardId
       ? boards.find((board) => board.id === editingBoardId)
@@ -806,7 +900,13 @@ function App() {
     (movingColumnId
       ? columns.find((column) => column.id === movingColumnId)
       : undefined) ?? null;
-  const moveDestinationBoards = boards.filter((board) => board.id !== activeBoardId);
+  const moveDestinationBoards = boards.filter(
+    (board) =>
+      board.id !== activeBoardId &&
+      board.kind === "channels" &&
+      activeBoard?.kind === "channels"
+  );
+  const saveDestinationColumns = savedBoardColumns;
   const deletingChannelNameRaw =
     deletingColumn?.handleInput.trim() || deletingColumn?.currentHandle.trim() || "";
   const deletingChannelName = deletingChannelNameRaw
@@ -826,7 +926,8 @@ function App() {
   const watchedVideos = activeBoard?.watchedVideos ?? {};
   const boardDropdownListHeight = Math.max(
     BOARD_DROPDOWN_ITEM_HEIGHT + BOARD_DROPDOWN_PADDING,
-    Math.min(boards.length + 1, BOARD_DROPDOWN_MAX_VISIBLE) * BOARD_DROPDOWN_ITEM_HEIGHT +
+    Math.min(displayedBoards.length + 1, BOARD_DROPDOWN_MAX_VISIBLE) *
+      BOARD_DROPDOWN_ITEM_HEIGHT +
       BOARD_DROPDOWN_PADDING
   );
   const isPlaylistActive =
@@ -836,6 +937,10 @@ function App() {
   const videoFilter = activeBoard?.videoFilter ?? "new";
   const videoWindowDays = activeBoard?.videoWindowDays ?? DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
+
+  useEffect(() => {
+    setBoards((previous) => ensureSavedBoard(previous));
+  }, []);
 
   useEffect(() => {
     if (boards.length === 0) {
@@ -892,6 +997,7 @@ function App() {
       const persistedBoards: PersistedBoardState[] = boards.map((board) => ({
         id: board.id,
         name: board.name,
+        kind: board.kind,
         columns: toPersistedColumns(board.columns),
         watchedVideos: board.watchedVideos,
         videoFilter: board.videoFilter,
@@ -1118,6 +1224,34 @@ function App() {
     columnId: string,
     handle: string
   ): Promise<void> => {
+    const boardState = boards.find((board) => board.id === boardId);
+    if (boardState?.kind === "saved") {
+      setColumn(boardId, columnId, (prev) => ({ ...prev, loading: true, error: null }));
+      try {
+        const ids = (boardState.columns.find((column) => column.id === columnId)?.videos ?? [])
+          .map((video) => video.videoId);
+        const counts = await fetchViewCountsByVideoIds(ids);
+        setColumn(boardId, columnId, (prev) => ({
+          ...prev,
+          loading: false,
+          error: null,
+          videos: prev.videos.map((video) => ({
+            ...video,
+            viewCount: counts[video.videoId] ?? video.viewCount
+          })),
+          lastFetchAt: new Date().toLocaleString()
+        }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to refresh videos.";
+        setColumn(boardId, columnId, (prev) => ({
+          ...prev,
+          loading: false,
+          error: message
+        }));
+      }
+      return;
+    }
+
     setColumn(boardId, columnId, (prev) => ({ ...prev, loading: true, error: null }));
 
     try {
@@ -1193,6 +1327,13 @@ function App() {
     if (!activeBoard) {
       return;
     }
+    if (activeBoard.kind === "saved") {
+      setBoard(activeBoard.id, (board) => ({
+        ...board,
+        columns: [...board.columns, createSavedListColumn(board.columns)]
+      }));
+      return;
+    }
     setBoard(activeBoard.id, (board) => ({
       ...board,
       columns: [...board.columns, createColumnState()]
@@ -1236,6 +1377,10 @@ function App() {
     if (!deletingColumnId) {
       return;
     }
+    if (isSavedBoardActive && columns.length <= 1) {
+      setDeletingColumnId(null);
+      return;
+    }
     removeColumnById(deletingColumnId);
     setDeletingColumnId(null);
   };
@@ -1244,6 +1389,26 @@ function App() {
     if (!activeBoard) {
       return;
     }
+    if (activeBoard.kind === "saved") {
+      const names = parseBulkListNames(bulkInput);
+      const createdNames =
+        names.length > 0
+          ? names
+          : [getNextSavedListName(activeBoard.columns)];
+      const created = createdNames.map((name) =>
+        createColumnState({
+          handleInput: name.trim().length > 0 ? name : getNextSavedListName(activeBoard.columns)
+        })
+      );
+      setBoard(activeBoard.id, (board) => ({
+        ...board,
+        columns: [...board.columns, ...created]
+      }));
+      setIsBulkModalOpen(false);
+      setBulkInput("");
+      return;
+    }
+
     const handles = parseBulkHandles(bulkInput);
     if (handles.length === 0) {
       setIsBulkModalOpen(false);
@@ -1274,6 +1439,10 @@ function App() {
       return;
     }
     columns.forEach((column) => {
+      if (activeBoard.kind === "saved") {
+        runFetch(activeBoard.id, column.id, column.handleInput);
+        return;
+      }
       const rawHandle = column.handleInput.trim();
       if (rawHandle.length > 0) {
         runFetch(activeBoard.id, column.id, column.handleInput);
@@ -1362,6 +1531,7 @@ function App() {
     setPlaylistIndex(-1);
     setPlaylistScope("all");
     setPlaylistChannelLabel("");
+    setPlaylistOrderLabel("NEWEST FIRST");
   };
 
   const closeVideoModal = (): void => {
@@ -1454,6 +1624,7 @@ function App() {
     setPlaylistIndex(0);
     setPlaylistScope("all");
     setPlaylistChannelLabel("");
+    setPlaylistOrderLabel("NEWEST FIRST");
     setActiveVideo(queue[0]);
   };
 
@@ -1480,19 +1651,27 @@ function App() {
     }
 
     const channelRaw = column.currentHandle.trim() || column.handleInput.trim();
-    const channelLabel = channelRaw
-      ? (channelRaw.startsWith("@") ? channelRaw : `@${channelRaw}`).toUpperCase()
-      : "@CHANNEL";
+    const channelLabel =
+      activeBoard?.kind === "saved"
+        ? (channelRaw || "LIST").toUpperCase()
+        : channelRaw
+        ? (channelRaw.startsWith("@") ? channelRaw : `@${channelRaw}`).toUpperCase()
+        : "@CHANNEL";
 
     setPlaylistQueue(queue);
     setPlaylistIndex(0);
     setPlaylistScope("channel");
     setPlaylistChannelLabel(channelLabel);
+    setPlaylistOrderLabel(activeBoard?.kind === "saved" ? "IN ORDER" : "NEWEST FIRST");
     setActiveVideo(queue[0]);
   };
 
   const createBoard = (): string => {
-    const board = createBoardState(getNextBoardName(boards), undefined, 1);
+    const board = createBoardState(
+      getNextBoardName(boards.filter((item) => item.kind !== "saved")),
+      { kind: "channels" },
+      1
+    );
     setBoards((previous) => [...previous, board]);
     setActiveBoardId(board.id);
     return board.id;
@@ -1542,6 +1721,9 @@ function App() {
       if (index === -1) {
         return previous;
       }
+      if (previous[index].kind === "saved") {
+        return previous;
+      }
 
       const targetIndex = direction === "up" ? index - 1 : index + 1;
       if (targetIndex < 0 || targetIndex >= previous.length) {
@@ -1568,6 +1750,9 @@ function App() {
       (boardId ? boards.find((board) => board.id === boardId) : undefined) ??
       activeBoard;
     if (!targetBoard) {
+      return;
+    }
+    if (targetBoard.kind === "saved") {
       return;
     }
     setEditingBoardId(targetBoard.id);
@@ -1597,20 +1782,24 @@ function App() {
     if (!removingBoardId) {
       return;
     }
+    if (boards.find((board) => board.id === removingBoardId)?.kind === "saved") {
+      return;
+    }
 
     let nextActiveBoardId = "";
     setBoards((previous) => {
       const filtered = previous.filter((board) => board.id !== removingBoardId);
-      if (filtered.length > 0) {
+      const filteredChannels = filtered.filter((board) => board.kind !== "saved");
+      if (filteredChannels.length > 0) {
         const activeIndex = previous.findIndex((board) => board.id === removingBoardId);
-        const fallbackIndex = Math.min(activeIndex, filtered.length - 1);
-        nextActiveBoardId = filtered[Math.max(0, fallbackIndex)].id;
-        return filtered;
+        const fallbackIndex = Math.min(activeIndex, filteredChannels.length - 1);
+        nextActiveBoardId = filteredChannels[Math.max(0, fallbackIndex)].id;
+        return ensureSavedBoard(filtered);
       }
 
-      const replacement = createBoardState("BOARD 1", { columns: [] });
+      const replacement = createBoardState("BOARD 1", { kind: "channels", columns: [] });
       nextActiveBoardId = replacement.id;
-      return [replacement];
+      return ensureSavedBoard([replacement]);
     });
     setActiveBoardId(nextActiveBoardId);
     setEditingBoardId(null);
@@ -1624,6 +1813,7 @@ function App() {
       boards: boards.map((board) => ({
         id: board.id,
         name: board.name,
+        kind: board.kind,
         columns: toPersistedColumns(board.columns),
         watchedVideos: board.watchedVideos,
         videoFilter: board.videoFilter,
@@ -1661,7 +1851,9 @@ function App() {
           throw new Error("Invalid backup file.");
         }
 
-        const importedBoards = backup.boards.map((board) => fromPersistedBoard(board));
+        const importedBoards = ensureSavedBoard(
+          backup.boards.map((board) => fromPersistedBoard(board))
+        );
         setBoards(importedBoards);
         setActiveBoardId(backup.activeBoardId);
         const importedActiveBoard =
@@ -1677,6 +1869,94 @@ function App() {
       }
     };
     reader.readAsText(file);
+  };
+
+  const saveVideoToSavedColumn = (): void => {
+    if (!savingVideo || !saveTargetColumnId || !savedBoard) {
+      return;
+    }
+    setBoard(savedBoard.id, (board) => ({
+      ...board,
+      columns: board.columns.map((column) => {
+        if (column.id !== saveTargetColumnId) {
+          return column;
+        }
+        const exists = column.videos.some((video) => video.videoId === savingVideo.videoId);
+        if (exists) {
+          return column;
+        }
+        const nextVideos = [...column.videos, savingVideo].sort(
+          (a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a)
+        );
+        return {
+          ...column,
+          videos: nextVideos
+        };
+      }),
+      watchedVideos: {
+        ...board.watchedVideos,
+        [savingVideo.videoId]: true
+      }
+    }));
+    if (activeBoard) {
+      setBoard(activeBoard.id, (board) => ({
+        ...board,
+        watchedVideos: {
+          ...board.watchedVideos,
+          [savingVideo.videoId]: true
+        }
+      }));
+    }
+    setSavingVideo(null);
+    setSaveTargetColumnId("");
+  };
+
+  const openEditSavedListModal = (column: ColumnState): void => {
+    setEditingSavedListColumnId(column.id);
+    setSavedListNameInput(column.handleInput);
+  };
+
+  const confirmEditSavedListName = (): void => {
+    if (!activeBoard || activeBoard.kind !== "saved" || !editingSavedListColumnId) {
+      return;
+    }
+    const nextName = savedListNameInput.trim();
+    if (nextName.length === 0) {
+      return;
+    }
+    setColumn(activeBoard.id, editingSavedListColumnId, (prev) => ({
+      ...prev,
+      handleInput: nextName
+    }));
+    setEditingSavedListColumnId(null);
+    setSavedListNameInput("");
+  };
+
+  const openSaveVideoModal = (video: VideoItem): void => {
+    if (!savedBoard || savedBoard.columns.length === 0) {
+      return;
+    }
+    setSavingVideo(video);
+    setSaveTargetColumnId(savedBoard.columns[0].id);
+  };
+
+  const deleteSavedVideo = (): void => {
+    if (!deletingSavedVideo || !savedBoard) {
+      return;
+    }
+    const { columnId, videoId } = deletingSavedVideo;
+    setBoard(savedBoard.id, (board) => ({
+      ...board,
+      columns: board.columns.map((column) =>
+        column.id === columnId
+          ? {
+              ...column,
+              videos: column.videos.filter((video) => video.videoId !== videoId)
+            }
+          : column
+      )
+    }));
+    setDeletingSavedVideo(null);
   };
 
   return (
@@ -1695,7 +1975,7 @@ function App() {
           optionLabelProp="title"
           listHeight={boardDropdownListHeight}
         >
-          {boards.map((board, boardIndex) => (
+          {displayedBoards.map((board, boardIndex) => (
             <Select.Option
               key={board.id}
               value={board.id}
@@ -1703,57 +1983,59 @@ function App() {
             >
               <div className="board-option-row">
                 <span className="board-option-name">{board.name.toUpperCase()}</span>
-                <div className="board-option-actions">
-                  <button
-                    type="button"
-                    className="board-option-move-btn"
-                    aria-label={`Move ${board.name} up`}
-                    disabled={boardIndex === 0}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      moveBoard(board.id, "up");
-                    }}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="board-option-move-btn"
-                    aria-label={`Move ${board.name} down`}
-                    disabled={boardIndex === boards.length - 1}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      moveBoard(board.id, "down");
-                    }}
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    className="board-option-edit-btn"
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      openRenameBoardModal(board.id);
-                    }}
-                  >
-                    E
-                  </button>
-                </div>
+                {board.kind !== "saved" ? (
+                  <div className="board-option-actions">
+                    <button
+                      type="button"
+                      className="board-option-move-btn"
+                      aria-label={`Move ${board.name} up`}
+                      disabled={boardIndex === 0}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        moveBoard(board.id, "up");
+                      }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="board-option-move-btn"
+                      aria-label={`Move ${board.name} down`}
+                      disabled={boardIndex === displayedBoards.length - 2}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        moveBoard(board.id, "down");
+                      }}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      className="board-option-edit-btn"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        openRenameBoardModal(board.id);
+                      }}
+                    >
+                      E
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </Select.Option>
           ))}
@@ -1789,25 +2071,27 @@ function App() {
         >
           Add
         </Button>
-        <Select<VideoFilter>
-          value={videoFilter}
-          onChange={(value) => {
-            if (!activeBoard) {
-              return;
-            }
-            setBoard(activeBoard.id, (board) => ({
-              ...board,
-              videoFilter: value
-            }));
-          }}
-          aria-label="Video filter"
-          className="video-filter-select video-status-select"
-          options={[
-            { value: "all", label: "ALL" },
-            { value: "new", label: "NEW" },
-            { value: "watched", label: "WATCHED" }
-          ]}
-        />
+        {!isSavedBoardActive ? (
+          <Select<VideoFilter>
+            value={videoFilter}
+            onChange={(value) => {
+              if (!activeBoard) {
+                return;
+              }
+              setBoard(activeBoard.id, (board) => ({
+                ...board,
+                videoFilter: value
+              }));
+            }}
+            aria-label="Video filter"
+            className="video-filter-select video-status-select"
+            options={[
+              { value: "all", label: "ALL" },
+              { value: "new", label: "NEW" },
+              { value: "watched", label: "WATCHED" }
+            ]}
+          />
+        ) : null}
         <Select<VideoWindowDays>
           value={videoWindowDays}
           onChange={(value) => {
@@ -1873,7 +2157,7 @@ function App() {
       </div>
 
       <Modal
-        title="Add Channels"
+        title={isSavedBoardActive ? "Add Lists" : "Add Channels"}
         open={isBulkModalOpen}
         onCancel={() => setIsBulkModalOpen(false)}
         onOk={handleBulkAddConfirm}
@@ -1884,7 +2168,11 @@ function App() {
           value={bulkInput}
           onChange={(event) => setBulkInput(event.target.value)}
           autoSize={{ minRows: 6, maxRows: 12 }}
-          placeholder={"@channelOne\n@channelTwo\n@channelThree"}
+          placeholder={
+            isSavedBoardActive
+              ? "List One\nList Two\nList Three"
+              : "@channelOne\n@channelTwo\n@channelThree"
+          }
         />
       </Modal>
 
@@ -1934,9 +2222,11 @@ function App() {
                   <Text className="playlist-progress-text">
                     {playlistIndex + 1} of {playlistQueue.length} |{" "}
                     {playlistScope === "channel"
-                      ? playlistChannelLabel || "@CHANNEL"
+                      ? playlistChannelLabel || "CHANNEL"
+                      : isSavedBoardActive
+                      ? "ALL LISTS"
                       : "ALL CHANNELS"}{" "}
-                    | NEWEST FIRST
+                    | {playlistOrderLabel}
                   </Text>
                 ) : null}
               </div>
@@ -1969,7 +2259,9 @@ function App() {
               const cutoffTime = getWindowCutoffTime(videoWindowDays);
               const brokenThumbKey = `${activeBoardId}:${column.id}`;
               const channelThumbToShow =
-                brokenChannelThumbnailKeys.includes(brokenThumbKey)
+                isSavedBoardActive
+                  ? ""
+                  : brokenChannelThumbnailKeys.includes(brokenThumbKey)
                   ? column.videos[0]?.thumbnailUrl ?? ""
                   : column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
               const hasHandleInput = column.handleInput.trim().length > 0;
@@ -2013,19 +2305,21 @@ function App() {
                       </Button>
                     </div>
                     <div className="column-actions-right">
-                      <Button
-                        htmlType="button"
-                        onClick={() => openMoveColumnModal(column.id)}
-                        disabled={
-                          column.loading ||
-                          moveDestinationBoards.length === 0 ||
-                          !hasChannelPlaylistVideos
-                        }
-                        aria-label={`Move column ${index + 1} to board`}
-                        className="column-move-btn"
-                      >
-                        M
-                      </Button>
+                      {!isSavedBoardActive ? (
+                        <Button
+                          htmlType="button"
+                          onClick={() => openMoveColumnModal(column.id)}
+                          disabled={
+                            column.loading ||
+                            moveDestinationBoards.length === 0 ||
+                            !hasChannelPlaylistVideos
+                          }
+                          aria-label={`Move column ${index + 1} to board`}
+                          className="column-move-btn"
+                        >
+                          M
+                        </Button>
+                      ) : null}
                       <Button
                         htmlType="button"
                         onClick={() => playChannelVideos(column)}
@@ -2038,7 +2332,7 @@ function App() {
                       <Button
                         htmlType="button"
                         onClick={() => setDeletingColumnId(column.id)}
-                        disabled={column.loading}
+                        disabled={column.loading || (isSavedBoardActive && columns.length <= 1)}
                         aria-label={`Remove column ${index + 1}`}
                         className="remove-column-btn"
                       >
@@ -2073,19 +2367,28 @@ function App() {
                         </div>
                       )}
                       <Input
-                        placeholder="@channel"
+                        placeholder={isSavedBoardActive ? "List name" : "@channel"}
                         value={column.handleInput}
                         className="channel-handle-input"
                         aria-label={`Channel ${index + 1} handle`}
                         onChange={(event) => {
+                          if (isSavedBoardActive) {
+                            return;
+                          }
                           const nextValue = event.target.value;
                           setColumn(activeBoardId, column.id, (prev) => ({
                             ...prev,
                             handleInput: nextValue
                           }));
                         }}
+                        readOnly={isSavedBoardActive}
+                        onClick={() => {
+                          if (isSavedBoardActive) {
+                            openEditSavedListModal(column);
+                          }
+                        }}
                         onPressEnter={(event) => {
-                          if (!hasHandleInput || column.loading) {
+                          if (!hasHandleInput || column.loading || isSavedBoardActive) {
                             event.preventDefault();
                           }
                         }}
@@ -2095,7 +2398,11 @@ function App() {
                         onClick={() =>
                           runFetch(activeBoardId, column.id, column.handleInput)
                         }
-                        disabled={!hasHandleInput || column.loading}
+                        disabled={
+                          column.loading ||
+                          (!isSavedBoardActive && !hasHandleInput) ||
+                          (isSavedBoardActive && column.videos.length === 0)
+                        }
                         loading={column.loading}
                         aria-label={`Fetch column ${index + 1}`}
                         className="inline-fetch-btn"
@@ -2131,16 +2438,43 @@ function App() {
                             <Space direction="vertical" size="small" className="full-width">
                               <div className="video-meta-row">
                                 <Text className="video-meta">{formatVideoMeta(video)}</Text>
-                                <Button
-                                  htmlType="button"
-                                  className="video-watch-btn"
-                                  aria-label={`Mark ${video.title} as ${
-                                    isWatched ? "new" : "watched"
-                                  }`}
-                                  onClick={() => toggleWatched(video.videoId)}
-                                >
-                                  {isWatched ? "U" : "W"}
-                                </Button>
+                                {isSavedBoardActive ? (
+                                  <Button
+                                    htmlType="button"
+                                    className="remove-column-btn video-delete-btn"
+                                    aria-label={`Delete ${video.title}`}
+                                    onClick={() =>
+                                      setDeletingSavedVideo({
+                                        columnId: column.id,
+                                        videoId: video.videoId
+                                      })
+                                    }
+                                  >
+                                    D
+                                  </Button>
+                                ) : (
+                                  <>
+                                    <Button
+                                      htmlType="button"
+                                      className="column-move-btn"
+                                      aria-label={`Save ${video.title}`}
+                                      onClick={() => openSaveVideoModal(video)}
+                                      disabled={saveDestinationColumns.length === 0}
+                                    >
+                                      S
+                                    </Button>
+                                    <Button
+                                      htmlType="button"
+                                      className="video-watch-btn"
+                                      aria-label={`Mark ${video.title} as ${
+                                        isWatched ? "new" : "watched"
+                                      }`}
+                                      onClick={() => toggleWatched(video.videoId)}
+                                    >
+                                      {isWatched ? "U" : "W"}
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                               {video.thumbnailUrl ? (
                                 <button
@@ -2279,7 +2613,7 @@ function App() {
       </Modal>
 
       <Modal
-        title="Delete Channel"
+        title={isSavedBoardActive ? "Delete Save List" : "Delete Channel"}
         open={deletingColumnId !== null}
         onCancel={() => setDeletingColumnId(null)}
         onOk={confirmDeleteColumn}
@@ -2288,9 +2622,74 @@ function App() {
         width={360}
       >
         <Text>
-          Delete channel
-          {deletingChannelNameDisplay ? ` ${deletingChannelNameDisplay}` : ""}?
+          {isSavedBoardActive
+            ? `Delete list ${deletingColumn?.handleInput || ""}?`
+            : `Delete channel${deletingChannelNameDisplay ? ` ${deletingChannelNameDisplay}` : ""}?`}
         </Text>
+      </Modal>
+
+      <Modal
+        title="Edit Save List"
+        open={editingSavedListColumnId !== null}
+        onCancel={() => {
+          setEditingSavedListColumnId(null);
+          setSavedListNameInput("");
+        }}
+        onOk={confirmEditSavedListName}
+        okText="Save"
+        width={360}
+      >
+        <Input
+          value={savedListNameInput}
+          onChange={(event) => setSavedListNameInput(event.target.value)}
+          onPressEnter={(event) => {
+            event.preventDefault();
+            confirmEditSavedListName();
+          }}
+          placeholder="List name"
+          maxLength={30}
+          autoFocus
+        />
+      </Modal>
+
+      <Modal
+        title="Save Video"
+        open={savingVideo !== null}
+        onCancel={() => {
+          setSavingVideo(null);
+          setSaveTargetColumnId("");
+        }}
+        onOk={saveVideoToSavedColumn}
+        okText="Save"
+        okButtonProps={{ disabled: !saveTargetColumnId }}
+        width={360}
+      >
+        <Space direction="vertical" size={10} className="full-width">
+          <Text>Save video?</Text>
+          <Select<string>
+            value={saveTargetColumnId || undefined}
+            onChange={setSaveTargetColumnId}
+            aria-label="Save destination list"
+            className="video-filter-select full-width"
+            placeholder="Select list"
+            options={saveDestinationColumns.map((column) => ({
+              value: column.id,
+              label: column.handleInput.toUpperCase()
+            }))}
+          />
+        </Space>
+      </Modal>
+
+      <Modal
+        title="Delete Video"
+        open={deletingSavedVideo !== null}
+        onCancel={() => setDeletingSavedVideo(null)}
+        onOk={deleteSavedVideo}
+        okText="Delete"
+        okButtonProps={{ danger: true, className: "delete-confirm-ok" }}
+        width={360}
+      >
+        <Text>Delete video?</Text>
       </Modal>
 
       <Modal
