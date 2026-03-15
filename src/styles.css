@@ -308,6 +308,13 @@ body {
   order: 7;
 }
 
+.columns-nav [aria-label="Fetch all channels"],
+.columns-nav [aria-label="Play all videos"],
+.columns-nav [aria-label="Bulk add channels"] {
+  width: 92px;
+  justify-content: center;
+}
+
 .columns-scroll {
   width: 100%;
   overflow-x: hidden;
