@@ -44,14 +44,14 @@ body {
 }
 
 .columns-nav {
-  width: 100%;
-  margin: 0 0 8px;
+  width: calc(100% + 24px);
+  margin: 0 -12px 8px;
   padding: 12px;
   display: flex;
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
-  background: linear-gradient(180deg, var(--surface-2), var(--surface-3));
+  background: rgba(255, 143, 31, 0.12);
 }
 
 .top-bar-logo {
@@ -272,6 +272,7 @@ body {
 
 .columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to first"] {
   order: 9;
+  margin-left: auto;
 }
 
 .columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns left"] {
@@ -313,17 +314,6 @@ body {
 
 .columns-nav [aria-label="Bulk add channels"] {
   order: 7;
-}
-
-.topbar-day-text.ant-typography {
-  order: 8;
-  margin-left: auto;
-  margin-right: 2px;
-  color: var(--muted);
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  line-height: 1;
-  align-self: center;
 }
 
 .columns-nav [aria-label="Fetch all channels"],
@@ -733,6 +723,10 @@ body {
 
 .video-tile-item.ant-list-item:hover {
   background: rgba(255, 143, 31, 0.12);
+}
+
+.ant-list .ant-list-items > .video-tile-item.ant-list-item:last-child {
+  border-block-end: 0 !important;
 }
 
 .video-title {

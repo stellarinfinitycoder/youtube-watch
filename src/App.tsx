@@ -28,7 +28,7 @@ import channelPlaceholderIcon from "../youtube.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326205316";
+const CHANGE_STAMP = "150326210646";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/favicon-prod.svg" : "/favicon-dev.svg";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
@@ -1163,13 +1163,6 @@ function App() {
   const videoFilter = activeBoard?.videoFilter ?? "new";
   const videoWindowDays = activeBoard?.videoWindowDays ?? DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
-  const todayDateLabel = (() => {
-    const now = new Date();
-    const day = String(now.getDate()).padStart(2, "0");
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const year = String(now.getFullYear()).slice(-2);
-    return `${day}.${month}.${year}`;
-  })();
 
   useEffect(() => {
     setBoards((previous) => ensureSavedBoard(previous));
@@ -2538,7 +2531,6 @@ function App() {
             { value: 2, label: "2X" }
           ]}
         />
-        <Text className="topbar-day-text">{todayDateLabel}</Text>
         <Button
           htmlType="button"
           onClick={() => scrollToEdge("start")}
