@@ -383,6 +383,13 @@ body {
   line-height: 1;
 }
 
+.add-column-bulk-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  object-fit: contain;
+}
+
 .full-width {
   width: 100%;
 }
