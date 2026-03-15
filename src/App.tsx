@@ -27,10 +27,11 @@ import savedListPlaceholderIcon from "../lists_black.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326112646";
+const CHANGE_STAMP = "150326123207";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
+const ERROR_LOGS_STORAGE_KEY = "youtube-watch:error-logs:v1";
 const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 const LEGACY_WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
@@ -168,6 +169,15 @@ type BackupPayload = {
   exportedAt: string;
   boards: PersistedBoardState[];
   activeBoardId: string;
+};
+
+type ErrorLogEntry = {
+  id: string;
+  time: string;
+  board: string;
+  column: string;
+  action: "FETCH";
+  message: string;
 };
 
 const NEW_BOARD_OPTION_VALUE = "__new__";
@@ -826,6 +836,41 @@ function parseBulkListNames(raw: string): string[] {
   return [...new Set(tokens)];
 }
 
+function readStoredErrorLogs(): ErrorLogEntry[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.getItem !== "function") {
+      return [];
+    }
+    const raw = storage.getItem(ERROR_LOGS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter(
+        (item): item is ErrorLogEntry =>
+          item !== null &&
+          typeof item === "object" &&
+          typeof (item as { id?: unknown }).id === "string" &&
+          typeof (item as { time?: unknown }).time === "string" &&
+          typeof (item as { board?: unknown }).board === "string" &&
+          typeof (item as { column?: unknown }).column === "string" &&
+          typeof (item as { action?: unknown }).action === "string" &&
+          typeof (item as { message?: unknown }).message === "string"
+      )
+      .slice(0, 100);
+  } catch {
+    return [];
+  }
+}
+
 function App() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -866,6 +911,8 @@ function App() {
   const [channelNameInput, setChannelNameInput] = useState("");
   const [renameBoardInput, setRenameBoardInput] = useState("");
   const [isDeleteBoardModalOpen, setIsDeleteBoardModalOpen] = useState(false);
+  const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
+  const [errorLogs, setErrorLogs] = useState<ErrorLogEntry[]>(readStoredErrorLogs);
   const [bulkInput, setBulkInput] = useState("");
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
@@ -1025,6 +1072,18 @@ function App() {
       // Ignore write failures (private mode / restricted environments).
     }
   }, [activeBoardId, boards]);
+
+  useEffect(() => {
+    try {
+      const storage = window.localStorage;
+      if (!storage || typeof storage.setItem !== "function") {
+        return;
+      }
+      storage.setItem(ERROR_LOGS_STORAGE_KEY, JSON.stringify(errorLogs.slice(0, 100)));
+    } catch {
+      // Ignore write failures.
+    }
+  }, [errorLogs]);
 
   useEffect(() => {
     if (!activeBoard) {
@@ -1234,6 +1293,32 @@ function App() {
     }));
   };
 
+  const appendFetchErrorLog = (
+    boardId: string,
+    columnId: string,
+    message: string
+  ): void => {
+    const board = boards.find((item) => item.id === boardId);
+    const column = board?.columns.find((item) => item.id === columnId);
+    const boardName = (board?.name || "UNKNOWN").toUpperCase();
+    const columnName = (
+      column?.handleInput.trim() ||
+      column?.currentHandle.trim() ||
+      "UNKNOWN"
+    ).toUpperCase();
+    setErrorLogs((previous) => [
+      {
+        id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        time: new Date().toLocaleString(),
+        board: boardName,
+        column: columnName,
+        action: "FETCH" as const,
+        message
+      },
+      ...previous
+    ].slice(0, 100));
+  };
+
   const runFetch = async (
     boardId: string,
     columnId: string,
@@ -1258,6 +1343,7 @@ function App() {
         }));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to refresh videos.";
+        appendFetchErrorLog(boardId, columnId, message);
         setColumn(boardId, columnId, (prev) => ({
           ...prev,
           loading: false,
@@ -1330,6 +1416,7 @@ function App() {
       )
         ? "Channel not found."
         : sourceMessage;
+      appendFetchErrorLog(boardId, columnId, message);
       setColumn(boardId, columnId, (prev) => ({
         ...prev,
         loading: false,
@@ -2638,6 +2725,14 @@ function App() {
         >
           Restore
         </Button>
+        <Button
+          htmlType="button"
+          onClick={() => setIsLogsModalOpen(true)}
+          aria-label="Open logs"
+          className="backup-btn"
+        >
+          Logs
+        </Button>
         <Text className="backup-limits-text">
           MAX FETCH LIMIT: 50 VIDEOS | MAX VIDEO AGE: 180 DAYS | {BUILD_INFO_LABEL}
         </Text>
@@ -2649,6 +2744,43 @@ function App() {
           onChange={handleImportBackup}
         />
       </div>
+
+      <Modal
+        title="Logs"
+        open={isLogsModalOpen}
+        onCancel={() => setIsLogsModalOpen(false)}
+        footer={
+          <Space>
+            <Button
+              htmlType="button"
+              onClick={() => setErrorLogs([])}
+              disabled={errorLogs.length === 0}
+            >
+              Clear
+            </Button>
+            <Button type="primary" onClick={() => setIsLogsModalOpen(false)}>
+              Close
+            </Button>
+          </Space>
+        }
+        width={640}
+      >
+        {errorLogs.length === 0 ? (
+          <Text>No logs.</Text>
+        ) : (
+          <List
+            size="small"
+            dataSource={errorLogs}
+            renderItem={(log) => (
+              <List.Item key={log.id}>
+                <Text>
+                  {log.time} | {log.board} | {log.column} | {log.action} | {log.message}
+                </Text>
+              </List.Item>
+            )}
+          />
+        )}
+      </Modal>
 
       <Modal
         title="Edit Board"
