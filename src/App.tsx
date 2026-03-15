@@ -22,11 +22,12 @@ import {
 import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
 import topBarLogo from "../youtube_plus_red.svg";
+import savedListPlaceholderIcon from "../lists_black.svg";
 
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326105441";
+const CHANGE_STAMP = "150326110808";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -2452,7 +2453,15 @@ function App() {
                           className="channel-avatar channel-avatar-placeholder"
                           aria-label={`Channel ${index + 1} placeholder`}
                         >
-                          <span />
+                          {isSavedBoardActive ? (
+                            <img
+                              src={savedListPlaceholderIcon}
+                              alt=""
+                              className="channel-avatar-placeholder-icon"
+                            />
+                          ) : (
+                            <span />
+                          )}
                         </div>
                       )}
                       <Input
