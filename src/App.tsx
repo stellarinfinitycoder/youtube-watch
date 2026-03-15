@@ -28,7 +28,7 @@ import playlistAddIcon from "../playlist_add.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326162540";
+const CHANGE_STAMP = "150326173702";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -2476,7 +2476,7 @@ function App() {
           aria-label="Fetch all channels"
           className="nav-btn"
         >
-          Fetch
+          <span className="btn-icon btn-icon-fetch" aria-hidden />
         </Button>
         <Button
           htmlType="button"
@@ -2484,7 +2484,7 @@ function App() {
           aria-label="Play all videos"
           className="nav-btn"
         >
-          Play
+          <span className="btn-icon btn-icon-play" aria-hidden />
         </Button>
         {!isSavedBoardActive ? (
           <Select<VideoFilter>

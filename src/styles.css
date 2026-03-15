@@ -321,7 +321,10 @@ body {
 .columns-nav [aria-label="Fetch all channels"],
 .columns-nav [aria-label="Play all videos"],
 .columns-nav [aria-label="Bulk add channels"] {
-  width: 92px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px !important;
+  padding: 0 !important;
   justify-content: center;
 }
 
@@ -455,53 +458,47 @@ body {
   width: 16px;
   height: 16px;
   display: inline-block;
-  background-color: currentColor;
-  mask-repeat: no-repeat;
-  mask-position: center;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  -webkit-mask-size: contain;
+  background: currentColor;
 }
 
 .btn-icon-play {
-  mask-image: url("../playlist_play.svg");
-  -webkit-mask-image: url("../playlist_play.svg");
+  -webkit-mask: url("/playlist_play.svg") center / contain no-repeat;
+  mask: url("/playlist_play.svg") center / contain no-repeat;
 }
 
 .btn-icon-delete {
-  mask-image: url("../delete.svg");
-  -webkit-mask-image: url("../delete.svg");
+  -webkit-mask: url("/delete.svg") center / contain no-repeat;
+  mask: url("/delete.svg") center / contain no-repeat;
 }
 
 .btn-icon-move {
-  mask-image: url("../move.svg");
-  -webkit-mask-image: url("../move.svg");
+  -webkit-mask: url("/move.svg") center / contain no-repeat;
+  mask: url("/move.svg") center / contain no-repeat;
 }
 
 .btn-icon-star {
-  mask-image: url("../star.svg");
-  -webkit-mask-image: url("../star.svg");
+  -webkit-mask: url("/star.svg") center / contain no-repeat;
+  mask: url("/star.svg") center / contain no-repeat;
 }
 
 .btn-icon-remove {
-  mask-image: url("../playlist_remove.svg");
-  -webkit-mask-image: url("../playlist_remove.svg");
+  -webkit-mask: url("/playlist_remove.svg") center / contain no-repeat;
+  mask: url("/playlist_remove.svg") center / contain no-repeat;
 }
 
 .btn-icon-check {
-  mask-image: url("../check.svg");
-  -webkit-mask-image: url("../check.svg");
+  -webkit-mask: url("/check.svg") center / contain no-repeat;
+  mask: url("/check.svg") center / contain no-repeat;
 }
 
 .btn-icon-undo {
-  mask-image: url("../undo.svg");
-  -webkit-mask-image: url("../undo.svg");
+  -webkit-mask: url("/undo.svg") center / contain no-repeat;
+  mask: url("/undo.svg") center / contain no-repeat;
 }
 
 .btn-icon-fetch {
-  mask-image: url("../fetch.svg");
-  -webkit-mask-image: url("../fetch.svg");
+  -webkit-mask: url("/fetch.svg") center / contain no-repeat;
+  mask: url("/fetch.svg") center / contain no-repeat;
 }
 
 .column-move-btn.ant-btn[disabled] {
@@ -583,6 +580,19 @@ body {
   background: #0b0b0d !important;
   color: var(--text) !important;
   border-color: var(--amber-soft) !important;
+}
+
+.columns-nav .nav-btn.ant-btn > span {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.columns-nav .nav-btn.ant-btn .btn-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
 }
 
 .columns-nav .nav-btn.ant-btn.ant-btn-primary {
