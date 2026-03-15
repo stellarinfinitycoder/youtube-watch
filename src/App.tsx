@@ -24,12 +24,12 @@ import type { VideoItem } from "./types/youtube";
 import topBarLogo from "../youtube_plus_red.svg";
 import savedListPlaceholderIcon from "../stars.svg";
 import playlistAddIcon from "../playlist_add.svg";
-import channelPlaceholderIcon from "../channel.svg";
+import channelPlaceholderIcon from "../youtube.svg";
 
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326175908";
+const CHANGE_STAMP = "150326182220";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
