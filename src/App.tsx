@@ -28,7 +28,7 @@ import playlistAddIcon from "../playlist_add.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326151622";
+const CHANGE_STAMP = "150326162540";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -2727,6 +2727,20 @@ function App() {
                       </Button>
                     </div>
                     <div className="column-actions-right">
+                      {isSavedBoardActive ? (
+                        <Select<SavedSortMode>
+                          value={column.savedSortMode}
+                          onChange={(value) => {
+                            setColumn(activeBoardId, column.id, (prev) => ({
+                              ...prev,
+                              savedSortMode: value
+                            }));
+                          }}
+                          aria-label={`Sort list ${index + 1}`}
+                          className="video-filter-select saved-sort-select"
+                          options={SAVED_SORT_MODE_OPTIONS}
+                        />
+                      ) : null}
                       <Button
                         htmlType="button"
                         onClick={() => playChannelVideos(column)}
@@ -2750,20 +2764,6 @@ function App() {
                         >
                           <span className="btn-icon btn-icon-move" aria-hidden />
                         </Button>
-                      ) : null}
-                      {isSavedBoardActive ? (
-                        <Select<SavedSortMode>
-                          value={column.savedSortMode}
-                          onChange={(value) => {
-                            setColumn(activeBoardId, column.id, (prev) => ({
-                              ...prev,
-                              savedSortMode: value
-                            }));
-                          }}
-                          aria-label={`Sort list ${index + 1}`}
-                          className="video-filter-select saved-sort-select"
-                          options={SAVED_SORT_MODE_OPTIONS}
-                        />
                       ) : null}
                       <Button
                         htmlType="button"
@@ -2953,7 +2953,11 @@ function App() {
                                       }`}
                                       onClick={() => toggleWatched(video.videoId)}
                                     >
-                                      {isWatched ? "U" : <span className="btn-icon btn-icon-check" aria-hidden />}
+                                      {isWatched ? (
+                                        <span className="btn-icon btn-icon-undo" aria-hidden />
+                                      ) : (
+                                        <span className="btn-icon btn-icon-check" aria-hidden />
+                                      )}
                                     </Button>
                                   </>
                                 )}

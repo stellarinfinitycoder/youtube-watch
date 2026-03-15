@@ -494,6 +494,11 @@ body {
   -webkit-mask-image: url("../check.svg");
 }
 
+.btn-icon-undo {
+  mask-image: url("../undo.svg");
+  -webkit-mask-image: url("../undo.svg");
+}
+
 .btn-icon-fetch {
   mask-image: url("../fetch.svg");
   -webkit-mask-image: url("../fetch.svg");
