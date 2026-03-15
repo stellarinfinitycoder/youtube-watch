@@ -56,11 +56,11 @@ body {
 }
 
 .top-bar-logo {
-  width: 48px;
-  height: 48px;
+  width: 32px;
+  height: 32px;
   display: block;
   object-fit: contain;
-  flex: 0 0 48px;
+  flex: 0 0 32px;
 }
 
 .columns-nav .nav-btn.ant-btn,
@@ -71,6 +71,11 @@ body {
 
 .video-filter-select {
   min-width: 110px;
+}
+
+.columns-nav .video-filter-select.ant-select {
+  height: 32px !important;
+  min-height: 32px !important;
 }
 
 .video-status-select {
@@ -192,6 +197,8 @@ body {
   background: #0b0b0d !important;
   color: var(--text) !important;
   padding-inline: 10px 28px !important;
+  display: flex !important;
+  align-items: center !important;
 }
 
 .video-filter-select .ant-select-selection-item,
@@ -242,7 +249,9 @@ body {
 }
 
 .scroll-btn.ant-btn {
-  width: 44px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px !important;
   padding: 0;
   font-size: 14px;
   line-height: 1;
