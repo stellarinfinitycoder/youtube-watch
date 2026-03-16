@@ -25,7 +25,7 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326175029";
+const CHANGE_STAMP = "160326180155";
 const VIEWCOUNT_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
@@ -445,6 +445,17 @@ function isVideoWindowFilter(value: unknown): value is VideoWindowFilter {
   );
 }
 
+function normalizeVideoWindowFilterForKind(
+  kind: BoardKind,
+  value: unknown
+): VideoWindowFilter {
+  if (!isVideoWindowFilter(value)) {
+    return kind === "saved" ? "all" : DEFAULT_VIDEO_WINDOW_DAYS;
+  }
+  const allowed = kind === "saved" ? SAVED_VIDEO_WINDOW_OPTIONS : CHANNEL_VIDEO_WINDOW_OPTIONS;
+  return allowed.includes(value) ? value : kind === "saved" ? "all" : DEFAULT_VIDEO_WINDOW_DAYS;
+}
+
 function sanitizeNumericMap(raw: unknown): Record<string, number> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return {};
@@ -640,6 +651,7 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
     const board: PersistedBoardState = {
       id: createBoardId(),
       name: "BOARD 1",
+      kind: "channels",
       columns,
       watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
       viewCountRefreshedAtByVideoId: {},
@@ -649,9 +661,10 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
         candidate.videoFilter === "watched"
           ? candidate.videoFilter
           : "new",
-      videoWindowDays: isVideoWindowFilter(candidate.videoWindowDays)
-        ? candidate.videoWindowDays
-        : DEFAULT_VIDEO_WINDOW_DAYS,
+      videoWindowDays: normalizeVideoWindowFilterForKind(
+        "channels",
+        candidate.videoWindowDays
+      ),
       defaultPlaybackRate:
         typeof candidate.defaultPlaybackRate === "number" &&
         Number.isFinite(candidate.defaultPlaybackRate) &&
@@ -854,11 +867,12 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
   const columns = candidate.columns
     .map((item) => sanitizePersistedColumn(item))
     .filter((item): item is PersistedColumnState => item !== null);
+  const kind: BoardKind = candidate.kind === "saved" ? "saved" : "channels";
 
   return {
     id: candidate.id,
     name: candidate.name,
-    kind: candidate.kind === "saved" ? "saved" : "channels",
+    kind,
     columns,
     watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
     viewCountRefreshedAtByVideoId: sanitizeNumericMap(
@@ -870,9 +884,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
       candidate.videoFilter === "watched"
         ? candidate.videoFilter
         : "new",
-    videoWindowDays: isVideoWindowFilter(candidate.videoWindowDays)
-      ? candidate.videoWindowDays
-      : DEFAULT_VIDEO_WINDOW_DAYS,
+    videoWindowDays: normalizeVideoWindowFilterForKind(kind, candidate.videoWindowDays),
     defaultPlaybackRate:
       typeof candidate.defaultPlaybackRate === "number" &&
       Number.isFinite(candidate.defaultPlaybackRate) &&
@@ -1260,7 +1272,9 @@ function App() {
     playlistQueue.length > 0 &&
     playlistIndex < playlistQueue.length;
   const videoFilter = activeBoard?.videoFilter ?? "new";
-  const videoWindowDays = activeBoard?.videoWindowDays ?? DEFAULT_VIDEO_WINDOW_DAYS;
+  const videoWindowDays = activeBoard
+    ? normalizeVideoWindowFilterForKind(activeBoard.kind, activeBoard.videoWindowDays)
+    : DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
 
   useEffect(() => {
