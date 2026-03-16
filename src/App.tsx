@@ -25,7 +25,7 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326180155";
+const CHANGE_STAMP = "160326181649";
 const VIEWCOUNT_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
@@ -3070,6 +3070,11 @@ function App() {
                           className="video-filter-select saved-sort-select"
                           options={SAVED_SORT_MODE_OPTIONS}
                         />
+                      ) : null}
+                      {!isSavedBoardActive ? (
+                        <Text className="column-video-count">
+                          {filteredVideos.length}
+                        </Text>
                       ) : null}
                       <Button
                         htmlType="button"

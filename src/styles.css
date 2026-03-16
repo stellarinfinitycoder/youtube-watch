@@ -456,6 +456,15 @@ body {
   margin-left: auto;
 }
 
+.column-video-count.ant-typography {
+  margin: 0;
+  min-width: 20px;
+  text-align: center;
+  color: #c08f56;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .saved-sort-select {
   width: 84px;
   height: 28px !important;
