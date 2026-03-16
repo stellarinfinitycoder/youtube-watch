@@ -25,11 +25,12 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326095322";
+const CHANGE_STAMP = "160326101528";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
 const CHANNEL_PLACEHOLDER_ICON = "/svg/placeholder-channel.svg";
+const PLAYBACK_RATE_OPTIONS = [0.5, 1, 1.5, 2] as const;
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -1094,12 +1095,9 @@ function App() {
   const [playlistChannelLabel, setPlaylistChannelLabel] = useState<string>("");
   const [playlistOrderLabel, setPlaylistOrderLabel] = useState<string>("NEWEST FIRST");
   const [playbackRate, setPlaybackRate] = useState<number>(1.5);
-  const [availablePlaybackRates, setAvailablePlaybackRates] = useState<number[]>([
-    0.5,
-    1,
-    1.5,
-    2
-  ]);
+  const [availablePlaybackRates, setAvailablePlaybackRates] = useState<number[]>(
+    [...PLAYBACK_RATE_OPTIONS]
+  );
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [useIframeFallback, setUseIframeFallback] = useState(false);
   const [brokenChannelThumbnailKeys, setBrokenChannelThumbnailKeys] = useState<string[]>(
@@ -1318,7 +1316,7 @@ function App() {
 
     let isCancelled = false;
     let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
-    setAvailablePlaybackRates([0.5, 1, 1.5, 2]);
+    setAvailablePlaybackRates([...PLAYBACK_RATE_OPTIONS]);
     setPlaybackRate(preferredPlaybackRate);
     setIsPlayerReady(false);
     playerReadyRef.current = false;
@@ -1349,7 +1347,11 @@ function App() {
           events: {
             onReady: (event) => {
               const rates = event.target.getAvailablePlaybackRates();
-              const normalizedRates = rates.length > 0 ? rates : [1];
+              const filteredRates = rates.filter((rate) =>
+                PLAYBACK_RATE_OPTIONS.includes(rate as (typeof PLAYBACK_RATE_OPTIONS)[number])
+              );
+              const normalizedRates =
+                filteredRates.length > 0 ? filteredRates : [...PLAYBACK_RATE_OPTIONS];
               setAvailablePlaybackRates(normalizedRates);
               const preferred = normalizedRates.includes(preferredPlaybackRate)
                 ? preferredPlaybackRate
@@ -2576,12 +2578,10 @@ function App() {
           onChange={handlePreferredPlaybackRateChange}
           aria-label="Default playback speed"
           className="video-filter-select playback-speed-select"
-          options={[
-            { value: 0.5, label: "0.5X" },
-            { value: 1, label: "1X" },
-            { value: 1.5, label: "1.5X" },
-            { value: 2, label: "2X" }
-          ]}
+          options={PLAYBACK_RATE_OPTIONS.map((value) => ({
+            value,
+            label: `${value}X`
+          }))}
         />
         <Button
           htmlType="button"
