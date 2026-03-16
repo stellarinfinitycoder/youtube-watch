@@ -457,13 +457,30 @@ body {
 }
 
 .saved-sort-select {
-  width: 96px;
+  width: 84px;
+  height: 28px !important;
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
 }
 
 .saved-sort-select .ant-select-selector {
   height: 28px !important;
   min-height: 28px !important;
   padding: 0 8px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.saved-sort-select .ant-select-selection-item {
+  line-height: 26px !important;
+}
+
+.saved-sort-select .ant-select-arrow {
+  top: 50%;
+  inset-inline-end: 8px;
+  transform: translateY(-50%);
+  margin-top: 0;
 }
 
 .column-move-btn.ant-btn {
@@ -478,6 +495,26 @@ body {
 
 .column-move-btn.ant-btn > span {
   line-height: 1;
+}
+
+.column-actions-right .ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.column-actions-right .ant-btn > span {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.column-actions-right .ant-btn .btn-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
 }
 
 .btn-icon {
@@ -530,6 +567,11 @@ body {
 .btn-icon-fetch {
   -webkit-mask: url("/svg/btn-fetch.svg") center / contain no-repeat;
   mask: url("/svg/btn-fetch.svg") center / contain no-repeat;
+}
+
+.btn-icon-remove-all {
+  -webkit-mask: url("/svg/btn-remove-all.svg") center / contain no-repeat;
+  mask: url("/svg/btn-remove-all.svg") center / contain no-repeat;
 }
 
 .btn-icon-backup {

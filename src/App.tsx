@@ -25,7 +25,7 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326111752";
+const CHANGE_STAMP = "160326113127";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -208,6 +208,12 @@ type BulkWatchColumnAction = {
   channelName: string;
   videoIds: string[];
   markWatched: boolean;
+};
+
+type RemoveAllSavedColumnAction = {
+  columnId: string;
+  listName: string;
+  videoCount: number;
 };
 
 const NEW_BOARD_OPTION_VALUE = "__new__";
@@ -1071,6 +1077,8 @@ function App() {
     columnId: string;
     videoId: string;
   } | null>(null);
+  const [removeAllSavedColumnAction, setRemoveAllSavedColumnAction] =
+    useState<RemoveAllSavedColumnAction | null>(null);
   const [bulkWatchColumnAction, setBulkWatchColumnAction] =
     useState<BulkWatchColumnAction | null>(null);
   const [moveSavedVideoTargetColumnId, setMoveSavedVideoTargetColumnId] =
@@ -2331,6 +2339,38 @@ function App() {
     setDeletingSavedVideo(null);
   };
 
+  const openRemoveAllSavedColumnModal = (column: ColumnState): void => {
+    if (column.videos.length === 0) {
+      return;
+    }
+    const listName = column.handleInput.trim() || "LIST";
+    setRemoveAllSavedColumnAction({
+      columnId: column.id,
+      listName,
+      videoCount: column.videos.length
+    });
+  };
+
+  const confirmRemoveAllSavedColumnVideos = (): void => {
+    if (!savedBoard || !removeAllSavedColumnAction) {
+      return;
+    }
+    setBoard(savedBoard.id, (board) => ({
+      ...board,
+      columns: board.columns.map((column) =>
+        column.id === removeAllSavedColumnAction.columnId
+          ? {
+              ...column,
+              videos: [],
+              savedAddedAtByVideoId: {},
+              savedManualOrder: []
+            }
+          : column
+      )
+    }));
+    setRemoveAllSavedColumnAction(null);
+  };
+
   const openMoveSavedVideoModal = (columnId: string, videoId: string): void => {
     if (!savedBoard) {
       return;
@@ -2810,6 +2850,17 @@ function App() {
                       >
                         <span className="btn-icon btn-icon-play" aria-hidden />
                       </Button>
+                      {isSavedBoardActive ? (
+                        <Button
+                          htmlType="button"
+                          onClick={() => openRemoveAllSavedColumnModal(column)}
+                          disabled={column.loading || column.videos.length === 0}
+                          aria-label={`Remove all videos from list ${index + 1}`}
+                          className="remove-column-btn"
+                        >
+                          <span className="btn-icon btn-icon-remove-all" aria-hidden />
+                        </Button>
+                      ) : null}
                       {!isSavedBoardActive ? (
                         <Button
                           htmlType="button"
@@ -3342,6 +3393,24 @@ function App() {
       >
         <Text>
           Remove video from {deletingSavedVideoListName.toUpperCase() || "LIST"}?
+        </Text>
+      </Modal>
+
+      <Modal
+        title="Remove All Videos"
+        open={removeAllSavedColumnAction !== null}
+        onCancel={() => setRemoveAllSavedColumnAction(null)}
+        onOk={confirmRemoveAllSavedColumnVideos}
+        okText="Remove"
+        okButtonProps={{ danger: true, className: "delete-confirm-ok" }}
+        width={380}
+      >
+        <Text>
+          {removeAllSavedColumnAction
+            ? `Remove ${removeAllSavedColumnAction.videoCount} video${
+                removeAllSavedColumnAction.videoCount === 1 ? "" : "s"
+              } from ${removeAllSavedColumnAction.listName.toUpperCase()}?`
+            : ""}
         </Text>
       </Modal>
 
