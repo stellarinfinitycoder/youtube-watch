@@ -174,6 +174,29 @@ body {
   justify-content: flex-start;
 }
 
+.backup-btn.ant-btn {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  background: #0b0b0d !important;
+  color: var(--text) !important;
+  border-color: var(--amber-soft) !important;
+}
+
+.backup-btn.ant-btn > span {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.backup-btn.ant-btn .btn-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
 .backup-limits-text.ant-typography {
   margin-left: auto;
   margin-bottom: 0;
@@ -507,6 +530,21 @@ body {
 .btn-icon-fetch {
   -webkit-mask: url("/svg/btn-fetch.svg") center / contain no-repeat;
   mask: url("/svg/btn-fetch.svg") center / contain no-repeat;
+}
+
+.btn-icon-backup {
+  -webkit-mask: url("/svg/btn-backup.svg") center / contain no-repeat;
+  mask: url("/svg/btn-backup.svg") center / contain no-repeat;
+}
+
+.btn-icon-restore {
+  -webkit-mask: url("/svg/btn-restore.svg") center / contain no-repeat;
+  mask: url("/svg/btn-restore.svg") center / contain no-repeat;
+}
+
+.btn-icon-logs {
+  -webkit-mask: url("/svg/btn-logs.svg") center / contain no-repeat;
+  mask: url("/svg/btn-logs.svg") center / contain no-repeat;
 }
 
 .column-move-btn.ant-btn[disabled] {

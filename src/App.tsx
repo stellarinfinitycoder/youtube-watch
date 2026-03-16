@@ -25,7 +25,7 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326101528";
+const CHANGE_STAMP = "160326104539";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -3093,7 +3093,7 @@ function App() {
           aria-label="Backup data"
           className="backup-btn"
         >
-          Backup
+          <span className="btn-icon btn-icon-backup" aria-hidden />
         </Button>
         <Button
           htmlType="button"
@@ -3101,7 +3101,7 @@ function App() {
           aria-label="Restore data"
           className="backup-btn"
         >
-          Restore
+          <span className="btn-icon btn-icon-restore" aria-hidden />
         </Button>
         <Button
           htmlType="button"
@@ -3109,7 +3109,7 @@ function App() {
           aria-label="Open logs"
           className="backup-btn"
         >
-          Logs
+          <span className="btn-icon btn-icon-logs" aria-hidden />
         </Button>
         <Text className="backup-limits-text">
           MAX FETCH LIMIT: 50 VIDEOS | MAX VIDEO AGE: 180 DAYS | {BUILD_INFO_LABEL}
