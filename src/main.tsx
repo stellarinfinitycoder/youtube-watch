@@ -4,7 +4,7 @@ import "antd/dist/reset.css";
 import "./styles.css";
 import App from "./App";
 
-const faviconHref = import.meta.env.PROD ? "/favicon-prod.svg" : "/favicon-dev.svg";
+const faviconHref = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const faviconLink =
   document.querySelector<HTMLLinkElement>("link[rel='icon']") ??
   document.createElement("link");

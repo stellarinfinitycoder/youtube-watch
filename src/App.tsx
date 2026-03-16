@@ -21,15 +21,15 @@ import {
 } from "./api/youtube";
 import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
-import savedListPlaceholderIcon from "../stars.svg";
-import playlistAddIcon from "../playlist_add.svg";
-import channelPlaceholderIcon from "../youtube.svg";
 
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326074234";
-const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/favicon-prod.svg" : "/favicon-dev.svg";
+const CHANGE_STAMP = "160326095322";
+const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
+const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
+const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
+const CHANNEL_PLACEHOLDER_ICON = "/svg/placeholder-channel.svg";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
@@ -2869,13 +2869,13 @@ function App() {
                         >
                           {isSavedBoardActive ? (
                             <img
-                              src={savedListPlaceholderIcon}
+                              src={SAVED_LIST_PLACEHOLDER_ICON}
                               alt=""
                               className="channel-avatar-placeholder-icon"
                             />
                           ) : (
                             <img
-                              src={channelPlaceholderIcon}
+                              src={CHANNEL_PLACEHOLDER_ICON}
                               alt=""
                               className="channel-avatar-placeholder-icon"
                             />
@@ -3080,7 +3080,7 @@ function App() {
                 aria-label="Bulk add channels"
                 className="add-column-btn add-column-bulk-btn"
               >
-                <img src={playlistAddIcon} alt="" className="add-column-bulk-icon" />
+                <img src={PLAYLIST_ADD_ICON} alt="" className="add-column-bulk-icon" />
               </Button>
             </aside>
           </section>
