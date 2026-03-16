@@ -25,8 +25,8 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326161727";
-const VIEWCOUNT_REFRESH_INTERVAL_MS = 3 * 60 * 60 * 1000;
+const CHANGE_STAMP = "160326175029";
+const VIEWCOUNT_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -43,7 +43,8 @@ const LEGACY_PLAYBACK_RATE_STORAGE_KEY = "youtube-watch:playback-rate:v1";
 const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 
 type VideoFilter = "all" | "new" | "watched";
-type VideoWindowDays = 1 | 3 | 7 | 30 | 60 | 90 | 120 | 180;
+type VideoWindowDays = 1 | 3 | 7 | 30 | 60 | 90 | 120 | 180 | 360;
+type VideoWindowFilter = VideoWindowDays | "all";
 type PlaylistScope = "all" | "channel";
 type BoardKind = "channels" | "saved";
 type SavedSortMode =
@@ -52,7 +53,19 @@ type SavedSortMode =
   | "added_asc"
   | "added_desc"
   | "manual";
-const VIDEO_WINDOW_OPTIONS: VideoWindowDays[] = [1, 3, 7, 30, 60, 90, 120, 180];
+const CHANNEL_VIDEO_WINDOW_OPTIONS: VideoWindowFilter[] = [1, 3, 7, 30, 60, 90];
+const SAVED_VIDEO_WINDOW_OPTIONS: VideoWindowFilter[] = [
+  1,
+  3,
+  7,
+  30,
+  60,
+  90,
+  120,
+  180,
+  360,
+  "all"
+];
 const SAVED_SORT_MODE_OPTIONS: Array<{ value: SavedSortMode; label: string }> = [
   { value: "time_asc", label: "TIME ↑" },
   { value: "time_desc", label: "TIME ↓" },
@@ -61,8 +74,8 @@ const SAVED_SORT_MODE_OPTIONS: Array<{ value: SavedSortMode; label: string }> = 
   { value: "manual", label: "MANUAL" }
 ];
 const DEFAULT_SAVED_SORT_MODE: SavedSortMode = "added_desc";
-const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowDays = 180;
-const STORAGE_VIDEO_WINDOW_DAYS: VideoWindowDays = 180;
+const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowFilter = 90;
+const STORAGE_VIDEO_WINDOW_DAYS: VideoWindowDays = 90;
 const BOARD_DROPDOWN_MAX_VISIBLE = 25;
 const BOARD_DROPDOWN_ITEM_HEIGHT = 36;
 const BOARD_DROPDOWN_PADDING = 8;
@@ -177,7 +190,7 @@ type BoardState = {
   watchedVideos: Record<string, boolean>;
   viewCountRefreshedAtByVideoId: Record<string, number>;
   videoFilter: VideoFilter;
-  videoWindowDays: VideoWindowDays;
+  videoWindowDays: VideoWindowFilter;
   defaultPlaybackRate: number;
 };
 
@@ -189,7 +202,7 @@ type PersistedBoardState = {
   watchedVideos: Record<string, boolean>;
   viewCountRefreshedAtByVideoId?: Record<string, number>;
   videoFilter: VideoFilter;
-  videoWindowDays: VideoWindowDays;
+  videoWindowDays: VideoWindowFilter;
   defaultPlaybackRate: number;
 };
 
@@ -422,6 +435,16 @@ function sanitizeWatchedVideos(raw: unknown): Record<string, boolean> {
   );
 }
 
+function isVideoWindowFilter(value: unknown): value is VideoWindowFilter {
+  return (
+    value === "all" ||
+    typeof value === "number" &&
+      [...CHANNEL_VIDEO_WINDOW_OPTIONS, ...SAVED_VIDEO_WINDOW_OPTIONS]
+        .filter((item): item is VideoWindowDays => typeof item === "number")
+        .includes(value as VideoWindowDays)
+  );
+}
+
 function sanitizeNumericMap(raw: unknown): Record<string, number> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return {};
@@ -626,11 +649,9 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
         candidate.videoFilter === "watched"
           ? candidate.videoFilter
           : "new",
-      videoWindowDays:
-        typeof candidate.videoWindowDays === "number" &&
-        VIDEO_WINDOW_OPTIONS.includes(candidate.videoWindowDays as VideoWindowDays)
-          ? (candidate.videoWindowDays as VideoWindowDays)
-          : DEFAULT_VIDEO_WINDOW_DAYS,
+      videoWindowDays: isVideoWindowFilter(candidate.videoWindowDays)
+        ? candidate.videoWindowDays
+        : DEFAULT_VIDEO_WINDOW_DAYS,
       defaultPlaybackRate:
         typeof candidate.defaultPlaybackRate === "number" &&
         Number.isFinite(candidate.defaultPlaybackRate) &&
@@ -718,6 +739,7 @@ function createSavedBoardState(overrides?: Partial<BoardState>): BoardState {
     id: SAVED_BOARD_ID,
     kind: "saved",
     videoFilter: "all",
+    videoWindowDays: "all",
     ...overrides
   }, 1);
 }
@@ -848,11 +870,9 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
       candidate.videoFilter === "watched"
         ? candidate.videoFilter
         : "new",
-    videoWindowDays:
-      typeof candidate.videoWindowDays === "number" &&
-      VIDEO_WINDOW_OPTIONS.includes(candidate.videoWindowDays as VideoWindowDays)
-        ? (candidate.videoWindowDays as VideoWindowDays)
-        : DEFAULT_VIDEO_WINDOW_DAYS,
+    videoWindowDays: isVideoWindowFilter(candidate.videoWindowDays)
+      ? candidate.videoWindowDays
+      : DEFAULT_VIDEO_WINDOW_DAYS,
     defaultPlaybackRate:
       typeof candidate.defaultPlaybackRate === "number" &&
       Number.isFinite(candidate.defaultPlaybackRate) &&
@@ -1026,7 +1046,10 @@ function getVideoPublishedTime(video: VideoItem): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getWindowCutoffTime(days: VideoWindowDays, now = Date.now()): number {
+function getWindowCutoffTime(days: VideoWindowFilter, now = Date.now()): number {
+  if (days === "all") {
+    return 0;
+  }
   return now - days * 24 * 60 * 60 * 1000;
 }
 
@@ -1171,7 +1194,6 @@ function App() {
   const [pendingBulkFetch, setPendingBulkFetch] = useState<
     Array<{ boardId: string; id: string; handle: string }>
   >([]);
-  const [viewBackfillInFlight, setViewBackfillInFlight] = useState<string[]>([]);
   const activeBoard =
     boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
   const displayedBoards = [
@@ -1263,6 +1285,9 @@ function App() {
     setBoards((previous) => {
       let changed = false;
       const next = previous.map((board) => {
+        if (board.kind === "saved") {
+          return board;
+        }
         let boardChanged = false;
         const nextColumns = board.columns.map((column) => {
           const nextVideos = column.videos.filter(
@@ -1326,71 +1351,6 @@ function App() {
       // Ignore write failures.
     }
   }, [errorLogs]);
-
-  useEffect(() => {
-    if (!activeBoard) {
-      return;
-    }
-
-    const now = Date.now();
-    columns.forEach((column) => {
-      const missingOrStaleStatsIds = column.videos
-        .filter(
-          (video) =>
-            video.viewCount === null ||
-            typeof video.durationSeconds === "undefined" ||
-            video.durationSeconds === null ||
-            shouldRefreshViewCount(
-              activeBoard.viewCountRefreshedAtByVideoId[video.videoId],
-              now
-            )
-        )
-        .map((video) => video.videoId);
-      const backfillKey = `${activeBoard.id}:${column.id}`;
-
-      if (missingOrStaleStatsIds.length === 0) {
-        return;
-      }
-
-      if (viewBackfillInFlight.includes(backfillKey)) {
-        return;
-      }
-
-      setViewBackfillInFlight((prev) => [...prev, backfillKey]);
-      fetchVideoStatsByVideoIds(missingOrStaleStatsIds)
-        .then((videoStats) => {
-          setColumn(activeBoard.id, column.id, (prev) => ({
-            ...prev,
-            videos: prev.videos.map((video) => ({
-              ...video,
-              viewCount: video.viewCount ?? videoStats[video.videoId]?.viewCount ?? null,
-              durationSeconds:
-                typeof video.durationSeconds === "number"
-                  ? video.durationSeconds
-                : videoStats[video.videoId]?.durationSeconds ?? null
-            }))
-          }));
-          const refreshedAt = Date.now();
-          setBoard(activeBoard.id, (board) => ({
-            ...board,
-            viewCountRefreshedAtByVideoId: {
-              ...board.viewCountRefreshedAtByVideoId,
-              ...Object.fromEntries(
-                missingOrStaleStatsIds.map((videoId) => [videoId, refreshedAt])
-              )
-            }
-          }));
-        })
-        .catch(() => {
-          // Ignore backfill errors; user can still refresh manually.
-        })
-        .finally(() => {
-          setViewBackfillInFlight((prev) =>
-            prev.filter((item) => item !== backfillKey)
-          );
-        });
-    });
-  }, [activeBoard, columns, viewBackfillInFlight]);
 
   useEffect(() => {
     if (pendingBulkFetch.length === 0) {
@@ -2849,7 +2809,7 @@ function App() {
             ]}
           />
         ) : null}
-        <Select<VideoWindowDays>
+        <Select<VideoWindowFilter>
           value={videoWindowDays}
           onChange={(value) => {
             if (!activeBoard) {
@@ -2862,9 +2822,13 @@ function App() {
           }}
           aria-label="Video age window"
           className="video-filter-select video-window-select"
-          options={VIDEO_WINDOW_OPTIONS.map((days) => ({
+          listHeight={isSavedBoardActive ? 360 : 256}
+          options={(isSavedBoardActive
+            ? SAVED_VIDEO_WINDOW_OPTIONS
+            : CHANNEL_VIDEO_WINDOW_OPTIONS
+          ).map((days) => ({
             value: days,
-            label: `${days}D`
+            label: days === "all" ? "ALL" : `${days}D`
           }))}
         />
         <Select<number>
@@ -3430,7 +3394,8 @@ function App() {
           <span className="btn-icon btn-icon-logs" aria-hidden />
         </Button>
         <Text className="backup-limits-text">
-          MAX FETCH LIMIT: 50 VIDEOS | MAX VIDEO AGE: 180 DAYS | {BUILD_INFO_LABEL}
+          MAX FETCH LIMIT: 50 VIDEOS | MAX VIDEO AGE: 90 DAYS | MAX SAVED VIDEO AGE: UNLIMITED |{" "}
+          {BUILD_INFO_LABEL}
         </Text>
         <input
           ref={importInputRef}
