@@ -2,6 +2,7 @@ export type VideoItem = {
   videoId: string;
   title: string;
   publishedAt: string;
+  durationSeconds?: number | null;
   thumbnailUrl: string;
   channelTitle: string;
   videoUrl: string;
@@ -77,7 +78,20 @@ type VideoStatisticsResponse = {
   }>;
 };
 
+type VideoMetadataResponse = {
+  items?: Array<{
+    id?: string;
+    statistics?: {
+      viewCount?: string;
+    };
+    contentDetails?: {
+      duration?: string;
+    };
+  }>;
+};
+
 type ViewCountMap = Record<string, number>;
+type VideoMetadataMap = Record<string, { viewCount?: number; durationSeconds?: number }>;
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 
@@ -147,11 +161,29 @@ function mapPlaylistItemToVideoItem(item: PlaylistItem): VideoItem | null {
     videoId,
     title: snippet.title ?? "Untitled video",
     publishedAt: snippet.publishedAt ?? "",
+    durationSeconds: null,
     thumbnailUrl: normalizeImageUrl(pickThumbnailUrl(snippet)),
     channelTitle: snippet.channelTitle ?? "",
     videoUrl: `https://www.youtube.com/watch?v=${videoId}`,
     viewCount: null
   };
+}
+
+function parseIsoDurationToSeconds(value: string | undefined): number | undefined {
+  if (!value || typeof value !== "string") {
+    return undefined;
+  }
+  const match = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i.exec(value);
+  if (!match) {
+    return undefined;
+  }
+  const hours = Number(match[1] ?? 0);
+  const minutes = Number(match[2] ?? 0);
+  const seconds = Number(match[3] ?? 0);
+  if (![hours, minutes, seconds].every((part) => Number.isFinite(part))) {
+    return undefined;
+  }
+  return hours * 3600 + minutes * 60 + seconds;
 }
 
 export function stripHandlePrefix(input: string): string {
@@ -250,6 +282,42 @@ export async function fetchViewCountsByVideoIds(videoIds: string[]): Promise<Vie
   return result;
 }
 
+export async function fetchVideoStatsByVideoIds(videoIds: string[]): Promise<VideoMetadataMap> {
+  const apiKey = getApiKey();
+  const uniqueIds = Array.from(new Set(videoIds.filter(Boolean)));
+  const result: VideoMetadataMap = {};
+
+  for (let index = 0; index < uniqueIds.length; index += 50) {
+    const chunk = uniqueIds.slice(index, index + 50);
+    if (chunk.length === 0) {
+      continue;
+    }
+
+    const metadataUrl = buildUrl("/videos", {
+      part: "statistics,contentDetails",
+      id: chunk.join(","),
+      key: apiKey
+    });
+    const metadataData = await fetchJson<VideoMetadataResponse>(metadataUrl);
+
+    for (const item of metadataData.items ?? []) {
+      if (!item.id) {
+        continue;
+      }
+      const parsedViewCount = Number(item.statistics?.viewCount ?? "");
+      const parsedDurationSeconds = parseIsoDurationToSeconds(item.contentDetails?.duration);
+      result[item.id] = {
+        ...(Number.isFinite(parsedViewCount) ? { viewCount: parsedViewCount } : {}),
+        ...(typeof parsedDurationSeconds === "number"
+          ? { durationSeconds: parsedDurationSeconds }
+          : {})
+      };
+    }
+  }
+
+  return result;
+}
+
 export async function fetchLatestVideos(channelId: string, limit = 25): Promise<VideoItem[]> {
   const apiKey = getApiKey();
 
@@ -301,13 +369,14 @@ export async function fetchLatestVideos(channelId: string, limit = 25): Promise<
     return limitedVideos;
   }
 
-  const viewCounts = await fetchViewCountsByVideoIds(
+  const videoMetadata = await fetchVideoStatsByVideoIds(
     limitedVideos.map((video) => video.videoId)
   );
 
   return limitedVideos.map((video) => ({
     ...video,
-    viewCount: viewCounts[video.videoId] ?? null
+    viewCount: videoMetadata[video.videoId]?.viewCount ?? null,
+    durationSeconds: videoMetadata[video.videoId]?.durationSeconds ?? null
   }));
 }
 

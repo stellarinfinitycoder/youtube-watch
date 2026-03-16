@@ -2,6 +2,7 @@ import type { VideoItem } from "../types/youtube";
 import { normalizeHandle } from "../utils/handle";
 
 const DEFAULT_LIMIT = 25;
+type VideoStatsMap = Record<string, { viewCount?: number; durationSeconds?: number }>;
 
 export type ChannelLookupResult = {
   channelId: string;
@@ -108,4 +109,24 @@ export async function fetchViewCountsByVideoIds(
     },
     body: JSON.stringify({ videoIds: uniqueIds })
   });
+}
+
+export async function fetchVideoStatsByVideoIds(
+  videoIds: string[]
+): Promise<VideoStatsMap> {
+  const uniqueIds = [...new Set(videoIds.filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return {};
+  }
+
+  return fetchJson<VideoStatsMap>(
+    buildInternalUrl("/api/youtube/view-counts", { includeDuration: "true" }),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ videoIds: uniqueIds, includeDuration: true })
+    }
+  );
 }

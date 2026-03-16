@@ -16,7 +16,7 @@ import {
 } from "antd";
 import type { FetchState } from "./types/youtube";
 import {
-  fetchViewCountsByVideoIds,
+  fetchVideoStatsByVideoIds,
   getLatestVideosAndChannelByHandle
 } from "./api/youtube";
 import { normalizeHandle } from "./utils/handle";
@@ -25,7 +25,8 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326131829";
+const CHANGE_STAMP = "160326161727";
+const VIEWCOUNT_REFRESH_INTERVAL_MS = 3 * 60 * 60 * 1000;
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -174,6 +175,7 @@ type BoardState = {
   kind: BoardKind;
   columns: ColumnState[];
   watchedVideos: Record<string, boolean>;
+  viewCountRefreshedAtByVideoId: Record<string, number>;
   videoFilter: VideoFilter;
   videoWindowDays: VideoWindowDays;
   defaultPlaybackRate: number;
@@ -185,6 +187,7 @@ type PersistedBoardState = {
   kind?: BoardKind;
   columns: PersistedColumnState[];
   watchedVideos: Record<string, boolean>;
+  viewCountRefreshedAtByVideoId?: Record<string, number>;
   videoFilter: VideoFilter;
   videoWindowDays: VideoWindowDays;
   defaultPlaybackRate: number;
@@ -419,6 +422,30 @@ function sanitizeWatchedVideos(raw: unknown): Record<string, boolean> {
   );
 }
 
+function sanitizeNumericMap(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(raw).filter(
+      (entry): entry is [string, number] =>
+        typeof entry[0] === "string" &&
+        typeof entry[1] === "number" &&
+        Number.isFinite(entry[1])
+    )
+  );
+}
+
+function shouldRefreshViewCount(
+  lastRefreshedAt: number | undefined,
+  now = Date.now()
+): boolean {
+  if (typeof lastRefreshedAt !== "number" || !Number.isFinite(lastRefreshedAt)) {
+    return true;
+  }
+  return now - lastRefreshedAt >= VIEWCOUNT_REFRESH_INTERVAL_MS;
+}
+
 function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
   if (!raw || typeof raw !== "object") {
     return null;
@@ -447,8 +474,8 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
     return null;
   }
 
-  const videos: VideoItem[] = candidate.videos
-    .map((video) => {
+  const videos = candidate.videos
+    .map((video): VideoItem | null => {
       if (!video || typeof video !== "object") {
         return null;
       }
@@ -458,6 +485,11 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
         typeof item.videoId !== "string" ||
         typeof item.title !== "string" ||
         typeof item.publishedAt !== "string" ||
+        !(
+          typeof item.durationSeconds === "number" ||
+          item.durationSeconds === null ||
+          typeof item.durationSeconds === "undefined"
+        ) ||
         typeof item.thumbnailUrl !== "string" ||
         typeof item.channelTitle !== "string" ||
         typeof item.videoUrl !== "string" ||
@@ -474,6 +506,10 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
         videoId: item.videoId,
         title: item.title,
         publishedAt: item.publishedAt,
+        durationSeconds:
+          typeof item.durationSeconds === "number" && Number.isFinite(item.durationSeconds)
+            ? item.durationSeconds
+            : null,
         thumbnailUrl: item.thumbnailUrl,
         channelTitle: item.channelTitle,
         videoUrl: item.videoUrl,
@@ -583,6 +619,7 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
       name: "BOARD 1",
       columns,
       watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
+      viewCountRefreshedAtByVideoId: {},
       videoFilter:
         candidate.videoFilter === "all" ||
         candidate.videoFilter === "new" ||
@@ -668,6 +705,7 @@ function createBoardState(
     kind: "channels",
     columns: Array.from({ length: initialColumnCount }, () => createColumnState()),
     watchedVideos: {},
+    viewCountRefreshedAtByVideoId: {},
     videoFilter: "new",
     videoWindowDays: DEFAULT_VIDEO_WINDOW_DAYS,
     defaultPlaybackRate: 1.5,
@@ -777,6 +815,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     kind?: unknown;
     columns?: unknown;
     watchedVideos?: unknown;
+    viewCountRefreshedAtByVideoId?: unknown;
     videoFilter?: unknown;
     videoWindowDays?: unknown;
     defaultPlaybackRate?: unknown;
@@ -800,6 +839,9 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     kind: candidate.kind === "saved" ? "saved" : "channels",
     columns,
     watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
+    viewCountRefreshedAtByVideoId: sanitizeNumericMap(
+      candidate.viewCountRefreshedAtByVideoId
+    ),
     videoFilter:
       candidate.videoFilter === "all" ||
       candidate.videoFilter === "new" ||
@@ -838,6 +880,7 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
       })
     ),
     watchedVideos: board.watchedVideos,
+    viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
     videoFilter: board.videoFilter,
     videoWindowDays: board.videoWindowDays,
     defaultPlaybackRate: board.defaultPlaybackRate
@@ -947,26 +990,35 @@ function formatViewCount(viewCount: number | null): string {
   return compact.toLowerCase();
 }
 
-function formatPublishedDateTime(value: string): string {
+function formatPublishedDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "--.--.-- | --:--";
+    return "--.--.--";
   }
 
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const yy = String(date.getFullYear()).slice(-2);
-  const hh = String(date.getHours()).padStart(2, "0");
-  const min = String(date.getMinutes()).padStart(2, "0");
+  return `${dd}.${mm}.${yy}`;
+}
 
-  return `${dd}.${mm}.${yy} | ${hh}:${min}`;
+function formatDuration(durationSeconds: number | null | undefined): string {
+  if (typeof durationSeconds !== "number" || !Number.isFinite(durationSeconds)) {
+    return "--:--";
+  }
+  const totalSeconds = Math.max(0, Math.floor(durationSeconds));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 function formatVideoMeta(video: VideoItem): string {
-  const dateTimeLabel = video.publishedAt
-    ? formatPublishedDateTime(video.publishedAt)
-    : "--.--.-- | --:--";
-  return `${dateTimeLabel} | ${formatViewCount(video.viewCount)}`;
+  const dateLabel = video.publishedAt ? formatPublishedDate(video.publishedAt) : "--.--.--";
+  return `${dateLabel} | ${formatDuration(video.durationSeconds)} | ${formatViewCount(video.viewCount)}`;
 }
 
 function getVideoPublishedTime(video: VideoItem): number {
@@ -1251,6 +1303,7 @@ function App() {
         kind: board.kind,
         columns: toPersistedColumns(board.columns),
         watchedVideos: board.watchedVideos,
+        viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
         videoFilter: board.videoFilter,
         videoWindowDays: board.videoWindowDays,
         defaultPlaybackRate: board.defaultPlaybackRate
@@ -1279,13 +1332,23 @@ function App() {
       return;
     }
 
+    const now = Date.now();
     columns.forEach((column) => {
-      const missingViewsIds = column.videos
-        .filter((video) => video.viewCount === null)
+      const missingOrStaleStatsIds = column.videos
+        .filter(
+          (video) =>
+            video.viewCount === null ||
+            typeof video.durationSeconds === "undefined" ||
+            video.durationSeconds === null ||
+            shouldRefreshViewCount(
+              activeBoard.viewCountRefreshedAtByVideoId[video.videoId],
+              now
+            )
+        )
         .map((video) => video.videoId);
       const backfillKey = `${activeBoard.id}:${column.id}`;
 
-      if (missingViewsIds.length === 0) {
+      if (missingOrStaleStatsIds.length === 0) {
         return;
       }
 
@@ -1294,15 +1357,28 @@ function App() {
       }
 
       setViewBackfillInFlight((prev) => [...prev, backfillKey]);
-      fetchViewCountsByVideoIds(missingViewsIds)
-        .then((viewCounts) => {
+      fetchVideoStatsByVideoIds(missingOrStaleStatsIds)
+        .then((videoStats) => {
           setColumn(activeBoard.id, column.id, (prev) => ({
             ...prev,
             videos: prev.videos.map((video) => ({
               ...video,
-              viewCount:
-                video.viewCount ?? viewCounts[video.videoId] ?? video.viewCount
+              viewCount: video.viewCount ?? videoStats[video.videoId]?.viewCount ?? null,
+              durationSeconds:
+                typeof video.durationSeconds === "number"
+                  ? video.durationSeconds
+                : videoStats[video.videoId]?.durationSeconds ?? null
             }))
+          }));
+          const refreshedAt = Date.now();
+          setBoard(activeBoard.id, (board) => ({
+            ...board,
+            viewCountRefreshedAtByVideoId: {
+              ...board.viewCountRefreshedAtByVideoId,
+              ...Object.fromEntries(
+                missingOrStaleStatsIds.map((videoId) => [videoId, refreshedAt])
+              )
+            }
           }));
         })
         .catch(() => {
@@ -1588,18 +1664,49 @@ function App() {
     if (boardState?.kind === "saved") {
       setColumn(boardId, columnId, (prev) => ({ ...prev, loading: true, error: null }));
       try {
+        const now = Date.now();
         const ids = (boardState.columns.find((column) => column.id === columnId)?.videos ?? [])
+          .filter(
+            (video) =>
+              video.durationSeconds === null ||
+              typeof video.durationSeconds === "undefined" ||
+              shouldRefreshViewCount(
+                boardState.viewCountRefreshedAtByVideoId[video.videoId],
+                now
+              )
+          )
           .map((video) => video.videoId);
-        const counts = await fetchViewCountsByVideoIds(ids);
+        if (ids.length === 0) {
+          setColumn(boardId, columnId, (prev) => ({
+            ...prev,
+            loading: false,
+            error: null,
+            lastFetchAt: new Date().toLocaleString()
+          }));
+          return;
+        }
+        const stats = await fetchVideoStatsByVideoIds(ids);
+        const refreshedAt = Date.now();
         setColumn(boardId, columnId, (prev) => ({
           ...prev,
           loading: false,
           error: null,
           videos: prev.videos.map((video) => ({
             ...video,
-            viewCount: counts[video.videoId] ?? video.viewCount
+            viewCount: stats[video.videoId]?.viewCount ?? video.viewCount,
+            durationSeconds:
+              typeof video.durationSeconds === "number"
+                ? video.durationSeconds
+                : stats[video.videoId]?.durationSeconds ?? null
           })),
           lastFetchAt: new Date().toLocaleString()
+        }));
+        setBoard(boardId, (board) => ({
+          ...board,
+          viewCountRefreshedAtByVideoId: {
+            ...board.viewCountRefreshedAtByVideoId,
+            ...Object.fromEntries(ids.map((videoId) => [videoId, refreshedAt]))
+          }
         }));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to refresh videos.";
@@ -1623,19 +1730,48 @@ function App() {
       );
       const boardState = boards.find((board) => board.id === boardId);
       const boardWatchedVideos = boardState?.watchedVideos ?? {};
+      const boardViewRefreshedAt = boardState?.viewCountRefreshedAtByVideoId ?? {};
       const cutoffTime = getWindowCutoffTime(STORAGE_VIDEO_WINDOW_DAYS);
       const nextChannelThumbnailUrl =
         channelThumbnailUrl || videos[0]?.thumbnailUrl || "";
+      const now = Date.now();
+      const refreshedViewVideoIds: string[] = [];
       setColumn(boardId, columnId, (prev) => ({
         ...prev,
         loading: false,
         error: null,
         videos: (() => {
           const mergedById = new Map<string, VideoItem>();
+          const prevById = new Map(prev.videos.map((video) => [video.videoId, video]));
 
           videos.forEach((video) => {
             if (getVideoPublishedTime(video) >= cutoffTime) {
-              mergedById.set(video.videoId, video);
+              const previousVideo = prevById.get(video.videoId);
+              if (!previousVideo) {
+                mergedById.set(video.videoId, video);
+                if (video.viewCount !== null) {
+                  refreshedViewVideoIds.push(video.videoId);
+                }
+                return;
+              }
+              const refreshDue =
+                previousVideo.viewCount === null ||
+                shouldRefreshViewCount(boardViewRefreshedAt[video.videoId], now);
+              const mergedVideo: VideoItem = {
+                ...previousVideo,
+                ...video,
+                viewCount: refreshDue
+                  ? (video.viewCount ?? previousVideo.viewCount)
+                  : previousVideo.viewCount,
+                durationSeconds:
+                  typeof previousVideo.durationSeconds === "number"
+                    ? previousVideo.durationSeconds
+                    : video.durationSeconds ?? null
+              };
+              if (refreshDue && video.viewCount !== null) {
+                refreshedViewVideoIds.push(video.videoId);
+              }
+              mergedById.set(video.videoId, mergedVideo);
             }
           });
 
@@ -1653,6 +1789,17 @@ function App() {
             if (existing.viewCount === null && video.viewCount !== null) {
               mergedById.set(video.videoId, { ...existing, viewCount: video.viewCount });
             }
+            if (
+              (existing.durationSeconds === null ||
+                typeof existing.durationSeconds === "undefined") &&
+              typeof video.durationSeconds === "number"
+            ) {
+              const latest = mergedById.get(video.videoId) ?? existing;
+              mergedById.set(video.videoId, {
+                ...latest,
+                durationSeconds: video.durationSeconds
+              });
+            }
           });
 
           return [...mergedById.values()].sort(
@@ -1664,6 +1811,18 @@ function App() {
           nextChannelThumbnailUrl || prev.channelThumbnailUrl || "",
         lastFetchAt: new Date().toLocaleString()
       }));
+      if (refreshedViewVideoIds.length > 0) {
+        const refreshedAt = Date.now();
+        setBoard(boardId, (board) => ({
+          ...board,
+          viewCountRefreshedAtByVideoId: {
+            ...board.viewCountRefreshedAtByVideoId,
+            ...Object.fromEntries(
+              [...new Set(refreshedViewVideoIds)].map((videoId) => [videoId, refreshedAt])
+            )
+          }
+        }));
+      }
       if (nextChannelThumbnailUrl) {
         const brokenKey = `${boardId}:${columnId}`;
         setBrokenChannelThumbnailKeys((prev) => prev.filter((key) => key !== brokenKey));
@@ -2233,6 +2392,7 @@ function App() {
         kind: board.kind,
         columns: toPersistedColumns(board.columns),
         watchedVideos: board.watchedVideos,
+        viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
         videoFilter: board.videoFilter,
         videoWindowDays: board.videoWindowDays,
         defaultPlaybackRate: board.defaultPlaybackRate
@@ -2321,6 +2481,10 @@ function App() {
       watchedVideos: {
         ...board.watchedVideos,
         [savingVideo.videoId]: true
+      },
+      viewCountRefreshedAtByVideoId: {
+        ...board.viewCountRefreshedAtByVideoId,
+        [savingVideo.videoId]: Date.now()
       }
     }));
     if (activeBoard) {
@@ -2406,6 +2570,11 @@ function App() {
               savedManualOrder: column.savedManualOrder.filter((id) => id !== videoId)
             }
           : column
+      ),
+      viewCountRefreshedAtByVideoId: Object.fromEntries(
+        Object.entries(board.viewCountRefreshedAtByVideoId).filter(
+          (entry) => entry[0] !== videoId
+        )
       )
     }));
     setDeletingSavedVideo(null);
@@ -2438,6 +2607,14 @@ function App() {
               savedManualOrder: []
             }
           : column
+      ),
+      viewCountRefreshedAtByVideoId: Object.fromEntries(
+        Object.entries(board.viewCountRefreshedAtByVideoId).filter(
+          (entry) =>
+            !board.columns
+              .find((column) => column.id === removeAllSavedColumnAction.columnId)
+              ?.videos.some((video) => video.videoId === entry[0])
+        )
       )
     }));
     setRemoveAllSavedColumnAction(null);
