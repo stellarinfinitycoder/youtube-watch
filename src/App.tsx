@@ -25,7 +25,7 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326105936";
+const CHANGE_STAMP = "160326111752";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -1140,6 +1140,11 @@ function App() {
     movingSavedVideo && savedBoard
       ? savedBoard.columns.filter((column) => column.id !== movingSavedVideo.columnId)
       : [];
+  const deletingSavedVideoListName =
+    deletingSavedVideo && savedBoard
+      ? savedBoard.columns.find((column) => column.id === deletingSavedVideo.columnId)
+          ?.handleInput ?? ""
+      : "";
   const deletingChannelNameRaw =
     deletingColumn?.handleInput.trim() || deletingColumn?.currentHandle.trim() || "";
   const deletingChannelName = deletingChannelNameRaw
@@ -3327,15 +3332,17 @@ function App() {
       </Modal>
 
       <Modal
-        title="Delete Video"
+        title="Remove Video"
         open={deletingSavedVideo !== null}
         onCancel={() => setDeletingSavedVideo(null)}
         onOk={deleteSavedVideo}
-        okText="Delete"
+        okText="Remove"
         okButtonProps={{ danger: true, className: "delete-confirm-ok" }}
         width={360}
       >
-        <Text>Delete video?</Text>
+        <Text>
+          Remove video from {deletingSavedVideoListName.toUpperCase() || "LIST"}?
+        </Text>
       </Modal>
 
       <Modal
