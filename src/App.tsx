@@ -28,7 +28,7 @@ import channelPlaceholderIcon from "../youtube.svg";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "150326210646";
+const CHANGE_STAMP = "160326074234";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/favicon-prod.svg" : "/favicon-dev.svg";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
@@ -200,6 +200,13 @@ type ErrorLogEntry = {
   column: string;
   action: "FETCH";
   message: string;
+};
+
+type BulkWatchColumnAction = {
+  columnId: string;
+  channelName: string;
+  videoIds: string[];
+  markWatched: boolean;
 };
 
 const NEW_BOARD_OPTION_VALUE = "__new__";
@@ -1063,6 +1070,8 @@ function App() {
     columnId: string;
     videoId: string;
   } | null>(null);
+  const [bulkWatchColumnAction, setBulkWatchColumnAction] =
+    useState<BulkWatchColumnAction | null>(null);
   const [moveSavedVideoTargetColumnId, setMoveSavedVideoTargetColumnId] =
     useState<string>("");
   const [editingSavedListColumnId, setEditingSavedListColumnId] = useState<string | null>(
@@ -1852,6 +1861,49 @@ function App() {
         watchedVideos: next
       };
     });
+  };
+
+  const openBulkWatchColumnAction = (
+    column: ColumnState,
+    videoIds: string[],
+    markWatched: boolean
+  ): void => {
+    if (videoIds.length === 0) {
+      return;
+    }
+    const channelNameRaw = column.handleInput.trim() || column.currentHandle.trim() || "";
+    const channelName = channelNameRaw
+      ? channelNameRaw.startsWith("@")
+        ? channelNameRaw
+        : `@${channelNameRaw}`
+      : "";
+    setBulkWatchColumnAction({
+      columnId: column.id,
+      channelName,
+      videoIds,
+      markWatched
+    });
+  };
+
+  const confirmBulkWatchColumnAction = (): void => {
+    if (!activeBoard || !bulkWatchColumnAction) {
+      return;
+    }
+    setBoard(activeBoard.id, (board) => {
+      const nextWatchedVideos = { ...board.watchedVideos };
+      bulkWatchColumnAction.videoIds.forEach((videoId) => {
+        if (bulkWatchColumnAction.markWatched) {
+          nextWatchedVideos[videoId] = true;
+        } else {
+          delete nextWatchedVideos[videoId];
+        }
+      });
+      return {
+        ...board,
+        watchedVideos: nextWatchedVideos
+      };
+    });
+    setBulkWatchColumnAction(null);
   };
 
   const playAllVideos = (): void => {
@@ -2758,6 +2810,29 @@ function App() {
                           <span className="btn-icon btn-icon-move" aria-hidden />
                         </Button>
                       ) : null}
+                      {!isSavedBoardActive ? (
+                        <Button
+                          htmlType="button"
+                          onClick={() =>
+                            openBulkWatchColumnAction(
+                              column,
+                              filteredVideos.map((video) => video.videoId),
+                              videoFilter !== "watched"
+                            )
+                          }
+                          disabled={column.loading || filteredVideos.length === 0}
+                          aria-label={`Mark all shown videos in channel ${index + 1} as ${
+                            videoFilter === "watched" ? "new" : "watched"
+                          }`}
+                          className="bulk-watch-column-btn"
+                        >
+                          {videoFilter === "watched" ? (
+                            <span className="btn-icon btn-icon-undo" aria-hidden />
+                          ) : (
+                            <span className="btn-icon btn-icon-check-all" aria-hidden />
+                          )}
+                        </Button>
+                      ) : null}
                       <Button
                         htmlType="button"
                         onClick={() => setDeletingColumnId(column.id)}
@@ -3310,6 +3385,25 @@ function App() {
             }))}
           />
         </Space>
+      </Modal>
+
+      <Modal
+        title={bulkWatchColumnAction?.markWatched ? "Mark Videos Watched" : "Mark Videos New"}
+        open={bulkWatchColumnAction !== null}
+        onCancel={() => setBulkWatchColumnAction(null)}
+        onOk={confirmBulkWatchColumnAction}
+        okText={bulkWatchColumnAction?.markWatched ? "WATCHED" : "NEW"}
+        width={380}
+      >
+        <Text>
+          {bulkWatchColumnAction
+            ? `${bulkWatchColumnAction.markWatched ? "Mark" : "Unmark"} ${
+                bulkWatchColumnAction.videoIds.length
+              } shown video${
+                bulkWatchColumnAction.videoIds.length === 1 ? "" : "s"
+              }${bulkWatchColumnAction.channelName ? ` in ${bulkWatchColumnAction.channelName.toUpperCase()}` : ""}?`
+            : ""}
+        </Text>
       </Modal>
     </main>
   );

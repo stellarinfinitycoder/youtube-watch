@@ -494,6 +494,11 @@ body {
   mask: url("/check.svg") center / contain no-repeat;
 }
 
+.btn-icon-check-all {
+  -webkit-mask: url("/check_all.svg") center / contain no-repeat;
+  mask: url("/check_all.svg") center / contain no-repeat;
+}
+
 .btn-icon-undo {
   -webkit-mask: url("/undo.svg") center / contain no-repeat;
   mask: url("/undo.svg") center / contain no-repeat;
@@ -790,6 +795,16 @@ body {
   height: 32px;
   padding: 0;
   font-size: 12px;
+  background: var(--amber-deep) !important;
+  color: var(--amber) !important;
+  border-color: var(--amber-soft) !important;
+}
+
+.bulk-watch-column-btn.ant-btn {
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   background: var(--amber-deep) !important;
   color: var(--amber) !important;
   border-color: var(--amber-soft) !important;
