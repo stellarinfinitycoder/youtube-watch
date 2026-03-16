@@ -25,7 +25,7 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326181649";
+const CHANGE_STAMP = "160326183040";
 const VIEWCOUNT_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
@@ -1703,13 +1703,38 @@ function App() {
         DEFAULT_LIMIT
       );
       const boardState = boards.find((board) => board.id === boardId);
+      const currentColumn = boardState?.columns.find((column) => column.id === columnId);
       const boardWatchedVideos = boardState?.watchedVideos ?? {};
       const boardViewRefreshedAt = boardState?.viewCountRefreshedAtByVideoId ?? {};
       const cutoffTime = getWindowCutoffTime(STORAGE_VIDEO_WINDOW_DAYS);
       const nextChannelThumbnailUrl =
         channelThumbnailUrl || videos[0]?.thumbnailUrl || "";
       const now = Date.now();
-      const refreshedViewVideoIds: string[] = [];
+      const previousVideosById = new Map(
+        (currentColumn?.videos ?? []).map((video) => [video.videoId, video])
+      );
+      const idsToRefresh = videos
+        .filter((video) => getVideoPublishedTime(video) >= cutoffTime)
+        .filter((video) => {
+          const previousVideo = previousVideosById.get(video.videoId);
+          if (!previousVideo) {
+            return true;
+          }
+          if (
+            previousVideo.durationSeconds === null ||
+            typeof previousVideo.durationSeconds === "undefined"
+          ) {
+            return true;
+          }
+          return (
+            previousVideo.viewCount === null ||
+            shouldRefreshViewCount(boardViewRefreshedAt[video.videoId], now)
+          );
+        })
+        .map((video) => video.videoId);
+      const idsToRefreshSet = new Set(idsToRefresh);
+      const statsByVideoId =
+        idsToRefresh.length > 0 ? await fetchVideoStatsByVideoIds(idsToRefresh) : {};
       setColumn(boardId, columnId, (prev) => ({
         ...prev,
         loading: false,
@@ -1721,30 +1746,27 @@ function App() {
           videos.forEach((video) => {
             if (getVideoPublishedTime(video) >= cutoffTime) {
               const previousVideo = prevById.get(video.videoId);
+              const stats = statsByVideoId[video.videoId];
               if (!previousVideo) {
-                mergedById.set(video.videoId, video);
-                if (video.viewCount !== null) {
-                  refreshedViewVideoIds.push(video.videoId);
-                }
+                mergedById.set(video.videoId, {
+                  ...video,
+                  viewCount: stats?.viewCount ?? video.viewCount,
+                  durationSeconds: stats?.durationSeconds ?? video.durationSeconds ?? null
+                });
                 return;
               }
-              const refreshDue =
-                previousVideo.viewCount === null ||
-                shouldRefreshViewCount(boardViewRefreshedAt[video.videoId], now);
+              const refreshDue = idsToRefreshSet.has(video.videoId);
               const mergedVideo: VideoItem = {
                 ...previousVideo,
                 ...video,
                 viewCount: refreshDue
-                  ? (video.viewCount ?? previousVideo.viewCount)
+                  ? (stats?.viewCount ?? previousVideo.viewCount)
                   : previousVideo.viewCount,
                 durationSeconds:
                   typeof previousVideo.durationSeconds === "number"
                     ? previousVideo.durationSeconds
-                    : video.durationSeconds ?? null
+                    : stats?.durationSeconds ?? video.durationSeconds ?? null
               };
-              if (refreshDue && video.viewCount !== null) {
-                refreshedViewVideoIds.push(video.videoId);
-              }
               mergedById.set(video.videoId, mergedVideo);
             }
           });
@@ -1785,14 +1807,14 @@ function App() {
           nextChannelThumbnailUrl || prev.channelThumbnailUrl || "",
         lastFetchAt: new Date().toLocaleString()
       }));
-      if (refreshedViewVideoIds.length > 0) {
+      if (idsToRefresh.length > 0) {
         const refreshedAt = Date.now();
         setBoard(boardId, (board) => ({
           ...board,
           viewCountRefreshedAtByVideoId: {
             ...board.viewCountRefreshedAtByVideoId,
             ...Object.fromEntries(
-              [...new Set(refreshedViewVideoIds)].map((videoId) => [videoId, refreshedAt])
+              [...new Set(idsToRefresh)].map((videoId) => [videoId, refreshedAt])
             )
           }
         }));

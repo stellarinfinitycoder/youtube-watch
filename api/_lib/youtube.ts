@@ -365,19 +365,7 @@ export async function fetchLatestVideos(channelId: string, limit = 25): Promise<
 
   const limitedVideos = videos.slice(0, cappedLimit);
 
-  if (limitedVideos.length === 0) {
-    return limitedVideos;
-  }
-
-  const videoMetadata = await fetchVideoStatsByVideoIds(
-    limitedVideos.map((video) => video.videoId)
-  );
-
-  return limitedVideos.map((video) => ({
-    ...video,
-    viewCount: videoMetadata[video.videoId]?.viewCount ?? null,
-    durationSeconds: videoMetadata[video.videoId]?.durationSeconds ?? null
-  }));
+  return limitedVideos;
 }
 
 export async function getLatestVideosAndChannelByHandle(handle: string, limit = 25): Promise<{
