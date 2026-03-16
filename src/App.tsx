@@ -25,7 +25,7 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326113127";
+const CHANGE_STAMP = "160326131829";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -74,6 +74,9 @@ type YouTubePlayer = {
   getAvailablePlaybackRates: () => number[];
   seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
   getCurrentTime: () => number;
+  getPlayerState: () => number;
+  playVideo: () => void;
+  pauseVideo: () => void;
 };
 
 type YouTubePlayerEvent = {
@@ -1053,6 +1056,8 @@ function App() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const playerHostRef = useRef<HTMLDivElement | null>(null);
+  const videoModalWrapRef = useRef<HTMLDivElement | null>(null);
+  const fallbackIframeRef = useRef<HTMLIFrameElement | null>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerReadyRef = useRef(false);
   const [playerHostNode, setPlayerHostNode] = useState<HTMLDivElement | null>(null);
@@ -1376,6 +1381,7 @@ function App() {
               setIsPlayerReady(true);
               playerReadyRef.current = true;
               setUseIframeFallback(false);
+              focusVideoPlayerSurface();
               if (fallbackTimer) {
                 clearTimeout(fallbackTimer);
                 fallbackTimer = null;
@@ -1421,28 +1427,70 @@ function App() {
     if (!activeVideo) {
       return;
     }
+    focusVideoPlayerSurface();
+  }, [activeVideo, isPlayerReady, useIframeFallback]);
+
+  useEffect(() => {
+    if (!activeVideo) {
+      return;
+    }
 
     const onKeyDown = (event: KeyboardEvent): void => {
       if (shouldIgnoreShortcutTarget(event.target)) {
         return;
       }
-      if (!playerRef.current) {
-        return;
-      }
 
       const key = event.key.toLowerCase();
-      if (key !== "arrowleft" && key !== "arrowright" && key !== "j" && key !== "l") {
+      const isSeekShortcut =
+        key === "arrowleft" || key === "arrowright" || key === "j" || key === "l";
+      const isSpaceShortcut = event.code === "Space" || key === " ";
+      const isFullscreenShortcut = key === "f";
+      if (!isSeekShortcut && !isSpaceShortcut && !isFullscreenShortcut) {
         return;
       }
 
       event.preventDefault();
-      const delta = key === "arrowleft" || key === "j" ? -10 : 10;
-      try {
-        const currentTime = playerRef.current.getCurrentTime();
-        const nextTime = Math.max(0, currentTime + delta);
-        playerRef.current.seekTo(nextTime, true);
-      } catch {
-        // Ignore unsupported seeks.
+      if (isSeekShortcut && playerRef.current) {
+        const delta = key === "arrowleft" || key === "j" ? -10 : 10;
+        try {
+          const currentTime = playerRef.current.getCurrentTime();
+          const nextTime = Math.max(0, currentTime + delta);
+          playerRef.current.seekTo(nextTime, true);
+        } catch {
+          // Ignore unsupported seeks.
+        }
+        return;
+      }
+
+      if (isSpaceShortcut && playerRef.current) {
+        try {
+          const currentState = playerRef.current.getPlayerState();
+          if (currentState === 1) {
+            playerRef.current.pauseVideo();
+          } else {
+            playerRef.current.playVideo();
+          }
+        } catch {
+          // Ignore unsupported play/pause controls.
+        }
+        return;
+      }
+
+      if (isFullscreenShortcut) {
+        const fullscreenTarget =
+          videoModalWrapRef.current ?? playerHostRef.current ?? fallbackIframeRef.current;
+        if (!fullscreenTarget) {
+          return;
+        }
+        try {
+          if (document.fullscreenElement) {
+            void document.exitFullscreen();
+          } else {
+            void fullscreenTarget.requestFullscreen();
+          }
+        } catch {
+          // Ignore unsupported fullscreen requests.
+        }
       }
     };
 
@@ -1455,6 +1503,30 @@ function App() {
   const setPlayerHost = (node: HTMLDivElement | null): void => {
     playerHostRef.current = node;
     setPlayerHostNode(node);
+  };
+
+  const focusVideoPlayerSurface = (): void => {
+    const focusTarget =
+      fallbackIframeRef.current ??
+      playerHostRef.current?.querySelector("iframe") ??
+      playerHostRef.current;
+    if (!focusTarget) {
+      return;
+    }
+    window.setTimeout(() => {
+      try {
+        focusTarget.focus();
+      } catch {
+        // Ignore focus failures.
+      }
+    }, 0);
+    window.setTimeout(() => {
+      try {
+        focusTarget.focus();
+      } catch {
+        // Ignore focus failures.
+      }
+    }, 120);
   };
 
   const setBoard = (
@@ -2697,12 +2769,14 @@ function App() {
       >
         {activeVideo ? (
           <Space direction="vertical" size="middle" className="full-width">
-            <div className="video-modal-wrap">
+            <div ref={videoModalWrapRef} className="video-modal-wrap">
               {useIframeFallback && !isPlayerReady ? (
                 <iframe
+                  ref={fallbackIframeRef}
                   src={`https://www.youtube.com/embed/${activeVideo.videoId}?autoplay=1&rel=0`}
                   title={activeVideo.title}
                   className="video-modal-frame"
+                  tabIndex={-1}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
@@ -2710,6 +2784,7 @@ function App() {
               ) : null}
               <div
                 ref={setPlayerHost}
+                tabIndex={-1}
                 className={`video-modal-frame ${
                   useIframeFallback && !isPlayerReady ? "video-modal-frame-hidden" : ""
                 }`}
