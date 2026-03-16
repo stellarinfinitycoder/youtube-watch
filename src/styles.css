@@ -899,6 +899,13 @@ body {
   margin-left: 0;
 }
 
+.modal-save-btn.ant-btn {
+  margin-left: 0;
+  background: #0b0b0d !important;
+  color: var(--text) !important;
+  border-color: var(--amber-soft) !important;
+}
+
 .ant-modal .ant-modal-content {
   background: var(--shell);
   border: 1px solid var(--amber);

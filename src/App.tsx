@@ -25,7 +25,7 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326104539";
+const CHANGE_STAMP = "160326105936";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -2646,6 +2646,7 @@ function App() {
         }}
         footer={null}
         width={1125}
+        zIndex={1000}
         destroyOnHidden
         className="video-player-modal"
       >
@@ -2671,6 +2672,15 @@ function App() {
             </div>
             <div className="speed-controls">
               <div className="speed-controls-left">
+                <Button
+                  htmlType="button"
+                  className="video-watch-btn modal-save-btn"
+                  aria-label={`Save ${activeVideo.title}`}
+                  onClick={() => openSaveVideoModal(activeVideo)}
+                  disabled={saveDestinationColumns.length === 0}
+                >
+                  <span className="btn-icon btn-icon-star" aria-hidden />
+                </Button>
                 <Button
                   htmlType="button"
                   className="video-watch-btn modal-watch-btn"
@@ -3298,6 +3308,7 @@ function App() {
         okText="Save"
         okButtonProps={{ disabled: !saveTargetColumnId }}
         width={360}
+        zIndex={1300}
       >
         <Space direction="vertical" size={10} className="full-width">
           <Text>Save video?</Text>
