@@ -26,7 +26,7 @@ import type { VideoItem } from "./types/youtube";
 
 const { Title, Text } = Typography;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "170326120034";
+const CHANGE_STAMP = "170326123149";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -259,6 +259,13 @@ type RemoveAllSavedColumnAction = {
   columnId: string;
   listName: string;
   videoCount: number;
+};
+
+type BoardDurationBackfillAction = {
+  boardId: string;
+  boardName: string;
+  videoIds: string[];
+  estimatedQueries: number;
 };
 
 type InlineMetaFeedback = {
@@ -1166,6 +1173,21 @@ function normalizeVideoDurationFilter(input: unknown): VideoDurationFilter {
     : "all";
 }
 
+function collectBoardMissingDurationNewVideoIds(board: BoardState): string[] {
+  const unique = new Set<string>();
+  board.columns.forEach((column) => {
+    column.videos.forEach((video) => {
+      const isWatched = board.watchedVideos[video.videoId] === true;
+      const hasDuration = typeof video.durationSeconds === "number";
+      if (isWatched || hasDuration) {
+        return;
+      }
+      unique.add(video.videoId);
+    });
+  });
+  return [...unique];
+}
+
 function formatVideoMeta(video: VideoItem): string {
   const dateLabel = video.publishedAt ? formatPublishedDate(video.publishedAt) : "--.--.--";
   return `${dateLabel} | ${formatDuration(video.durationSeconds)} | ${formatViewCount(video.viewCount)}`;
@@ -1325,7 +1347,8 @@ function App() {
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerReadyRef = useRef(false);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
-  const quotaActionStartsRef = useRef<Record<string, number>>({});
+  const quotaActionCountsRef = useRef<Record<string, number>>({});
+  const activeQuotaActionIdsRef = useRef<string[]>([]);
   const [playerHostNode, setPlayerHostNode] = useState<HTMLDivElement | null>(null);
   const initialBoardsState = getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
@@ -1350,6 +1373,13 @@ function App() {
   } | null>(null);
   const [removeAllSavedColumnAction, setRemoveAllSavedColumnAction] =
     useState<RemoveAllSavedColumnAction | null>(null);
+  const [boardDurationBackfillAction, setBoardDurationBackfillAction] =
+    useState<BoardDurationBackfillAction | null>(null);
+  const [isBoardDurationBackfillRunning, setIsBoardDurationBackfillRunning] =
+    useState(false);
+  const [boardDurationBackfillError, setBoardDurationBackfillError] = useState<string | null>(
+    null
+  );
   const [bulkWatchColumnAction, setBulkWatchColumnAction] =
     useState<BulkWatchColumnAction | null>(null);
   const [moveSavedVideoTargetColumnId, setMoveSavedVideoTargetColumnId] =
@@ -1466,6 +1496,12 @@ function App() {
     : DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
   const quotaEstimateText = `LAST Q: ${quotaEstimate.lastActionUnits} | TODAY: ${quotaEstimate.todayUnits}`;
+  const activeBoardDurationBackfillIds = activeBoard
+    ? collectBoardMissingDurationNewVideoIds(activeBoard)
+    : [];
+  const activeBoardDurationBackfillEstimatedQueries = Math.ceil(
+    activeBoardDurationBackfillIds.length / 50
+  );
 
   useEffect(() => {
     setBoards((previous) => ensureSavedBoard(previous));
@@ -1495,6 +1531,10 @@ function App() {
 
   useEffect(() => {
     setApiRequestListener(() => {
+      activeQuotaActionIdsRef.current.forEach((actionId) => {
+        quotaActionCountsRef.current[actionId] =
+          (quotaActionCountsRef.current[actionId] ?? 0) + 1;
+      });
       setQuotaEstimate((previous) => {
         const todayKey = getPacificDayKey();
         if (previous.dayKey !== todayKey) {
@@ -1839,19 +1879,20 @@ function App() {
 
   const beginQuotaTrackedAction = (): string => {
     const actionId = `quota-action-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    quotaActionStartsRef.current[actionId] = quotaEstimate.todayUnits;
+    quotaActionCountsRef.current[actionId] = 0;
+    activeQuotaActionIdsRef.current = [...activeQuotaActionIdsRef.current, actionId];
     return actionId;
   };
 
   const endQuotaTrackedAction = (actionId: string): void => {
-    const startUnits = quotaActionStartsRef.current[actionId];
-    delete quotaActionStartsRef.current[actionId];
-    if (typeof startUnits !== "number") {
-      return;
-    }
+    const actionUnits = quotaActionCountsRef.current[actionId] ?? 0;
+    delete quotaActionCountsRef.current[actionId];
+    activeQuotaActionIdsRef.current = activeQuotaActionIdsRef.current.filter(
+      (id) => id !== actionId
+    );
     setQuotaEstimate((previous) => ({
       ...previous,
-      lastActionUnits: Math.max(0, previous.todayUnits - startUnits)
+      lastActionUnits: Math.max(0, actionUnits)
     }));
   };
 
@@ -2153,6 +2194,62 @@ function App() {
         runFetch(activeBoard.id, column.id, column.handleInput);
       }
     });
+  };
+
+  const openBoardDurationBackfillModal = (): void => {
+    if (!activeBoard) {
+      return;
+    }
+    const videoIds = collectBoardMissingDurationNewVideoIds(activeBoard);
+    setBoardDurationBackfillError(null);
+    setBoardDurationBackfillAction({
+      boardId: activeBoard.id,
+      boardName: activeBoard.name,
+      videoIds,
+      estimatedQueries: Math.ceil(videoIds.length / 50)
+    });
+  };
+
+  const confirmBoardDurationBackfill = async (): Promise<void> => {
+    if (!boardDurationBackfillAction) {
+      return;
+    }
+    setBoardDurationBackfillError(null);
+    setIsBoardDurationBackfillRunning(true);
+    const quotaActionId = beginQuotaTrackedAction();
+    try {
+      const stats = await fetchVideoStatsByVideoIds(boardDurationBackfillAction.videoIds);
+      setBoard(boardDurationBackfillAction.boardId, (board) => ({
+        ...board,
+        columns: board.columns.map((column) => ({
+          ...column,
+          videos: column.videos.map((video) => {
+            if (board.watchedVideos[video.videoId] === true) {
+              return video;
+            }
+            if (typeof video.durationSeconds === "number") {
+              return video;
+            }
+            const nextDuration = stats[video.videoId]?.durationSeconds;
+            if (typeof nextDuration !== "number") {
+              return video;
+            }
+            return {
+              ...video,
+              durationSeconds: nextDuration
+            };
+          })
+        }))
+      }));
+      setBoardDurationBackfillAction(null);
+    } catch (error) {
+      setBoardDurationBackfillError(
+        error instanceof Error ? error.message : "Failed to backfill durations."
+      );
+    } finally {
+      setIsBoardDurationBackfillRunning(false);
+      endQuotaTrackedAction(quotaActionId);
+    }
   };
 
   const scrollColumns = (direction: "left" | "right"): void => {
@@ -3768,6 +3865,15 @@ function App() {
         >
           <span className="btn-icon btn-icon-logs" aria-hidden />
         </Button>
+        <Button
+          htmlType="button"
+          onClick={openBoardDurationBackfillModal}
+          aria-label="Backfill board duration"
+          className="backup-btn"
+          disabled={activeBoardDurationBackfillIds.length === 0}
+        >
+          BD
+        </Button>
         <Text className="backup-limits-text">
           {quotaEstimateText} | FETCH PAGE SIZE: 50 VIDEOS | MAX VIDEO AGE: 90 DAYS | MAX SAVED
           VIDEO AGE: UNLIMITED | {BUILD_INFO_LABEL}
@@ -3816,6 +3922,47 @@ function App() {
             )}
           />
         )}
+      </Modal>
+
+      <Modal
+        title="Backfill Durations"
+        open={boardDurationBackfillAction !== null}
+        onCancel={() => {
+          if (isBoardDurationBackfillRunning) {
+            return;
+          }
+          setBoardDurationBackfillAction(null);
+          setBoardDurationBackfillError(null);
+        }}
+        onOk={() => void confirmBoardDurationBackfill()}
+        okText="Backfill"
+        confirmLoading={isBoardDurationBackfillRunning}
+        okButtonProps={{
+          disabled:
+            !boardDurationBackfillAction ||
+            boardDurationBackfillAction.videoIds.length === 0 ||
+            isBoardDurationBackfillRunning
+        }}
+      >
+        {boardDurationBackfillAction ? (
+          <Space direction="vertical" size="small" className="full-width">
+            <Text>
+              Board: <strong>{boardDurationBackfillAction.boardName.toUpperCase()}</strong>
+            </Text>
+            <Text>
+              Videos to backfill: <strong>{boardDurationBackfillAction.videoIds.length}</strong>
+            </Text>
+            <Text>
+              Estimated queries: <strong>{boardDurationBackfillAction.estimatedQueries}</strong>
+            </Text>
+            <Text type="secondary">
+              Includes only NEW (unwatched) videos with missing duration.
+            </Text>
+            {boardDurationBackfillError ? (
+              <Alert type="error" showIcon={false} message={boardDurationBackfillError} />
+            ) : null}
+          </Space>
+        ) : null}
       </Modal>
 
       <Modal
