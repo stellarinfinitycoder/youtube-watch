@@ -18,15 +18,14 @@ import type { FetchState } from "./types/youtube";
 import {
   fetchPlaylistDiscoveryPage,
   fetchVideoStatsByVideoIds,
-  resolveChannelByHandleWithThumbnail,
-  setApiRequestListener
+  resolveChannelByHandleWithThumbnail
 } from "./api/youtube";
 import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
 
 const { Title, Text } = Typography;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "170326123149";
+const CHANGE_STAMP = "170326125340";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -1347,8 +1346,6 @@ function App() {
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerReadyRef = useRef(false);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
-  const quotaActionCountsRef = useRef<Record<string, number>>({});
-  const activeQuotaActionIdsRef = useRef<string[]>([]);
   const [playerHostNode, setPlayerHostNode] = useState<HTMLDivElement | null>(null);
   const initialBoardsState = getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
@@ -1526,32 +1523,6 @@ function App() {
         window.clearTimeout(timeoutId);
       });
       videoMetaFeedbackTimeoutsRef.current = {};
-    };
-  }, []);
-
-  useEffect(() => {
-    setApiRequestListener(() => {
-      activeQuotaActionIdsRef.current.forEach((actionId) => {
-        quotaActionCountsRef.current[actionId] =
-          (quotaActionCountsRef.current[actionId] ?? 0) + 1;
-      });
-      setQuotaEstimate((previous) => {
-        const todayKey = getPacificDayKey();
-        if (previous.dayKey !== todayKey) {
-          return {
-            dayKey: todayKey,
-            todayUnits: 1,
-            lastActionUnits: previous.lastActionUnits
-          };
-        }
-        return {
-          ...previous,
-          todayUnits: previous.todayUnits + 1
-        };
-      });
-    });
-    return () => {
-      setApiRequestListener(null);
     };
   }, []);
 
@@ -1877,22 +1848,15 @@ function App() {
     }));
   };
 
-  const beginQuotaTrackedAction = (): string => {
-    const actionId = `quota-action-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    quotaActionCountsRef.current[actionId] = 0;
-    activeQuotaActionIdsRef.current = [...activeQuotaActionIdsRef.current, actionId];
-    return actionId;
-  };
-
-  const endQuotaTrackedAction = (actionId: string): void => {
-    const actionUnits = quotaActionCountsRef.current[actionId] ?? 0;
-    delete quotaActionCountsRef.current[actionId];
-    activeQuotaActionIdsRef.current = activeQuotaActionIdsRef.current.filter(
-      (id) => id !== actionId
-    );
+  const recordEstimatedQuotaUsage = (units: number): void => {
+    const safeUnits = Math.max(0, Math.floor(units));
     setQuotaEstimate((previous) => ({
-      ...previous,
-      lastActionUnits: Math.max(0, actionUnits)
+      dayKey: previous.dayKey === getPacificDayKey() ? previous.dayKey : getPacificDayKey(),
+      todayUnits:
+        previous.dayKey === getPacificDayKey()
+          ? previous.todayUnits + safeUnits
+          : safeUnits,
+      lastActionUnits: safeUnits
     }));
   };
 
@@ -1928,9 +1892,9 @@ function App() {
     handle: string
   ): Promise<void> => {
     const boardState = boards.find((board) => board.id === boardId);
-    const quotaActionId = beginQuotaTrackedAction();
+    let estimatedQuotaUnits = 0;
     if (boardState?.kind === "saved") {
-      endQuotaTrackedAction(quotaActionId);
+      recordEstimatedQuotaUsage(0);
       return;
     }
 
@@ -1958,6 +1922,7 @@ function App() {
       let nextChannelThumbnailUrl = currentColumn.channelThumbnailUrl;
 
       if (!channelId || !uploadsPlaylistId || currentColumn.currentHandle !== normalized) {
+        estimatedQuotaUnits += 1; // channels.list for handle resolve + uploads playlist
         const lookup = await resolveChannelByHandleWithThumbnail(normalized);
         channelId = lookup.channelId;
         uploadsPlaylistId = lookup.uploadsPlaylistId;
@@ -1969,6 +1934,7 @@ function App() {
       let pageToken = "";
 
       while (true) {
+        estimatedQuotaUnits += 1; // playlistItems.list page
         const { videos, nextPageToken } = await fetchPlaylistDiscoveryPage(
           uploadsPlaylistId,
           pageToken,
@@ -2002,6 +1968,9 @@ function App() {
         pageToken = nextPageToken;
       }
 
+      if (discoveredNewVideos.length > 0) {
+        estimatedQuotaUnits += Math.ceil(discoveredNewVideos.length / 50); // videos.list batches
+      }
       const statsByVideoId =
         discoveredNewVideos.length > 0
           ? await fetchVideoStatsByVideoIds(discoveredNewVideos.map((video) => video.videoId))
@@ -2069,7 +2038,7 @@ function App() {
         error: message
       }));
     } finally {
-      endQuotaTrackedAction(quotaActionId);
+      recordEstimatedQuotaUsage(estimatedQuotaUnits);
     }
   };
 
@@ -2216,7 +2185,7 @@ function App() {
     }
     setBoardDurationBackfillError(null);
     setIsBoardDurationBackfillRunning(true);
-    const quotaActionId = beginQuotaTrackedAction();
+    const estimatedQuotaUnits = Math.ceil(boardDurationBackfillAction.videoIds.length / 50);
     try {
       const stats = await fetchVideoStatsByVideoIds(boardDurationBackfillAction.videoIds);
       setBoard(boardDurationBackfillAction.boardId, (board) => ({
@@ -2248,7 +2217,7 @@ function App() {
       );
     } finally {
       setIsBoardDurationBackfillRunning(false);
-      endQuotaTrackedAction(quotaActionId);
+      recordEstimatedQuotaUsage(estimatedQuotaUnits);
     }
   };
 
@@ -2394,7 +2363,7 @@ function App() {
     if (videoStatsBackfillInFlight.includes(videoId)) {
       return;
     }
-    const quotaActionId = beginQuotaTrackedAction();
+    const estimatedQuotaUnits = 1;
     const setInlineMetaFeedback = (
       kind: InlineMetaFeedback["kind"],
       text: string,
@@ -2481,7 +2450,7 @@ function App() {
       setInlineMetaFeedback("error", messageText, 3000);
     } finally {
       setVideoStatsBackfillInFlight((prev) => prev.filter((item) => item !== videoId));
-      endQuotaTrackedAction(quotaActionId);
+      recordEstimatedQuotaUsage(estimatedQuotaUnits);
     }
   };
 
