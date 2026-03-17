@@ -16,17 +16,16 @@ import {
 } from "antd";
 import type { FetchState } from "./types/youtube";
 import {
+  fetchPlaylistDiscoveryPage,
   fetchVideoStatsByVideoIds,
-  getLatestVideosAndChannelByHandle
+  resolveChannelByHandleWithThumbnail
 } from "./api/youtube";
 import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
 
 const { Title, Text } = Typography;
-const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
 const CHANGE_STAMP = "170326110027";
-const VIEWCOUNT_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -163,6 +162,8 @@ function loadYouTubeIframeApi(): Promise<void> {
 type ColumnState = FetchState & {
   id: string;
   handleInput: string;
+  channelId: string;
+  uploadsPlaylistId: string;
   channelThumbnailUrl: string;
   lastFetchAt: string | null;
   savedSortMode: SavedSortMode;
@@ -174,6 +175,8 @@ type PersistedColumnState = {
   id: string;
   handleInput: string;
   currentHandle: string;
+  channelId?: string;
+  uploadsPlaylistId?: string;
   channelThumbnailUrl: string;
   videos: VideoItem[];
   lastFetchAt: string | null;
@@ -254,6 +257,8 @@ function createColumnState(overrides?: Partial<ColumnState>): ColumnState {
   return {
     id: createColumnId(),
     handleInput: "",
+    channelId: "",
+    uploadsPlaylistId: "",
     channelThumbnailUrl: "",
     lastFetchAt: null,
     loading: false,
@@ -475,16 +480,6 @@ function sanitizeNumericMap(raw: unknown): Record<string, number> {
   );
 }
 
-function shouldRefreshViewCount(
-  lastRefreshedAt: number | undefined,
-  now = Date.now()
-): boolean {
-  if (typeof lastRefreshedAt !== "number" || !Number.isFinite(lastRefreshedAt)) {
-    return true;
-  }
-  return now - lastRefreshedAt >= VIEWCOUNT_REFRESH_INTERVAL_MS;
-}
-
 function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
   if (!raw || typeof raw !== "object") {
     return null;
@@ -494,6 +489,8 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
     id?: unknown;
     handleInput?: unknown;
     currentHandle?: unknown;
+    channelId?: unknown;
+    uploadsPlaylistId?: unknown;
     channelThumbnailUrl?: unknown;
     videos?: unknown;
     lastFetchAt?: unknown;
@@ -506,6 +503,13 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
     !(typeof candidate.id === "string" || typeof candidate.id === "undefined") ||
     typeof candidate.handleInput !== "string" ||
     typeof candidate.currentHandle !== "string" ||
+    !(
+      typeof candidate.channelId === "string" || typeof candidate.channelId === "undefined"
+    ) ||
+    !(
+      typeof candidate.uploadsPlaylistId === "string" ||
+      typeof candidate.uploadsPlaylistId === "undefined"
+    ) ||
     typeof candidate.channelThumbnailUrl !== "string" ||
     !(typeof candidate.lastFetchAt === "string" || candidate.lastFetchAt === null) ||
     !Array.isArray(candidate.videos)
@@ -595,6 +599,8 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
     id: candidate.id ?? createColumnId(),
     handleInput: candidate.handleInput,
     currentHandle: candidate.currentHandle,
+    channelId: candidate.channelId ?? "",
+    uploadsPlaylistId: candidate.uploadsPlaylistId ?? "",
     channelThumbnailUrl: candidate.channelThumbnailUrl,
     videos,
     lastFetchAt: candidate.lastFetchAt,
@@ -835,6 +841,8 @@ function toPersistedColumns(columns: ColumnState[]): PersistedColumnState[] {
     id: column.id,
     handleInput: column.handleInput,
     currentHandle: column.currentHandle,
+    channelId: column.channelId,
+    uploadsPlaylistId: column.uploadsPlaylistId,
     channelThumbnailUrl: column.channelThumbnailUrl,
     videos: column.videos,
     lastFetchAt: column.lastFetchAt,
@@ -908,6 +916,8 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
         id: column.id,
         handleInput: column.handleInput,
         currentHandle: column.currentHandle,
+        channelId: column.channelId ?? "",
+        uploadsPlaylistId: column.uploadsPlaylistId ?? "",
         channelThumbnailUrl: column.channelThumbnailUrl,
         videos: column.videos,
         lastFetchAt: column.lastFetchAt,
@@ -999,6 +1009,8 @@ function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string 
         id: legacyColumns[index]?.id ?? createColumnId(),
         handleInput: legacyColumns[index]?.handleInput ?? legacyHandles[index] ?? "",
         currentHandle: legacyColumns[index]?.currentHandle ?? "",
+        channelId: legacyColumns[index]?.channelId ?? "",
+        uploadsPlaylistId: legacyColumns[index]?.uploadsPlaylistId ?? "",
         channelThumbnailUrl: legacyColumns[index]?.channelThumbnailUrl ?? "",
         videos: legacyColumns[index]?.videos ?? [],
         lastFetchAt: legacyColumns[index]?.lastFetchAt ?? null,
@@ -1657,61 +1669,6 @@ function App() {
   ): Promise<void> => {
     const boardState = boards.find((board) => board.id === boardId);
     if (boardState?.kind === "saved") {
-      setColumn(boardId, columnId, (prev) => ({ ...prev, loading: true, error: null }));
-      try {
-        const now = Date.now();
-        const ids = (boardState.columns.find((column) => column.id === columnId)?.videos ?? [])
-          .filter(
-            (video) =>
-              video.durationSeconds === null ||
-              typeof video.durationSeconds === "undefined" ||
-              shouldRefreshViewCount(
-                boardState.viewCountRefreshedAtByVideoId[video.videoId],
-                now
-              )
-          )
-          .map((video) => video.videoId);
-        if (ids.length === 0) {
-          setColumn(boardId, columnId, (prev) => ({
-            ...prev,
-            loading: false,
-            error: null,
-            lastFetchAt: new Date().toLocaleString()
-          }));
-          return;
-        }
-        const stats = await fetchVideoStatsByVideoIds(ids);
-        const refreshedAt = Date.now();
-        setColumn(boardId, columnId, (prev) => ({
-          ...prev,
-          loading: false,
-          error: null,
-          videos: prev.videos.map((video) => ({
-            ...video,
-            viewCount: stats[video.videoId]?.viewCount ?? video.viewCount,
-            durationSeconds:
-              typeof video.durationSeconds === "number"
-                ? video.durationSeconds
-                : stats[video.videoId]?.durationSeconds ?? null
-          })),
-          lastFetchAt: new Date().toLocaleString()
-        }));
-        setBoard(boardId, (board) => ({
-          ...board,
-          viewCountRefreshedAtByVideoId: {
-            ...board.viewCountRefreshedAtByVideoId,
-            ...Object.fromEntries(ids.map((videoId) => [videoId, refreshedAt]))
-          }
-        }));
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to refresh videos.";
-        appendFetchErrorLog(boardId, columnId, message);
-        setColumn(boardId, columnId, (prev) => ({
-          ...prev,
-          loading: false,
-          error: message
-        }));
-      }
       return;
     }
 
@@ -1719,104 +1676,94 @@ function App() {
 
     try {
       const normalized = normalizeHandle(handle);
-      const { videos, channelThumbnailUrl } = await getLatestVideosAndChannelByHandle(
-        normalized,
-        DEFAULT_LIMIT
-      );
       const boardState = boards.find((board) => board.id === boardId);
       const currentColumn = boardState?.columns.find((column) => column.id === columnId);
-      const boardWatchedVideos = boardState?.watchedVideos ?? {};
-      const boardViewRefreshedAt = boardState?.viewCountRefreshedAtByVideoId ?? {};
+      if (!currentColumn) {
+        throw new Error("Column not found.");
+      }
       const cutoffTime = getWindowCutoffTime(STORAGE_VIDEO_WINDOW_DAYS);
-      const nextChannelThumbnailUrl =
-        channelThumbnailUrl || videos[0]?.thumbnailUrl || "";
-      const now = Date.now();
       const previousVideosById = new Map(
-        (currentColumn?.videos ?? []).map((video) => [video.videoId, video])
+        currentColumn.videos.map((video) => [video.videoId, video])
       );
-      const idsToRefresh = videos
-        .filter((video) => getVideoPublishedTime(video) >= cutoffTime)
-        .filter((video) => {
-          const previousVideo = previousVideosById.get(video.videoId);
-          if (!previousVideo) {
-            return true;
+
+      const newestKnownPublishedTime = currentColumn.videos.reduce((latest, video) => {
+        const publishedTime = getVideoPublishedTime(video);
+        return publishedTime > latest ? publishedTime : latest;
+      }, 0);
+
+      let channelId = currentColumn.channelId;
+      let uploadsPlaylistId = currentColumn.uploadsPlaylistId;
+      let nextChannelThumbnailUrl = currentColumn.channelThumbnailUrl;
+
+      if (!channelId || !uploadsPlaylistId || currentColumn.currentHandle !== normalized) {
+        const lookup = await resolveChannelByHandleWithThumbnail(normalized);
+        channelId = lookup.channelId;
+        uploadsPlaylistId = lookup.uploadsPlaylistId;
+        nextChannelThumbnailUrl = lookup.channelThumbnailUrl || nextChannelThumbnailUrl;
+      }
+
+      const discoveredNewVideos: VideoItem[] = [];
+      const seenVideoIds = new Set<string>();
+      let pageToken = "";
+
+      while (true) {
+        const { videos, nextPageToken } = await fetchPlaylistDiscoveryPage(
+          uploadsPlaylistId,
+          pageToken,
+          50
+        );
+        if (videos.length === 0) {
+          break;
+        }
+
+        let stopDiscovery = false;
+        for (const video of videos) {
+          const publishedTime = getVideoPublishedTime(video);
+          if (publishedTime < cutoffTime) {
+            stopDiscovery = true;
+            break;
           }
-          if (
-            previousVideo.durationSeconds === null ||
-            typeof previousVideo.durationSeconds === "undefined"
-          ) {
-            return true;
+          if (previousVideosById.has(video.videoId) || publishedTime <= newestKnownPublishedTime) {
+            stopDiscovery = true;
+            break;
           }
-          return (
-            previousVideo.viewCount === null ||
-            shouldRefreshViewCount(boardViewRefreshedAt[video.videoId], now)
-          );
-        })
-        .map((video) => video.videoId);
-      const idsToRefreshSet = new Set(idsToRefresh);
+          if (seenVideoIds.has(video.videoId)) {
+            continue;
+          }
+          seenVideoIds.add(video.videoId);
+          discoveredNewVideos.push(video);
+        }
+
+        if (stopDiscovery || !nextPageToken) {
+          break;
+        }
+        pageToken = nextPageToken;
+      }
+
       const statsByVideoId =
-        idsToRefresh.length > 0 ? await fetchVideoStatsByVideoIds(idsToRefresh) : {};
+        discoveredNewVideos.length > 0
+          ? await fetchVideoStatsByVideoIds(discoveredNewVideos.map((video) => video.videoId))
+          : {};
+
       setColumn(boardId, columnId, (prev) => ({
         ...prev,
         loading: false,
         error: null,
         videos: (() => {
           const mergedById = new Map<string, VideoItem>();
-          const prevById = new Map(prev.videos.map((video) => [video.videoId, video]));
-
-          videos.forEach((video) => {
+          prev.videos.forEach((video) => {
             if (getVideoPublishedTime(video) >= cutoffTime) {
-              const previousVideo = prevById.get(video.videoId);
-              const stats = statsByVideoId[video.videoId];
-              if (!previousVideo) {
-                mergedById.set(video.videoId, {
-                  ...video,
-                  viewCount: stats?.viewCount ?? video.viewCount,
-                  durationSeconds: stats?.durationSeconds ?? video.durationSeconds ?? null
-                });
-                return;
-              }
-              const refreshDue = idsToRefreshSet.has(video.videoId);
-              const mergedVideo: VideoItem = {
-                ...previousVideo,
-                ...video,
-                viewCount: refreshDue
-                  ? (stats?.viewCount ?? previousVideo.viewCount)
-                  : previousVideo.viewCount,
-                durationSeconds:
-                  typeof previousVideo.durationSeconds === "number"
-                    ? previousVideo.durationSeconds
-                    : stats?.durationSeconds ?? video.durationSeconds ?? null
-              };
-              mergedById.set(video.videoId, mergedVideo);
+              mergedById.set(video.videoId, video);
             }
           });
 
-          prev.videos.forEach((video) => {
-            const isWatched = boardWatchedVideos[video.videoId] === true;
-            const isWithinWindow = getVideoPublishedTime(video) >= cutoffTime;
-            if (isWatched || !isWithinWindow) {
-              return;
-            }
-            const existing = mergedById.get(video.videoId);
-            if (!existing) {
-              mergedById.set(video.videoId, video);
-              return;
-            }
-            if (existing.viewCount === null && video.viewCount !== null) {
-              mergedById.set(video.videoId, { ...existing, viewCount: video.viewCount });
-            }
-            if (
-              (existing.durationSeconds === null ||
-                typeof existing.durationSeconds === "undefined") &&
-              typeof video.durationSeconds === "number"
-            ) {
-              const latest = mergedById.get(video.videoId) ?? existing;
-              mergedById.set(video.videoId, {
-                ...latest,
-                durationSeconds: video.durationSeconds
-              });
-            }
+          discoveredNewVideos.forEach((video) => {
+            const stats = statsByVideoId[video.videoId];
+            mergedById.set(video.videoId, {
+              ...video,
+              viewCount: stats?.viewCount ?? video.viewCount,
+              durationSeconds: stats?.durationSeconds ?? video.durationSeconds ?? null
+            });
           });
 
           return [...mergedById.values()].sort(
@@ -1824,18 +1771,19 @@ function App() {
           );
         })(),
         currentHandle: normalized,
-        channelThumbnailUrl:
-          nextChannelThumbnailUrl || prev.channelThumbnailUrl || "",
+        channelId: channelId || prev.channelId,
+        uploadsPlaylistId: uploadsPlaylistId || prev.uploadsPlaylistId,
+        channelThumbnailUrl: nextChannelThumbnailUrl || prev.channelThumbnailUrl || "",
         lastFetchAt: new Date().toLocaleString()
       }));
-      if (idsToRefresh.length > 0) {
+      if (discoveredNewVideos.length > 0) {
         const refreshedAt = Date.now();
         setBoard(boardId, (board) => ({
           ...board,
           viewCountRefreshedAtByVideoId: {
             ...board.viewCountRefreshedAtByVideoId,
             ...Object.fromEntries(
-              [...new Set(idsToRefresh)].map((videoId) => [videoId, refreshedAt])
+              discoveredNewVideos.map((video) => [video.videoId, refreshedAt])
             )
           }
         }));
@@ -1973,14 +1921,10 @@ function App() {
   };
 
   const fetchAllColumns = (): void => {
-    if (!activeBoard) {
+    if (!activeBoard || activeBoard.kind === "saved") {
       return;
     }
     columns.forEach((column) => {
-      if (activeBoard.kind === "saved") {
-        runFetch(activeBoard.id, column.id, column.handleInput);
-        return;
-      }
       const rawHandle = column.handleInput.trim();
       if (rawHandle.length > 0) {
         runFetch(activeBoard.id, column.id, column.handleInput);
@@ -2926,6 +2870,7 @@ function App() {
           htmlType="button"
           onClick={fetchAllColumns}
           aria-label="Fetch all channels"
+          disabled={isSavedBoardActive}
           className="nav-btn"
         >
           <span className="btn-icon btn-icon-fetch" aria-hidden />
@@ -3343,8 +3288,8 @@ function App() {
                         }
                         disabled={
                           column.loading ||
-                          (!isSavedBoardActive && !hasHandleInput) ||
-                          (isSavedBoardActive && column.videos.length === 0)
+                          isSavedBoardActive ||
+                          !hasHandleInput
                         }
                         loading={column.loading}
                         aria-label={`Fetch column ${index + 1}`}
@@ -3575,7 +3520,7 @@ function App() {
           <span className="btn-icon btn-icon-logs" aria-hidden />
         </Button>
         <Text className="backup-limits-text">
-          MAX FETCH LIMIT: 50 VIDEOS | MAX VIDEO AGE: 90 DAYS | MAX SAVED VIDEO AGE: UNLIMITED |{" "}
+          FETCH PAGE SIZE: 50 VIDEOS | MAX VIDEO AGE: 90 DAYS | MAX SAVED VIDEO AGE: UNLIMITED |{" "}
           {BUILD_INFO_LABEL}
         </Text>
         <input

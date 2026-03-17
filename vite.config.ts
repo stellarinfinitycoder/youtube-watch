@@ -4,6 +4,7 @@ import { loadEnv } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execSync } from "node:child_process";
 import {
+  fetchUploadsPlaylistPage,
   fetchLatestVideos,
   fetchVideoStatsByVideoIds,
   fetchViewCountsByVideoIds,
@@ -113,6 +114,19 @@ export default defineConfig(({ mode }) => {
                 const limit = parseLimit(url.searchParams.get("limit"));
                 const videos = await fetchLatestVideos(channelId, limit);
                 sendJson(res, 200, { videos });
+                return;
+              }
+
+              if (url.pathname === "/api/youtube/discover-by-playlist" && method === "GET") {
+                const uploadsPlaylistId = (url.searchParams.get("uploadsPlaylistId") ?? "").trim();
+                if (!uploadsPlaylistId) {
+                  sendJson(res, 400, { error: "uploadsPlaylistId is required." });
+                  return;
+                }
+                const pageToken = (url.searchParams.get("pageToken") ?? "").trim();
+                const limit = parseLimit(url.searchParams.get("limit"));
+                const data = await fetchUploadsPlaylistPage(uploadsPlaylistId, pageToken, limit);
+                sendJson(res, 200, data);
                 return;
               }
 

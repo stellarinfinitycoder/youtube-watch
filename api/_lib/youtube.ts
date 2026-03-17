@@ -12,6 +12,11 @@ export type VideoItem = {
 type ChannelByHandleResponse = {
   items?: Array<{
     id?: string;
+    contentDetails?: {
+      relatedPlaylists?: {
+        uploads?: string;
+      };
+    };
     snippet?: {
       thumbnails?: {
         high?: { url?: string };
@@ -207,13 +212,17 @@ export function normalizeHandle(input: string): string {
 
 export async function resolveChannelByHandleWithThumbnail(
   handle: string
-): Promise<{ channelId: string; channelThumbnailUrl: string }> {
+): Promise<{
+  channelId: string;
+  channelThumbnailUrl: string;
+  uploadsPlaylistId: string;
+}> {
   const apiKey = getApiKey();
   const normalized = normalizeHandle(handle);
   const cleanHandle = stripHandlePrefix(normalized);
 
   const url = buildUrl("/channels", {
-    part: "id,snippet",
+    part: "id,snippet,contentDetails",
     forHandle: cleanHandle,
     key: apiKey
   });
@@ -224,6 +233,10 @@ export async function resolveChannelByHandleWithThumbnail(
 
   if (!channelId) {
     throw new Error(`Channel not found for handle ${normalized}.`);
+  }
+  const uploadsPlaylistId = channel?.contentDetails?.relatedPlaylists?.uploads;
+  if (!uploadsPlaylistId) {
+    throw new Error("Uploads playlist not found for this channel.");
   }
 
   let channelThumbnailUrl =
@@ -247,7 +260,11 @@ export async function resolveChannelByHandleWithThumbnail(
       "";
   }
 
-  return { channelId, channelThumbnailUrl: normalizeImageUrl(channelThumbnailUrl) };
+  return {
+    channelId,
+    channelThumbnailUrl: normalizeImageUrl(channelThumbnailUrl),
+    uploadsPlaylistId
+  };
 }
 
 export async function fetchViewCountsByVideoIds(videoIds: string[]): Promise<ViewCountMap> {
@@ -366,6 +383,34 @@ export async function fetchLatestVideos(channelId: string, limit = 25): Promise<
   const limitedVideos = videos.slice(0, cappedLimit);
 
   return limitedVideos;
+}
+
+export async function fetchUploadsPlaylistPage(
+  uploadsPlaylistId: string,
+  pageToken = "",
+  maxResults = 50
+): Promise<{ videos: VideoItem[]; nextPageToken: string | null }> {
+  const apiKey = getApiKey();
+  const params: Record<string, string | number> = {
+    part: "snippet",
+    playlistId: uploadsPlaylistId,
+    maxResults: Math.max(1, Math.min(50, Math.floor(maxResults))),
+    key: apiKey
+  };
+  if (pageToken) {
+    params.pageToken = pageToken;
+  }
+
+  const playlistUrl = buildUrl("/playlistItems", params);
+  const playlistData = await fetchJson<PlaylistItemsResponse>(playlistUrl);
+  const videos = (playlistData.items ?? [])
+    .map(mapPlaylistItemToVideoItem)
+    .filter((item): item is VideoItem => item !== null);
+
+  return {
+    videos,
+    nextPageToken: playlistData.nextPageToken ?? null
+  };
 }
 
 export async function getLatestVideosAndChannelByHandle(handle: string, limit = 25): Promise<{

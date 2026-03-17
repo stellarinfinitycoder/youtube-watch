@@ -7,11 +7,17 @@ type VideoStatsMap = Record<string, { viewCount?: number; durationSeconds?: numb
 export type ChannelLookupResult = {
   channelId: string;
   channelThumbnailUrl: string;
+  uploadsPlaylistId: string;
 };
 
 export type ChannelVideosResult = {
   channelThumbnailUrl: string;
   videos: VideoItem[];
+};
+
+export type PlaylistDiscoveryResult = {
+  videos: VideoItem[];
+  nextPageToken: string | null;
 };
 
 type ApiErrorPayload = {
@@ -71,6 +77,20 @@ export async function fetchLatestVideos(
     })
   );
   return data.videos ?? [];
+}
+
+export async function fetchPlaylistDiscoveryPage(
+  uploadsPlaylistId: string,
+  pageToken = "",
+  limit = 50
+): Promise<PlaylistDiscoveryResult> {
+  return fetchJson<PlaylistDiscoveryResult>(
+    buildInternalUrl("/api/youtube/discover-by-playlist", {
+      uploadsPlaylistId,
+      pageToken,
+      limit: Math.min(limit, 50)
+    })
+  );
 }
 
 export async function getLatestVideosByHandle(
