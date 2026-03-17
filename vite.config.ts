@@ -5,6 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { execSync } from "node:child_process";
 import {
   fetchLatestVideos,
+  fetchVideoStatsByVideoIds,
   fetchViewCountsByVideoIds,
   getLatestVideosAndChannelByHandle,
   normalizeHandle,
@@ -120,20 +121,32 @@ export default defineConfig(({ mode }) => {
                 (method === "POST" || method === "GET")
               ) {
                 let videoIds: string[] = [];
+                let includeDuration = method === "GET";
                 if (method === "POST") {
                   const rawBody = await readRequestBody(req);
-                  const parsed = rawBody ? (JSON.parse(rawBody) as { videoIds?: unknown }) : {};
+                  const parsed = rawBody
+                    ? (JSON.parse(rawBody) as {
+                        videoIds?: unknown;
+                        includeDuration?: unknown;
+                      })
+                    : {};
                   videoIds = Array.isArray(parsed.videoIds)
                     ? parsed.videoIds.filter((id): id is string => typeof id === "string")
                     : [];
+                  includeDuration =
+                    parsed.includeDuration === true || parsed.includeDuration === "true";
                 } else {
                   videoIds = (url.searchParams.get("videoIds") ?? "")
                     .split(",")
                     .map((id) => id.trim())
                     .filter(Boolean);
+                  includeDuration =
+                    includeDuration || url.searchParams.get("includeDuration") === "true";
                 }
 
-                const data = await fetchViewCountsByVideoIds(videoIds);
+                const data = includeDuration
+                  ? await fetchVideoStatsByVideoIds(videoIds)
+                  : await fetchViewCountsByVideoIds(videoIds);
                 sendJson(res, 200, data);
                 return;
               }

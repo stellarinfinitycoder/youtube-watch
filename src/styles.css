@@ -874,8 +874,31 @@ body {
   gap: 8px;
 }
 
+.video-meta-btn {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.video-meta-btn:disabled {
+  cursor: progress;
+}
+
+.video-meta-row .video-meta-btn {
+  flex: 1;
+  min-width: 0;
+}
+
 .video-meta-row .video-meta.ant-typography {
   flex: 1;
+}
+
+.video-meta-btn:hover .video-meta.ant-typography,
+.video-meta-btn:focus-visible .video-meta.ant-typography {
+  color: var(--text) !important;
 }
 
 .video-watch-btn.ant-btn {

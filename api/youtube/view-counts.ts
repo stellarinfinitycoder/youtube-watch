@@ -61,7 +61,7 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    const includeDuration = parseIncludeDuration(req);
+    const includeDuration = req.method === "GET" ? true : parseIncludeDuration(req);
     const data = includeDuration
       ? await fetchVideoStatsByVideoIds(videoIds)
       : await fetchViewCountsByVideoIds(videoIds);

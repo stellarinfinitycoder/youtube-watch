@@ -12,7 +12,8 @@ import {
   Skeleton,
   Space,
   Spin,
-  Typography
+  Typography,
+  message
 } from "antd";
 import type { FetchState } from "./types/youtube";
 import {
@@ -25,7 +26,7 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "160326183040";
+const CHANGE_STAMP = "170326103457";
 const VIEWCOUNT_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
@@ -1187,6 +1188,9 @@ function App() {
   const [isDeleteBoardModalOpen, setIsDeleteBoardModalOpen] = useState(false);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   const [errorLogs, setErrorLogs] = useState<ErrorLogEntry[]>(readStoredErrorLogs);
+  const [videoStatsBackfillInFlight, setVideoStatsBackfillInFlight] = useState<string[]>(
+    []
+  );
   const [bulkInput, setBulkInput] = useState("");
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
@@ -2103,6 +2107,88 @@ function App() {
         watchedVideos: next
       };
     });
+  };
+
+  const backfillVideoStats = async (videoId: string): Promise<void> => {
+    if (videoStatsBackfillInFlight.includes(videoId)) {
+      return;
+    }
+    const feedbackKey = `video-meta-refresh-${videoId}`;
+    const previousVideo = boards
+      .flatMap((board) => board.columns)
+      .flatMap((column) => column.videos)
+      .find((video) => video.videoId === videoId);
+    setVideoStatsBackfillInFlight((prev) => [...prev, videoId]);
+    message.open({
+      key: feedbackKey,
+      type: "loading",
+      content: "REFRESHING METADATA",
+      duration: 0
+    });
+    try {
+      const stats = await fetchVideoStatsByVideoIds([videoId]);
+      const nextStats = stats[videoId];
+      if (!nextStats) {
+        message.open({
+          key: feedbackKey,
+          type: "warning",
+          content: "NO METADATA FOUND",
+          duration: 2
+        });
+        return;
+      }
+      const refreshedAt = Date.now();
+      const nextDurationSeconds =
+        typeof previousVideo?.durationSeconds === "number"
+          ? previousVideo.durationSeconds
+          : nextStats.durationSeconds ?? null;
+      const nextViewCount = nextStats.viewCount ?? previousVideo?.viewCount;
+      setBoards((previous) =>
+        previous.map((board) => ({
+          ...board,
+          columns: board.columns.map((column) => ({
+            ...column,
+            videos: column.videos.map((video) =>
+              video.videoId !== videoId
+                ? video
+                : {
+                    ...video,
+                    viewCount: nextViewCount ?? video.viewCount,
+                    durationSeconds: nextDurationSeconds
+                  }
+            )
+          })),
+          viewCountRefreshedAtByVideoId: {
+            ...board.viewCountRefreshedAtByVideoId,
+            [videoId]: refreshedAt
+          }
+        }))
+      );
+      const didChange =
+        previousVideo?.viewCount !== nextViewCount ||
+        previousVideo?.durationSeconds !== nextDurationSeconds;
+      message.open({
+        key: feedbackKey,
+        type: didChange ? "success" : typeof nextStats.durationSeconds === "number" ? "info" : "warning",
+        content: didChange
+          ? "METADATA UPDATED"
+          : typeof nextStats.durationSeconds === "number"
+            ? "METADATA ALREADY CURRENT"
+            : "DURATION NOT RETURNED",
+        duration: 2
+      });
+    } catch (error) {
+      const messageText =
+        error instanceof Error && error.message ? error.message.toUpperCase() : "METADATA REFRESH FAILED";
+      message.open({
+        key: feedbackKey,
+        type: "error",
+        content: messageText,
+        duration: 3
+      });
+    } finally {
+      setVideoStatsBackfillInFlight((prev) => prev.filter((item) => item !== videoId));
+    }
   };
 
   const openBulkWatchColumnAction = (
@@ -3262,11 +3348,25 @@ function App() {
                       dataSource={filteredVideos}
                       renderItem={(video) => {
                         const isWatched = watchedVideos[video.videoId] === true;
+                        const isMetaRefreshInFlight = videoStatsBackfillInFlight.includes(
+                          video.videoId
+                        );
                         return (
                           <List.Item key={video.videoId} className="video-tile-item">
                             <Space direction="vertical" size="small" className="full-width">
                               <div className="video-meta-row">
-                                <Text className="video-meta">{formatVideoMeta(video)}</Text>
+                                <button
+                                  type="button"
+                                  className="video-meta-btn"
+                                  onClick={() => void backfillVideoStats(video.videoId)}
+                                  aria-label={`Refresh metadata for ${video.title}`}
+                                  disabled={isMetaRefreshInFlight}
+                                >
+                                  <Text className="video-meta">
+                                    {formatVideoMeta(video)}
+                                    {isMetaRefreshInFlight ? " | ..." : ""}
+                                  </Text>
+                                </button>
                                 {isSavedBoardActive ? (
                                   <>
                                     {column.savedSortMode === "manual" ? (

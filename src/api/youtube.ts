@@ -120,13 +120,13 @@ export async function fetchVideoStatsByVideoIds(
   }
 
   return fetchJson<VideoStatsMap>(
-    buildInternalUrl("/api/youtube/view-counts", { includeDuration: "true" }),
+    buildInternalUrl("/api/youtube/view-counts", {
+      includeDuration: "true",
+      videoIds: uniqueIds.join(","),
+      ts: Date.now()
+    }),
     {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ videoIds: uniqueIds, includeDuration: true })
+      cache: "no-store"
     }
   );
 }
