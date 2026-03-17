@@ -12,8 +12,7 @@ import {
   Skeleton,
   Space,
   Spin,
-  Typography,
-  message
+  Typography
 } from "antd";
 import type { FetchState } from "./types/youtube";
 import {
@@ -26,7 +25,7 @@ import type { VideoItem } from "./types/youtube";
 const { Title, Text } = Typography;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "170326103457";
+const CHANGE_STAMP = "170326110027";
 const VIEWCOUNT_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
@@ -234,6 +233,11 @@ type RemoveAllSavedColumnAction = {
   columnId: string;
   listName: string;
   videoCount: number;
+};
+
+type InlineMetaFeedback = {
+  kind: "info" | "success" | "warning" | "error";
+  text: string;
 };
 
 const NEW_BOARD_OPTION_VALUE = "__new__";
@@ -1148,6 +1152,7 @@ function App() {
   const fallbackIframeRef = useRef<HTMLIFrameElement | null>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerReadyRef = useRef(false);
+  const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
   const [playerHostNode, setPlayerHostNode] = useState<HTMLDivElement | null>(null);
   const initialBoardsState = getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
@@ -1191,6 +1196,9 @@ function App() {
   const [videoStatsBackfillInFlight, setVideoStatsBackfillInFlight] = useState<string[]>(
     []
   );
+  const [videoMetaFeedbackById, setVideoMetaFeedbackById] = useState<
+    Record<string, InlineMetaFeedback>
+  >({});
   const [bulkInput, setBulkInput] = useState("");
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
@@ -1297,6 +1305,15 @@ function App() {
   useEffect(() => {
     setPlaybackRate(preferredPlaybackRate);
   }, [preferredPlaybackRate]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(videoMetaFeedbackTimeoutsRef.current).forEach((timeoutId) => {
+        window.clearTimeout(timeoutId);
+      });
+      videoMetaFeedbackTimeoutsRef.current = {};
+    };
+  }, []);
 
   useEffect(() => {
     const cutoffTime = getWindowCutoffTime(STORAGE_VIDEO_WINDOW_DAYS);
@@ -2113,28 +2130,43 @@ function App() {
     if (videoStatsBackfillInFlight.includes(videoId)) {
       return;
     }
-    const feedbackKey = `video-meta-refresh-${videoId}`;
+    const setInlineMetaFeedback = (
+      kind: InlineMetaFeedback["kind"],
+      text: string,
+      durationMs?: number
+    ): void => {
+      const existingTimeout = videoMetaFeedbackTimeoutsRef.current[videoId];
+      if (existingTimeout) {
+        window.clearTimeout(existingTimeout);
+      }
+      setVideoMetaFeedbackById((previous) => ({
+        ...previous,
+        [videoId]: { kind, text }
+      }));
+      if (!durationMs || durationMs <= 0) {
+        delete videoMetaFeedbackTimeoutsRef.current[videoId];
+        return;
+      }
+      videoMetaFeedbackTimeoutsRef.current[videoId] = window.setTimeout(() => {
+        setVideoMetaFeedbackById((previous) => {
+          const next = { ...previous };
+          delete next[videoId];
+          return next;
+        });
+        delete videoMetaFeedbackTimeoutsRef.current[videoId];
+      }, durationMs);
+    };
     const previousVideo = boards
       .flatMap((board) => board.columns)
       .flatMap((column) => column.videos)
       .find((video) => video.videoId === videoId);
     setVideoStatsBackfillInFlight((prev) => [...prev, videoId]);
-    message.open({
-      key: feedbackKey,
-      type: "loading",
-      content: "REFRESHING METADATA",
-      duration: 0
-    });
+    setInlineMetaFeedback("info", "FETCHING", 0);
     try {
       const stats = await fetchVideoStatsByVideoIds([videoId]);
       const nextStats = stats[videoId];
       if (!nextStats) {
-        message.open({
-          key: feedbackKey,
-          type: "warning",
-          content: "NO METADATA FOUND",
-          duration: 2
-        });
+        setInlineMetaFeedback("error", "ERROR: NO DATA", 2000);
         return;
       }
       const refreshedAt = Date.now();
@@ -2167,25 +2199,21 @@ function App() {
       const didChange =
         previousVideo?.viewCount !== nextViewCount ||
         previousVideo?.durationSeconds !== nextDurationSeconds;
-      message.open({
-        key: feedbackKey,
-        type: didChange ? "success" : typeof nextStats.durationSeconds === "number" ? "info" : "warning",
-        content: didChange
-          ? "METADATA UPDATED"
+      setInlineMetaFeedback(
+        didChange ? "success" : typeof nextStats.durationSeconds === "number" ? "info" : "error",
+        didChange
+          ? "UPDATED"
           : typeof nextStats.durationSeconds === "number"
-            ? "METADATA ALREADY CURRENT"
-            : "DURATION NOT RETURNED",
-        duration: 2
-      });
+            ? "NO CHANGE"
+            : "NO DURATION",
+        2000
+      );
     } catch (error) {
       const messageText =
-        error instanceof Error && error.message ? error.message.toUpperCase() : "METADATA REFRESH FAILED";
-      message.open({
-        key: feedbackKey,
-        type: "error",
-        content: messageText,
-        duration: 3
-      });
+        error instanceof Error && error.message
+          ? `ERROR: ${error.message.toUpperCase()}`
+          : "ERROR: REFRESH FAILED";
+      setInlineMetaFeedback("error", messageText, 3000);
     } finally {
       setVideoStatsBackfillInFlight((prev) => prev.filter((item) => item !== videoId));
     }
@@ -3351,6 +3379,7 @@ function App() {
                         const isMetaRefreshInFlight = videoStatsBackfillInFlight.includes(
                           video.videoId
                         );
+                        const metaFeedback = videoMetaFeedbackById[video.videoId];
                         return (
                           <List.Item key={video.videoId} className="video-tile-item">
                             <Space direction="vertical" size="small" className="full-width">
@@ -3363,8 +3392,19 @@ function App() {
                                   disabled={isMetaRefreshInFlight}
                                 >
                                   <Text className="video-meta">
-                                    {formatVideoMeta(video)}
-                                    {isMetaRefreshInFlight ? " | ..." : ""}
+                                    {metaFeedback ? (
+                                      <span
+                                        className={`video-meta-feedback is-${metaFeedback.kind}`}
+                                      >
+                                        {metaFeedback.text}
+                                      </span>
+                                    ) : isMetaRefreshInFlight ? (
+                                      <span className="video-meta-feedback is-info">
+                                        FETCHING
+                                      </span>
+                                    ) : (
+                                      formatVideoMeta(video)
+                                    )}
                                   </Text>
                                 </button>
                                 {isSavedBoardActive ? (

@@ -896,6 +896,22 @@ body {
   flex: 1;
 }
 
+.video-meta-feedback {
+  color: var(--muted);
+}
+
+.video-meta-feedback.is-info {
+  color: var(--muted);
+}
+
+.video-meta-feedback.is-success {
+  color: var(--green);
+}
+
+.video-meta-feedback.is-error {
+  color: rgba(255, 92, 92, 0.8);
+}
+
 .video-meta-btn:hover .video-meta.ant-typography,
 .video-meta-btn:focus-visible .video-meta.ant-typography {
   color: var(--text) !important;
