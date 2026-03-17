@@ -145,6 +145,10 @@ body {
   min-width: 104px;
 }
 
+.video-duration-select {
+  min-width: 128px;
+}
+
 .board-name-btn.ant-btn {
   margin-left: auto;
   height: 32px;
@@ -323,20 +327,24 @@ body {
   order: 3;
 }
 
-.columns-nav [aria-label="Default playback speed"] {
+.columns-nav [aria-label="Video duration filter"] {
   order: 4;
 }
 
-.columns-nav [aria-label="Fetch all channels"] {
+.columns-nav [aria-label="Default playback speed"] {
   order: 5;
 }
 
-.columns-nav [aria-label="Play all videos"] {
+.columns-nav [aria-label="Fetch all channels"] {
   order: 6;
 }
 
-.columns-nav [aria-label="Bulk add channels"] {
+.columns-nav [aria-label="Play all videos"] {
   order: 7;
+}
+
+.columns-nav [aria-label="Bulk add channels"] {
+  order: 8;
 }
 
 .columns-nav [aria-label="Fetch all channels"],
