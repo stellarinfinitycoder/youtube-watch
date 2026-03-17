@@ -298,20 +298,20 @@ body {
 }
 
 .columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to first"] {
-  order: 9;
+  order: 10;
   margin-left: auto;
 }
 
 .columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns left"] {
-  order: 10;
-}
-
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] {
   order: 11;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] {
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] {
   order: 12;
+}
+
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] {
+  order: 13;
 }
 
 .columns-nav [aria-label="Board selector"] {

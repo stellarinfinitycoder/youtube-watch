@@ -24,6 +24,13 @@ type ApiErrorPayload = {
   error?: string;
 };
 
+type ApiRequestListener = (meta: { path: string; method: string }) => void;
+let apiRequestListener: ApiRequestListener | null = null;
+
+export function setApiRequestListener(listener: ApiRequestListener | null): void {
+  apiRequestListener = listener;
+}
+
 function buildInternalUrl(path: string, params?: Record<string, string | number>): string {
   const url = new URL(path, window.location.origin);
   Object.entries(params ?? {}).forEach(([key, value]) => {
@@ -33,6 +40,11 @@ function buildInternalUrl(path: string, params?: Record<string, string | number>
 }
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
+  const url = new URL(input, window.location.origin);
+  apiRequestListener?.({
+    path: url.pathname,
+    method: (init?.method ?? "GET").toUpperCase()
+  });
   const response = await fetch(input, init);
   const payload = (await response.json().catch(() => ({}))) as ApiErrorPayload;
 

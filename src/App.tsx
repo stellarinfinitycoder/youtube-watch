@@ -18,14 +18,15 @@ import type { FetchState } from "./types/youtube";
 import {
   fetchPlaylistDiscoveryPage,
   fetchVideoStatsByVideoIds,
-  resolveChannelByHandleWithThumbnail
+  resolveChannelByHandleWithThumbnail,
+  setApiRequestListener
 } from "./api/youtube";
 import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
 
 const { Title, Text } = Typography;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "170326113804";
+const CHANGE_STAMP = "170326120034";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -35,6 +36,7 @@ const BUILD_INFO_LABEL = CHANGE_STAMP;
 const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
 const ERROR_LOGS_STORAGE_KEY = "youtube-watch:error-logs:v1";
+const QUOTA_ESTIMATE_STORAGE_KEY = "youtube-watch:quota-estimate:v1";
 const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 const LEGACY_WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
@@ -262,6 +264,12 @@ type RemoveAllSavedColumnAction = {
 type InlineMetaFeedback = {
   kind: "info" | "success" | "warning" | "error";
   text: string;
+};
+
+type QuotaEstimateState = {
+  dayKey: string;
+  todayUnits: number;
+  lastActionUnits: number;
 };
 
 const NEW_BOARD_OPTION_VALUE = "__new__";
@@ -1249,6 +1257,65 @@ function readStoredErrorLogs(): ErrorLogEntry[] {
   }
 }
 
+function getPacificDayKey(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(now);
+}
+
+function readStoredQuotaEstimate(): QuotaEstimateState {
+  const initial: QuotaEstimateState = {
+    dayKey: getPacificDayKey(),
+    todayUnits: 0,
+    lastActionUnits: 0
+  };
+  if (typeof window === "undefined") {
+    return initial;
+  }
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.getItem !== "function") {
+      return initial;
+    }
+    const raw = storage.getItem(QUOTA_ESTIMATE_STORAGE_KEY);
+    if (!raw) {
+      return initial;
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") {
+      return initial;
+    }
+    const candidate = parsed as {
+      dayKey?: unknown;
+      todayUnits?: unknown;
+      lastActionUnits?: unknown;
+    };
+    const dayKey =
+      typeof candidate.dayKey === "string" ? candidate.dayKey : initial.dayKey;
+    const todayUnits =
+      typeof candidate.todayUnits === "number" && Number.isFinite(candidate.todayUnits)
+        ? Math.max(0, Math.floor(candidate.todayUnits))
+        : 0;
+    const lastActionUnits =
+      typeof candidate.lastActionUnits === "number" && Number.isFinite(candidate.lastActionUnits)
+        ? Math.max(0, Math.floor(candidate.lastActionUnits))
+        : 0;
+    if (dayKey !== initial.dayKey) {
+      return initial;
+    }
+    return {
+      dayKey,
+      todayUnits,
+      lastActionUnits
+    };
+  } catch {
+    return initial;
+  }
+}
+
 function App() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -1258,6 +1325,7 @@ function App() {
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerReadyRef = useRef(false);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
+  const quotaActionStartsRef = useRef<Record<string, number>>({});
   const [playerHostNode, setPlayerHostNode] = useState<HTMLDivElement | null>(null);
   const initialBoardsState = getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
@@ -1298,6 +1366,7 @@ function App() {
   const [isDeleteBoardModalOpen, setIsDeleteBoardModalOpen] = useState(false);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   const [errorLogs, setErrorLogs] = useState<ErrorLogEntry[]>(readStoredErrorLogs);
+  const [quotaEstimate, setQuotaEstimate] = useState<QuotaEstimateState>(readStoredQuotaEstimate);
   const [videoStatsBackfillInFlight, setVideoStatsBackfillInFlight] = useState<string[]>(
     []
   );
@@ -1396,6 +1465,7 @@ function App() {
     ? normalizeVideoWindowFilterForKind(activeBoard.kind, activeBoard.videoWindowDays)
     : DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
+  const quotaEstimateText = `LAST Q: ${quotaEstimate.lastActionUnits} | TODAY: ${quotaEstimate.todayUnits}`;
 
   useEffect(() => {
     setBoards((previous) => ensureSavedBoard(previous));
@@ -1422,6 +1492,40 @@ function App() {
       videoMetaFeedbackTimeoutsRef.current = {};
     };
   }, []);
+
+  useEffect(() => {
+    setApiRequestListener(() => {
+      setQuotaEstimate((previous) => {
+        const todayKey = getPacificDayKey();
+        if (previous.dayKey !== todayKey) {
+          return {
+            dayKey: todayKey,
+            todayUnits: 1,
+            lastActionUnits: previous.lastActionUnits
+          };
+        }
+        return {
+          ...previous,
+          todayUnits: previous.todayUnits + 1
+        };
+      });
+    });
+    return () => {
+      setApiRequestListener(null);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const storage = window.localStorage;
+      storage.setItem(QUOTA_ESTIMATE_STORAGE_KEY, JSON.stringify(quotaEstimate));
+    } catch {
+      // Ignore local storage write errors.
+    }
+  }, [quotaEstimate]);
 
   useEffect(() => {
     const cutoffTime = getWindowCutoffTime(STORAGE_VIDEO_WINDOW_DAYS);
@@ -1733,6 +1837,24 @@ function App() {
     }));
   };
 
+  const beginQuotaTrackedAction = (): string => {
+    const actionId = `quota-action-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    quotaActionStartsRef.current[actionId] = quotaEstimate.todayUnits;
+    return actionId;
+  };
+
+  const endQuotaTrackedAction = (actionId: string): void => {
+    const startUnits = quotaActionStartsRef.current[actionId];
+    delete quotaActionStartsRef.current[actionId];
+    if (typeof startUnits !== "number") {
+      return;
+    }
+    setQuotaEstimate((previous) => ({
+      ...previous,
+      lastActionUnits: Math.max(0, previous.todayUnits - startUnits)
+    }));
+  };
+
   const appendFetchErrorLog = (
     boardId: string,
     columnId: string,
@@ -1765,7 +1887,9 @@ function App() {
     handle: string
   ): Promise<void> => {
     const boardState = boards.find((board) => board.id === boardId);
+    const quotaActionId = beginQuotaTrackedAction();
     if (boardState?.kind === "saved") {
+      endQuotaTrackedAction(quotaActionId);
       return;
     }
 
@@ -1903,6 +2027,8 @@ function App() {
         loading: false,
         error: message
       }));
+    } finally {
+      endQuotaTrackedAction(quotaActionId);
     }
   };
 
@@ -2171,6 +2297,7 @@ function App() {
     if (videoStatsBackfillInFlight.includes(videoId)) {
       return;
     }
+    const quotaActionId = beginQuotaTrackedAction();
     const setInlineMetaFeedback = (
       kind: InlineMetaFeedback["kind"],
       text: string,
@@ -2257,6 +2384,7 @@ function App() {
       setInlineMetaFeedback("error", messageText, 3000);
     } finally {
       setVideoStatsBackfillInFlight((prev) => prev.filter((item) => item !== videoId));
+      endQuotaTrackedAction(quotaActionId);
     }
   };
 
@@ -3641,8 +3769,8 @@ function App() {
           <span className="btn-icon btn-icon-logs" aria-hidden />
         </Button>
         <Text className="backup-limits-text">
-          FETCH PAGE SIZE: 50 VIDEOS | MAX VIDEO AGE: 90 DAYS | MAX SAVED VIDEO AGE: UNLIMITED |{" "}
-          {BUILD_INFO_LABEL}
+          {quotaEstimateText} | FETCH PAGE SIZE: 50 VIDEOS | MAX VIDEO AGE: 90 DAYS | MAX SAVED
+          VIDEO AGE: UNLIMITED | {BUILD_INFO_LABEL}
         </Text>
         <input
           ref={importInputRef}
