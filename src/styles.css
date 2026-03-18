@@ -315,28 +315,28 @@ body {
 }
 
 .columns-nav [aria-label="Board selector"] {
-  order: 1;
+  order: 2;
 }
 
 .columns-nav [aria-label="Video filter"] {
-  order: 2;
+  order: 3;
   margin-left: 0;
 }
 
 .columns-nav [aria-label="Video age window"] {
-  order: 3;
-}
-
-.columns-nav [aria-label="Video duration filter"] {
   order: 4;
 }
 
-.columns-nav [aria-label="Default playback speed"] {
+.columns-nav [aria-label="Video duration filter"] {
   order: 5;
 }
 
-.columns-nav [aria-label="Fetch all channels"] {
+.columns-nav [aria-label="Default playback speed"] {
   order: 6;
+}
+
+.columns-nav [aria-label="Fetch all channels"] {
+  order: 1;
 }
 
 .columns-nav [aria-label="Play all videos"] {
