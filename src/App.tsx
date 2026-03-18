@@ -3519,6 +3519,16 @@ function App() {
               <div className="speed-controls-left">
                 <Button
                   htmlType="button"
+                  className={`column-move-btn link-copy-btn ${
+                    copiedLinkVideoId === activeVideo.videoId ? "is-copied" : ""
+                  }`}
+                  aria-label={`Copy link for ${activeVideo.title}`}
+                  onClick={() => void copyVideoLink(activeVideo)}
+                >
+                  <span className="btn-icon btn-icon-link" aria-hidden />
+                </Button>
+                <Button
+                  htmlType="button"
                   className="video-watch-btn modal-save-btn"
                   aria-label={`Save ${activeVideo.title}`}
                   onClick={() => openSaveVideoModal(activeVideo)}
