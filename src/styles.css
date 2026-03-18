@@ -161,7 +161,7 @@ body {
 }
 
 .board-name-btn.ant-btn:hover,
-.board-name-btn.ant-btn:focus {
+.board-name-btn.ant-btn:focus-visible {
   background: transparent !important;
   color: var(--text-strong) !important;
 }
@@ -606,8 +606,54 @@ body {
   mask: url("/svg/btn-logs.svg") center / contain no-repeat;
 }
 
+.btn-icon-link {
+  -webkit-mask: url("/svg/btn-link.svg") center / contain no-repeat;
+  mask: url("/svg/btn-link.svg") center / contain no-repeat;
+}
+
 .column-move-btn.ant-btn[disabled] {
   opacity: 0.45;
+}
+
+.link-copy-btn.ant-btn:hover:not(:disabled),
+.link-copy-btn.ant-btn:focus-visible:not(:disabled) {
+  opacity: 0.95;
+  transform: translateY(-1px);
+}
+
+.link-copy-btn.ant-btn.is-copied {
+  animation: link-copy-flash 1s ease-out;
+}
+
+.link-copy-btn.ant-btn.is-copied .btn-icon-link {
+  background: var(--amber) !important;
+}
+
+@keyframes link-copy-flash {
+  0% {
+    border-color: var(--amber-soft);
+    background: #0b0b0d;
+    color: var(--text);
+    box-shadow: none;
+  }
+  25% {
+    border-color: var(--amber);
+    background: var(--amber);
+    color: #18110a;
+    box-shadow: 0 0 0 2px rgba(255, 143, 31, 0.3);
+  }
+  55% {
+    border-color: var(--amber);
+    background: #3a250f;
+    color: var(--amber);
+    box-shadow: 0 0 0 1px rgba(255, 143, 31, 0.2);
+  }
+  100% {
+    border-color: var(--amber-soft);
+    background: #0b0b0d;
+    color: var(--text);
+    box-shadow: none;
+  }
 }
 
 .column-header {
@@ -675,7 +721,7 @@ body {
 }
 
 .remove-column-btn.ant-btn:hover,
-.remove-column-btn.ant-btn:focus {
+.remove-column-btn.ant-btn:focus-visible {
   border-color: rgba(204, 106, 106, 0.62) !important;
   color: rgba(204, 106, 106, 0.74) !important;
   background: rgba(204, 106, 106, 0.08) !important;
@@ -763,9 +809,9 @@ body {
 }
 
 .ant-btn-default:hover,
-.ant-btn-default:focus,
+.ant-btn-default:focus-visible,
 .ant-btn-primary:hover,
-.ant-btn-primary:focus {
+.ant-btn-primary:focus-visible {
   opacity: 0.95;
   transform: translateY(-1px);
 }
@@ -1067,7 +1113,7 @@ body {
 }
 
 .board-delete-btn.ant-btn.ant-btn-dangerous:hover,
-.board-delete-btn.ant-btn.ant-btn-dangerous:focus {
+.board-delete-btn.ant-btn.ant-btn-dangerous:focus-visible {
   background: rgba(204, 106, 106, 0.08) !important;
   border-color: rgba(204, 106, 106, 0.62) !important;
   color: rgba(204, 106, 106, 0.74) !important;

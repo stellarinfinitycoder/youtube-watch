@@ -25,7 +25,7 @@ import type { VideoItem } from "./types/youtube";
 
 const { Title, Text } = Typography;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "180326083935";
+const CHANGE_STAMP = "180326090731";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -1346,6 +1346,7 @@ function App() {
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerReadyRef = useRef(false);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
+  const linkCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const [playerHostNode, setPlayerHostNode] = useState<HTMLDivElement | null>(null);
   const initialBoardsState = getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
@@ -1400,6 +1401,7 @@ function App() {
   const [videoMetaFeedbackById, setVideoMetaFeedbackById] = useState<
     Record<string, InlineMetaFeedback>
   >({});
+  const [copiedLinkVideoId, setCopiedLinkVideoId] = useState<string | null>(null);
   const [bulkInput, setBulkInput] = useState("");
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
@@ -1523,6 +1525,9 @@ function App() {
         window.clearTimeout(timeoutId);
       });
       videoMetaFeedbackTimeoutsRef.current = {};
+      if (linkCopyFeedbackTimeoutRef.current) {
+        window.clearTimeout(linkCopyFeedbackTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -2452,6 +2457,35 @@ function App() {
       setVideoStatsBackfillInFlight((prev) => prev.filter((item) => item !== videoId));
       recordEstimatedQuotaUsage(estimatedQuotaUnits);
     }
+  };
+
+  const copyVideoLink = async (video: VideoItem): Promise<void> => {
+    const text = video.videoUrl;
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard API unavailable.");
+      }
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "true");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+    setCopiedLinkVideoId(video.videoId);
+    if (linkCopyFeedbackTimeoutRef.current) {
+      window.clearTimeout(linkCopyFeedbackTimeoutRef.current);
+    }
+    linkCopyFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setCopiedLinkVideoId((previous) => (previous === video.videoId ? null : previous));
+      linkCopyFeedbackTimeoutRef.current = null;
+    }, 1000);
   };
 
   const openBulkWatchColumnAction = (
@@ -3731,6 +3765,16 @@ function App() {
                                   </>
                                 ) : (
                                   <>
+                                    <Button
+                                      htmlType="button"
+                                      className={`column-move-btn link-copy-btn ${
+                                        copiedLinkVideoId === video.videoId ? "is-copied" : ""
+                                      }`}
+                                      aria-label={`Copy link for ${video.title}`}
+                                      onClick={() => void copyVideoLink(video)}
+                                    >
+                                      <span className="btn-icon btn-icon-link" aria-hidden />
+                                    </Button>
                                     <Button
                                       htmlType="button"
                                       className="column-move-btn"
