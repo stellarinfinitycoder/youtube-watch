@@ -12,6 +12,7 @@ import {
   Skeleton,
   Space,
   Spin,
+  Tooltip,
   Typography
 } from "antd";
 import type { FetchState } from "./types/youtube";
@@ -1153,6 +1154,43 @@ function formatPublishedDate(value: string): string {
   return `${dd}.${mm}`;
 }
 
+function parseStoredLastFetchAt(value: string): number | null {
+  const direct = Date.parse(value);
+  if (Number.isFinite(direct)) {
+    return direct;
+  }
+  const match = value.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/
+  );
+  if (!match) {
+    return null;
+  }
+  const [, dayRaw, monthRaw, yearRaw, hourRaw, minuteRaw, secondRaw] = match;
+  const day = Number(dayRaw);
+  const month = Number(monthRaw);
+  const year = Number(yearRaw);
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  const second = Number(secondRaw ?? "0");
+  const parsed = new Date(year, month - 1, day, hour, minute, second).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatLastFetchTooltipLabel(timestamp: number | null): string {
+  if (timestamp === null) {
+    return "-";
+  }
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+  return `${dd}.${mm} ${hh}:${min}`;
+}
+
 function formatDuration(durationSeconds: number | null | undefined): string {
   if (typeof durationSeconds !== "number" || !Number.isFinite(durationSeconds)) {
     return "--:--";
@@ -1560,6 +1598,23 @@ function App() {
     : DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
   const quotaEstimateText = `LAST Q: ${quotaEstimate.lastActionUnits} | TODAY: ${quotaEstimate.todayUnits}`;
+  const topbarLastFetchLabel = activeBoard
+    ? formatLastFetchTooltipLabel(
+        activeBoard.columns.reduce<number | null>((latest, column) => {
+          if (!column.lastFetchAt) {
+            return latest;
+          }
+          const parsed = parseStoredLastFetchAt(column.lastFetchAt);
+          if (parsed === null) {
+            return latest;
+          }
+          if (latest === null || parsed > latest) {
+            return parsed;
+          }
+          return latest;
+        }, null)
+      )
+    : "-";
   const shownVideosTotal = activeBoard
     ? (() => {
         const now = Date.now();
@@ -3244,16 +3299,27 @@ function App() {
           alt="Logo"
           className="top-bar-logo"
         />
-        <Button
-          type="primary"
-          htmlType="button"
-          onClick={fetchAllColumns}
-          aria-label="Fetch all channels"
-          disabled={isSavedBoardActive}
-          className="nav-btn"
+        <Tooltip
+          title={
+            <>
+              <div>Fetch all new videos for all channels.</div>
+              <div>Last: {topbarLastFetchLabel}</div>
+            </>
+          }
+          placement="bottom"
+          overlayClassName="fetch-all-tooltip"
         >
-          <span className="btn-icon btn-icon-fetch" aria-hidden />
-        </Button>
+          <Button
+            type="primary"
+            htmlType="button"
+            onClick={fetchAllColumns}
+            aria-label="Fetch all channels"
+            disabled={isSavedBoardActive}
+            className="nav-btn"
+          >
+            <span className="btn-icon btn-icon-fetch" aria-hidden />
+          </Button>
+        </Tooltip>
         <Select<string>
           value={activeBoard?.id}
           onChange={handleBoardSelectChange}
@@ -4053,8 +4119,8 @@ function App() {
           BD
         </Button>
         <Text className="backup-limits-text">
-          {quotaEstimateText} | FETCH PAGE SIZE: 50 VIDEOS | MAX VIDEO AGE: 90 DAYS | MAX SAVED
-          VIDEO AGE: UNLIMITED | {BUILD_INFO_LABEL}
+          {quotaEstimateText} | MAX VIDEO AGE: 90 DAYS | MAX SAVED VIDEO AGE: UNLIMITED |{" "}
+          {BUILD_INFO_LABEL}
         </Text>
         <input
           ref={importInputRef}

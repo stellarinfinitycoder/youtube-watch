@@ -274,6 +274,14 @@ body {
   opacity: 0.92;
 }
 
+.fetch-all-tooltip .ant-tooltip-inner {
+  min-width: 280px;
+  font-size: 10px;
+  color: #c08f56 !important;
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  text-transform: uppercase;
+}
+
 .scroll-btn.ant-btn {
   width: 32px;
   min-width: 32px;
