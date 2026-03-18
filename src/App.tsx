@@ -25,7 +25,7 @@ import type { VideoItem } from "./types/youtube";
 
 const { Title, Text } = Typography;
 const DEFAULT_COLUMN_COUNT = 3;
-const CHANGE_STAMP = "170326125340";
+const CHANGE_STAMP = "180326083935";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
@@ -3202,7 +3202,7 @@ function App() {
             : CHANNEL_VIDEO_WINDOW_OPTIONS
           ).map((days) => ({
             value: days,
-            label: days === "all" ? "LAST ALL" : `LAST ${days}D`
+            label: days === "all" ? "ALL" : `LAST ${days}D`
           }))}
         />
         <Select<VideoDurationFilter>
@@ -3489,7 +3489,7 @@ function App() {
                           aria-label={`Remove all videos from list ${index + 1}`}
                           className="remove-column-btn"
                         >
-                          <span className="btn-icon btn-icon-remove-all" aria-hidden />
+                          <span className="btn-icon btn-icon-remove" aria-hidden />
                         </Button>
                       ) : null}
                       {!isSavedBoardActive ? (
@@ -3526,7 +3526,7 @@ function App() {
                           {videoFilter === "watched" ? (
                             <span className="btn-icon btn-icon-undo" aria-hidden />
                           ) : (
-                            <span className="btn-icon btn-icon-check-all" aria-hidden />
+                            <span className="btn-icon btn-icon-check" aria-hidden />
                           )}
                         </Button>
                       ) : null}
