@@ -1145,13 +1145,12 @@ function formatViewCount(viewCount: number | null): string {
 function formatPublishedDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "--.--.--";
+    return "--.--";
   }
 
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yy = String(date.getFullYear()).slice(-2);
-  return `${dd}.${mm}.${yy}`;
+  return `${dd}.${mm}`;
 }
 
 function formatDuration(durationSeconds: number | null | undefined): string {
@@ -1228,7 +1227,7 @@ function collectBoardMissingDurationNewVideoIds(board: BoardState): string[] {
 }
 
 function formatVideoMeta(video: VideoItem): string {
-  const dateLabel = video.publishedAt ? formatPublishedDate(video.publishedAt) : "--.--.--";
+  const dateLabel = video.publishedAt ? formatPublishedDate(video.publishedAt) : "--.--";
   return `${dateLabel} | ${formatDuration(video.durationSeconds)} | ${formatViewCount(video.viewCount)}`;
 }
 
@@ -3804,6 +3803,16 @@ function App() {
                                         </Button>
                                       </>
                                     ) : null}
+                                    <Button
+                                      htmlType="button"
+                                      className={`column-move-btn link-copy-btn ${
+                                        copiedLinkVideoId === video.videoId ? "is-copied" : ""
+                                      }`}
+                                      aria-label={`Copy link for ${video.title}`}
+                                      onClick={() => void copyVideoLink(video)}
+                                    >
+                                      <span className="btn-icon btn-icon-link" aria-hidden />
+                                    </Button>
                                     <Button
                                       htmlType="button"
                                       className="column-move-btn"
