@@ -343,12 +343,17 @@ body {
   order: 7;
 }
 
-.columns-nav [aria-label="Bulk add channels"] {
+.columns-nav .top-wa-btn.ant-btn {
   order: 8;
+}
+
+.columns-nav [aria-label="Bulk add channels"] {
+  order: 9;
 }
 
 .columns-nav [aria-label="Fetch all channels"],
 .columns-nav [aria-label="Play all videos"],
+.columns-nav .top-wa-btn.ant-btn,
 .columns-nav [aria-label="Bulk add channels"] {
   width: 32px;
   min-width: 32px;
@@ -744,6 +749,10 @@ body {
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
+}
+
+.columns-nav .top-wa-btn.ant-btn .btn-icon {
+  background: var(--amber) !important;
 }
 
 .columns-nav .nav-btn.ant-btn.ant-btn-primary {

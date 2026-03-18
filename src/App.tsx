@@ -2575,6 +2575,42 @@ function App() {
     });
   };
 
+  const openBulkWatchBoardAction = (): void => {
+    if (!activeBoard || activeBoard.kind === "saved") {
+      return;
+    }
+    const markWatched = videoFilter !== "watched";
+    const now = Date.now();
+    const uniqueVideoIds = new Set<string>();
+    activeBoard.columns.forEach((column) => {
+      column.videos.forEach((video) => {
+        if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
+          return;
+        }
+        if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
+          return;
+        }
+        const isWatched = watchedVideos[video.videoId] === true;
+        if (videoFilter === "watched" && !isWatched) {
+          return;
+        }
+        if (videoFilter === "new" && isWatched) {
+          return;
+        }
+        uniqueVideoIds.add(video.videoId);
+      });
+    });
+    if (uniqueVideoIds.size === 0) {
+      return;
+    }
+    setBulkWatchColumnAction({
+      columnId: "",
+      channelName: "ALL CHANNELS",
+      videoIds: [...uniqueVideoIds],
+      markWatched
+    });
+  };
+
   const confirmBulkWatchColumnAction = (): void => {
     if (!activeBoard || !bulkWatchColumnAction) {
       return;
@@ -3182,6 +3218,16 @@ function App() {
           alt="Logo"
           className="top-bar-logo"
         />
+        <Button
+          type="primary"
+          htmlType="button"
+          onClick={fetchAllColumns}
+          aria-label="Fetch all channels"
+          disabled={isSavedBoardActive}
+          className="nav-btn"
+        >
+          <span className="btn-icon btn-icon-fetch" aria-hidden />
+        </Button>
         <Select<string>
           value={activeBoard?.id}
           onChange={handleBoardSelectChange}
@@ -3328,16 +3374,6 @@ function App() {
           }))}
         />
         <Button
-          type="primary"
-          htmlType="button"
-          onClick={fetchAllColumns}
-          aria-label="Fetch all channels"
-          disabled={isSavedBoardActive}
-          className="nav-btn"
-        >
-          <span className="btn-icon btn-icon-fetch" aria-hidden />
-        </Button>
-        <Button
           htmlType="button"
           onClick={playAllVideos}
           aria-label="Play all videos"
@@ -3345,6 +3381,23 @@ function App() {
         >
           <span className="btn-icon btn-icon-play" aria-hidden />
         </Button>
+        {!isSavedBoardActive ? (
+          <Button
+            htmlType="button"
+            onClick={openBulkWatchBoardAction}
+            aria-label={`Mark all shown videos ${
+              videoFilter === "watched" ? "new" : "watched"
+            }`}
+            className="nav-btn top-wa-btn"
+            disabled={videoFilter === "all"}
+          >
+            {videoFilter === "watched" ? (
+              <span className="btn-icon btn-icon-undo" aria-hidden />
+            ) : (
+              <span className="btn-icon btn-icon-check" aria-hidden />
+            )}
+          </Button>
+        ) : null}
         <Button
           htmlType="button"
           onClick={() => scrollToEdge("start")}
@@ -3616,7 +3669,7 @@ function App() {
                               videoFilter !== "watched"
                             )
                           }
-                          disabled={column.loading || filteredVideos.length === 0}
+                          disabled={column.loading || filteredVideos.length === 0 || videoFilter === "all"}
                           aria-label={`Mark all shown videos in channel ${index + 1} as ${
                             videoFilter === "watched" ? "new" : "watched"
                           }`}
@@ -4311,11 +4364,21 @@ function App() {
       >
         <Text>
           {bulkWatchColumnAction
-            ? `${bulkWatchColumnAction.markWatched ? "Mark" : "Unmark"} ${
-                bulkWatchColumnAction.videoIds.length
-              } shown video${
-                bulkWatchColumnAction.videoIds.length === 1 ? "" : "s"
-              }${bulkWatchColumnAction.channelName ? ` in ${bulkWatchColumnAction.channelName.toUpperCase()}` : ""}?`
+            ? bulkWatchColumnAction.markWatched
+              ? `Mark ${bulkWatchColumnAction.videoIds.length} shown video${
+                  bulkWatchColumnAction.videoIds.length === 1 ? "" : "s"
+                }${
+                  bulkWatchColumnAction.channelName
+                    ? ` in ${bulkWatchColumnAction.channelName.toUpperCase()}`
+                    : ""
+                } watched?`
+              : `Mark ${bulkWatchColumnAction.videoIds.length} shown video${
+                  bulkWatchColumnAction.videoIds.length === 1 ? "" : "s"
+                } NEW${
+                  bulkWatchColumnAction.channelName
+                    ? ` in ${bulkWatchColumnAction.channelName.toUpperCase()}`
+                    : ""
+                }?`
             : ""}
         </Text>
       </Modal>
