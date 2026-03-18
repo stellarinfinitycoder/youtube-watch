@@ -3415,7 +3415,7 @@ function App() {
               videoFilter === "watched" ? "new" : "watched"
             }`}
             className="nav-btn top-wa-btn"
-            disabled={videoFilter === "all"}
+            disabled={videoFilter === "all" || shownVideosTotal === 0}
           >
             {videoFilter === "watched" ? (
               <span className="btn-icon btn-icon-undo" aria-hidden />
