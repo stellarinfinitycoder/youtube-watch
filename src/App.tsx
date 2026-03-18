@@ -44,7 +44,8 @@ const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 
 type VideoFilter = "all" | "new" | "watched";
 type VideoWindowDays = 1 | 3 | 7 | 30 | 60 | 90 | 120 | 180 | 360;
-type VideoWindowFilter = VideoWindowDays | "all";
+type ChannelVideoWindowFilter = VideoWindowDays | "older_7" | "older_30" | "older_60";
+type VideoWindowFilter = ChannelVideoWindowFilter | "all";
 type VideoDurationFilter =
   | "all"
   | "under_1"
@@ -62,7 +63,17 @@ type SavedSortMode =
   | "added_asc"
   | "added_desc"
   | "manual";
-const CHANNEL_VIDEO_WINDOW_OPTIONS: VideoWindowFilter[] = [1, 3, 7, 30, 60, 90];
+const CHANNEL_VIDEO_WINDOW_OPTIONS: ChannelVideoWindowFilter[] = [
+  1,
+  3,
+  7,
+  30,
+  60,
+  90,
+  "older_7",
+  "older_30",
+  "older_60"
+];
 const SAVED_VIDEO_WINDOW_OPTIONS: VideoWindowFilter[] = [
   1,
   3,
@@ -95,6 +106,32 @@ const SAVED_SORT_MODE_OPTIONS: Array<{ value: SavedSortMode; label: string }> = 
 const DEFAULT_SAVED_SORT_MODE: SavedSortMode = "added_desc";
 const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowFilter = 90;
 const STORAGE_VIDEO_WINDOW_DAYS: VideoWindowDays = 90;
+const CHANNEL_VIDEO_WINDOW_SELECT_OPTIONS: Array<{
+  value: ChannelVideoWindowFilter;
+  label: string;
+}> = [
+  { value: 1, label: "LAST 1D" },
+  { value: 3, label: "LAST 3D" },
+  { value: 7, label: "LAST 7D" },
+  { value: 30, label: "LAST 30D" },
+  { value: 60, label: "LAST 60D" },
+  { value: 90, label: "LAST 90D" },
+  { value: "older_7", label: ">7D" },
+  { value: "older_30", label: ">30D" },
+  { value: "older_60", label: ">60D" }
+];
+const SAVED_VIDEO_WINDOW_SELECT_OPTIONS: Array<{ value: VideoWindowFilter; label: string }> = [
+  { value: 1, label: "LAST 1D" },
+  { value: 3, label: "LAST 3D" },
+  { value: 7, label: "LAST 7D" },
+  { value: 30, label: "LAST 30D" },
+  { value: 60, label: "LAST 60D" },
+  { value: 90, label: "LAST 90D" },
+  { value: 120, label: "LAST 120D" },
+  { value: 180, label: "LAST 180D" },
+  { value: 360, label: "LAST 360D" },
+  { value: "all", label: "LAST ALL" }
+];
 const BOARD_DROPDOWN_MAX_VISIBLE = 25;
 const BOARD_DROPDOWN_ITEM_HEIGHT = 36;
 const BOARD_DROPDOWN_PADDING = 8;
@@ -483,6 +520,9 @@ function sanitizeWatchedVideos(raw: unknown): Record<string, boolean> {
 function isVideoWindowFilter(value: unknown): value is VideoWindowFilter {
   return (
     value === "all" ||
+    value === "older_7" ||
+    value === "older_30" ||
+    value === "older_60" ||
     typeof value === "number" &&
       [...CHANNEL_VIDEO_WINDOW_OPTIONS, ...SAVED_VIDEO_WINDOW_OPTIONS]
         .filter((item): item is VideoWindowDays => typeof item === "number")
@@ -1201,7 +1241,33 @@ function getWindowCutoffTime(days: VideoWindowFilter, now = Date.now()): number 
   if (days === "all") {
     return 0;
   }
+  if (days === "older_7" || days === "older_30" || days === "older_60") {
+    return 0;
+  }
   return now - days * 24 * 60 * 60 * 1000;
+}
+
+function matchesVideoWindowFilter(
+  publishedTime: number,
+  windowFilter: VideoWindowFilter,
+  now = Date.now()
+): boolean {
+  if (!Number.isFinite(publishedTime) || publishedTime <= 0) {
+    return false;
+  }
+  if (windowFilter === "all") {
+    return true;
+  }
+  if (windowFilter === "older_7") {
+    return publishedTime <= now - 7 * 24 * 60 * 60 * 1000;
+  }
+  if (windowFilter === "older_30") {
+    return publishedTime <= now - 30 * 24 * 60 * 60 * 1000;
+  }
+  if (windowFilter === "older_60") {
+    return publishedTime <= now - 60 * 24 * 60 * 60 * 1000;
+  }
+  return publishedTime >= now - windowFilter * 24 * 60 * 60 * 1000;
 }
 
 function shouldIgnoreShortcutTarget(target: EventTarget | null): boolean {
@@ -2536,13 +2602,13 @@ function App() {
       return;
     }
 
-    const cutoffTime = getWindowCutoffTime(videoWindowDays);
+    const now = Date.now();
     const mergedById = new Map<string, VideoItem>();
     columns.forEach((column) => {
       const sourceVideos =
         activeBoard.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
       sourceVideos.forEach((video) => {
-        if (getVideoPublishedTime(video) >= cutoffTime) {
+        if (matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
           if (!mergedById.has(video.videoId)) {
             mergedById.set(video.videoId, video);
           }
@@ -2583,12 +2649,12 @@ function App() {
   };
 
   const playChannelVideos = (column: ColumnState): void => {
-    const cutoffTime = getWindowCutoffTime(videoWindowDays);
+    const now = Date.now();
     const sourceVideos =
       activeBoard?.kind === "saved" ? sortSavedVideosByMode(column) : [...column.videos];
     const queue = sourceVideos
       .filter((video) => {
-        if (getVideoPublishedTime(video) < cutoffTime) {
+        if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
           return false;
         }
         if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
@@ -3230,14 +3296,12 @@ function App() {
           }}
           aria-label="Video age window"
           className="video-filter-select video-window-select"
-          listHeight={isSavedBoardActive ? 360 : 256}
-          options={(isSavedBoardActive
-            ? SAVED_VIDEO_WINDOW_OPTIONS
-            : CHANNEL_VIDEO_WINDOW_OPTIONS
-          ).map((days) => ({
-            value: days,
-            label: days === "all" ? "ALL" : `LAST ${days}D`
-          }))}
+          listHeight={360}
+          options={
+            isSavedBoardActive
+              ? SAVED_VIDEO_WINDOW_SELECT_OPTIONS
+              : CHANNEL_VIDEO_WINDOW_SELECT_OPTIONS
+          }
         />
         <Select<VideoDurationFilter>
           value={videoDurationFilter}
@@ -3429,7 +3493,7 @@ function App() {
         <div className="columns-layout">
           <section className="columns-grid">
             {columns.map((column, index) => {
-              const cutoffTime = getWindowCutoffTime(videoWindowDays);
+              const now = Date.now();
               const brokenThumbKey = `${activeBoardId}:${column.id}`;
               const channelThumbToShow =
                 isSavedBoardActive
@@ -3442,7 +3506,9 @@ function App() {
                 isSavedBoardActive ? sortSavedVideosByMode(column) : column.videos;
 
               const filteredVideos = sortedColumnVideos.filter((video) => {
-                if (getVideoPublishedTime(video) < cutoffTime) {
+                if (
+                  !matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)
+                ) {
                   return false;
                 }
                 if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
@@ -3520,7 +3586,7 @@ function App() {
                           htmlType="button"
                           onClick={() => openRemoveAllSavedColumnModal(column)}
                           disabled={column.loading || column.videos.length === 0}
-                          aria-label={`Remove all videos from list ${index + 1}`}
+                          aria-label={`Remove videos from list ${index + 1}`}
                           className="remove-column-btn"
                         >
                           <span className="btn-icon btn-icon-remove" aria-hidden />
@@ -4149,7 +4215,7 @@ function App() {
       </Modal>
 
       <Modal
-        title="Remove All Videos"
+        title="Remove Videos"
         open={removeAllSavedColumnAction !== null}
         onCancel={() => setRemoveAllSavedColumnAction(null)}
         onOk={confirmRemoveAllSavedColumnVideos}
