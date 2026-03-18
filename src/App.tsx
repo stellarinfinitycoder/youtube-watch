@@ -1560,6 +1560,32 @@ function App() {
     : DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
   const quotaEstimateText = `LAST Q: ${quotaEstimate.lastActionUnits} | TODAY: ${quotaEstimate.todayUnits}`;
+  const shownVideosTotal = activeBoard
+    ? (() => {
+        const now = Date.now();
+        return activeBoard.columns.reduce((total, column) => {
+          const sourceVideos =
+            activeBoard.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
+          const shownCount = sourceVideos.filter((video) => {
+            if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
+              return false;
+            }
+            if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
+              return false;
+            }
+            const isWatched = watchedVideos[video.videoId] === true;
+            if (videoFilter === "all") {
+              return true;
+            }
+            if (videoFilter === "watched") {
+              return isWatched;
+            }
+            return !isWatched;
+          }).length;
+          return total + shownCount;
+        }, 0);
+      })()
+    : 0;
   const activeBoardDurationBackfillIds = activeBoard
     ? collectBoardMissingDurationNewVideoIds(activeBoard)
     : [];
@@ -3398,6 +3424,7 @@ function App() {
             )}
           </Button>
         ) : null}
+        <Text className="topbar-video-count">{shownVideosTotal}</Text>
         <Button
           htmlType="button"
           onClick={() => scrollToEdge("start")}
