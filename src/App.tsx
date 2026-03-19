@@ -3557,7 +3557,7 @@ function App() {
             }));
           }}
           aria-label={hideEmptyColumns ? "Unhide empty columns" : "Hide empty columns"}
-          className="nav-btn top-hide-empty-btn"
+          className={`nav-btn top-hide-empty-btn ${hideEmptyColumns ? "is-unhide" : ""}`}
         >
           {hideEmptyColumns ? (
             <span className="btn-icon btn-icon-unhide" aria-hidden />

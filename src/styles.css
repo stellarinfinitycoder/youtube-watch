@@ -717,6 +717,16 @@ body {
   flex: 0 0 18px;
 }
 
+.columns-nav .top-hide-empty-btn.ant-btn.is-unhide {
+  color: #3eff8a !important;
+  border-color: rgba(62, 255, 138, 0.7) !important;
+  background: rgba(62, 255, 138, 0.08) !important;
+}
+
+.columns-nav .top-hide-empty-btn.ant-btn.is-unhide .btn-icon {
+  background: #3eff8a !important;
+}
+
 .column-move-btn.ant-btn[disabled] {
   opacity: 0.45;
 }
