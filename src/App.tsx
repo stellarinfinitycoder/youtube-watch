@@ -3523,7 +3523,9 @@ function App() {
             )}
           </Button>
         ) : null}
-        <Text className="topbar-video-count">{shownVideosTotal}</Text>
+        <Text className={`topbar-video-count ${shownVideosTotal === 0 ? "is-zero" : ""}`}>
+          {shownVideosTotal}
+        </Text>
         <Button
           htmlType="button"
           onClick={() => scrollToEdge("start")}
@@ -3771,7 +3773,11 @@ function App() {
                         />
                       ) : null}
                       {!isSavedBoardActive ? (
-                        <Text className="column-video-count">
+                        <Text
+                          className={`column-video-count ${
+                            filteredVideos.length === 0 ? "is-zero" : ""
+                          }`}
+                        >
                           {filteredVideos.length}
                         </Text>
                       ) : null}

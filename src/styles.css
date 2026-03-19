@@ -362,9 +362,26 @@ body {
   order: 10;
   margin-left: auto;
   margin-bottom: 0;
-  min-width: 24px;
-  text-align: right;
-  color: #c08f56 !important;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--cyan) !important;
+  font-size: 12px;
+  font-weight: 400;
+  border: 1px solid rgba(70, 217, 255, 0.6);
+  background: rgba(70, 217, 255, 0.08);
+  box-shadow: inset 0 0 8px rgba(70, 217, 255, 0.16);
+}
+
+.topbar-video-count.ant-typography.is-zero {
+  color: rgba(70, 217, 255, 0.38) !important;
+  border-color: rgba(70, 217, 255, 0.24);
+  background: rgba(70, 217, 255, 0.03);
+  box-shadow: inset 0 0 4px rgba(70, 217, 255, 0.08);
 }
 
 .columns-nav [aria-label="Fetch all channels"],
@@ -487,11 +504,26 @@ body {
 
 .column-video-count.ant-typography {
   margin: 0;
-  min-width: 20px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  color: #c08f56;
+  color: var(--cyan) !important;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 400;
+  border: 1px solid rgba(70, 217, 255, 0.6);
+  background: rgba(70, 217, 255, 0.08);
+  box-shadow: inset 0 0 8px rgba(70, 217, 255, 0.16);
+}
+
+.column-video-count.ant-typography.is-zero {
+  color: rgba(70, 217, 255, 0.38) !important;
+  border-color: rgba(70, 217, 255, 0.24);
+  background: rgba(70, 217, 255, 0.03);
+  box-shadow: inset 0 0 4px rgba(70, 217, 255, 0.08);
 }
 
 .saved-sort-select {
