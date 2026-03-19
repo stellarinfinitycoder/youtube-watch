@@ -3332,27 +3332,28 @@ function App() {
           alt="Logo"
           className="top-bar-logo"
         />
-        <Tooltip
-          title={
-            <>
-              <div>Fetch all new videos for all channels.</div>
-              <div>Last: {topbarLastFetchLabel}</div>
-            </>
-          }
-          placement="bottom"
-          overlayClassName="fetch-all-tooltip"
-        >
-          <Button
-            type="primary"
-            htmlType="button"
-            onClick={fetchAllColumns}
-            aria-label="Fetch all channels"
-            disabled={isSavedBoardActive}
-            className="nav-btn"
+        {!isSavedBoardActive ? (
+          <Tooltip
+            title={
+              <>
+                <div>Fetch all new videos for all channels.</div>
+                <div>Last: {topbarLastFetchLabel}</div>
+              </>
+            }
+            placement="bottom"
+            overlayClassName="fetch-all-tooltip"
           >
-            <span className="btn-icon btn-icon-fetch" aria-hidden />
-          </Button>
-        </Tooltip>
+            <Button
+              type="primary"
+              htmlType="button"
+              onClick={fetchAllColumns}
+              aria-label="Fetch all channels"
+              className="nav-btn"
+            >
+              <span className="btn-icon btn-icon-fetch" aria-hidden />
+            </Button>
+          </Tooltip>
+        ) : null}
         <Select<string>
           value={activeBoard?.id}
           onChange={handleBoardSelectChange}
@@ -3916,32 +3917,13 @@ function App() {
                           event.preventDefault();
                         }}
                       />
-                      {!isSavedBoardActive ? (
-                        <Text
-                          className={`column-video-count ${
-                            filteredVideos.length === 0 ? "is-zero" : ""
-                          }`}
-                        >
-                          {filteredVideos.length}
-                        </Text>
-                      ) : (
-                        <Button
-                          htmlType="button"
-                          onClick={() =>
-                            runFetch(activeBoardId, column.id, column.handleInput)
-                          }
-                          disabled={
-                            column.loading ||
-                            isSavedBoardActive ||
-                            !hasHandleInput
-                          }
-                          loading={column.loading}
-                          aria-label={`Fetch column ${index + 1}`}
-                          className="inline-fetch-btn"
-                        >
-                          <span className="btn-icon btn-icon-fetch" aria-hidden />
-                        </Button>
-                      )}
+                      <Text
+                        className={`column-video-count ${
+                          filteredVideos.length === 0 ? "is-zero" : ""
+                        }`}
+                      >
+                        {filteredVideos.length}
+                      </Text>
                     </div>
 
                   </Form>
