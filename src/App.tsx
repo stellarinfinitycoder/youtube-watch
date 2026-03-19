@@ -2634,6 +2634,39 @@ function App() {
     }, 1000);
   };
 
+  const copyAllVideoLinks = async (columnId: string, videos: VideoItem[]): Promise<void> => {
+    if (videos.length === 0) {
+      return;
+    }
+    const text = videos.map((video) => video.videoUrl).join("\n");
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard API unavailable.");
+      }
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "true");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+    const feedbackId = `column-links:${columnId}`;
+    setCopiedLinkVideoId(feedbackId);
+    if (linkCopyFeedbackTimeoutRef.current) {
+      window.clearTimeout(linkCopyFeedbackTimeoutRef.current);
+    }
+    linkCopyFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setCopiedLinkVideoId((previous) => (previous === feedbackId ? null : previous));
+      linkCopyFeedbackTimeoutRef.current = null;
+    }, 1000);
+  };
+
   const openBulkWatchColumnAction = (
     column: ColumnState,
     videoIds: string[],
@@ -3706,6 +3739,21 @@ function App() {
                       >
                         {"›"}
                       </Button>
+                      {!isSavedBoardActive ? (
+                        <Button
+                          htmlType="button"
+                          onClick={() => openMoveColumnModal(column.id)}
+                          disabled={
+                            column.loading ||
+                            moveDestinationBoards.length === 0 ||
+                            !hasChannelPlaylistVideos
+                          }
+                          aria-label={`Move column ${index + 1} to board`}
+                          className="column-move-btn"
+                        >
+                          <span className="btn-icon btn-icon-move" aria-hidden />
+                        </Button>
+                      ) : null}
                     </div>
                     <div className="column-actions-right">
                       {isSavedBoardActive ? (
@@ -3750,16 +3798,14 @@ function App() {
                       {!isSavedBoardActive ? (
                         <Button
                           htmlType="button"
-                          onClick={() => openMoveColumnModal(column.id)}
-                          disabled={
-                            column.loading ||
-                            moveDestinationBoards.length === 0 ||
-                            !hasChannelPlaylistVideos
-                          }
-                          aria-label={`Move column ${index + 1} to board`}
-                          className="column-move-btn"
+                          onClick={() => void copyAllVideoLinks(column.id, filteredVideos)}
+                          disabled={column.loading || filteredVideos.length === 0}
+                          aria-label={`Copy all shown links in channel ${index + 1}`}
+                          className={`column-move-btn link-copy-btn ${
+                            copiedLinkVideoId === `column-links:${column.id}` ? "is-copied" : ""
+                          }`}
                         >
-                          <span className="btn-icon btn-icon-move" aria-hidden />
+                          <span className="btn-icon btn-icon-link" aria-hidden />
                         </Button>
                       ) : null}
                       {!isSavedBoardActive ? (
