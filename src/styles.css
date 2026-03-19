@@ -502,11 +502,23 @@ body {
   margin-left: auto;
 }
 
+.is-channel-column .column-actions {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  align-items: center;
+  justify-items: center;
+}
+
+.is-channel-column .column-actions-left,
+.is-channel-column .column-actions-right {
+  display: contents;
+}
+
 .column-video-count.ant-typography {
   margin: 0;
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -727,6 +739,13 @@ body {
   height: 32px;
   padding: 0;
   flex: 0 0 32px;
+}
+
+.column-actions-right .inline-fetch-btn.ant-btn {
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
 }
 
 .channel-avatar {

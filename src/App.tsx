@@ -3720,7 +3720,12 @@ function App() {
               const hasChannelPlaylistVideos = filteredVideos.length > 0;
 
               return (
-                <article key={column.id} className="channel-column">
+                <article
+                  key={column.id}
+                  className={`channel-column ${
+                    isSavedBoardActive ? "is-saved-column" : "is-channel-column"
+                  }`}
+                >
                   <div className="column-actions">
                     <div className="column-actions-left">
                       <Button
@@ -3773,13 +3778,21 @@ function App() {
                         />
                       ) : null}
                       {!isSavedBoardActive ? (
-                        <Text
-                          className={`column-video-count ${
-                            filteredVideos.length === 0 ? "is-zero" : ""
-                          }`}
+                        <Button
+                          htmlType="button"
+                          onClick={() =>
+                            runFetch(activeBoardId, column.id, column.handleInput)
+                          }
+                          disabled={
+                            column.loading ||
+                            !hasHandleInput
+                          }
+                          loading={column.loading}
+                          aria-label={`Fetch column ${index + 1}`}
+                          className="inline-fetch-btn"
                         >
-                          {filteredVideos.length}
-                        </Text>
+                          <span className="btn-icon btn-icon-fetch" aria-hidden />
+                        </Button>
                       ) : null}
                       <Button
                         htmlType="button"
@@ -3790,17 +3803,6 @@ function App() {
                       >
                         <span className="btn-icon btn-icon-play" aria-hidden />
                       </Button>
-                      {isSavedBoardActive ? (
-                        <Button
-                          htmlType="button"
-                          onClick={() => openRemoveAllSavedColumnModal(column)}
-                          disabled={column.loading || column.videos.length === 0}
-                          aria-label={`Remove videos from list ${index + 1}`}
-                          className="remove-column-btn"
-                        >
-                          <span className="btn-icon btn-icon-remove" aria-hidden />
-                        </Button>
-                      ) : null}
                       {!isSavedBoardActive ? (
                         <Button
                           htmlType="button"
@@ -3812,6 +3814,17 @@ function App() {
                           }`}
                         >
                           <span className="btn-icon btn-icon-link" aria-hidden />
+                        </Button>
+                      ) : null}
+                      {isSavedBoardActive ? (
+                        <Button
+                          htmlType="button"
+                          onClick={() => openRemoveAllSavedColumnModal(column)}
+                          disabled={column.loading || column.videos.length === 0}
+                          aria-label={`Remove videos from list ${index + 1}`}
+                          className="remove-column-btn"
+                        >
+                          <span className="btn-icon btn-icon-remove" aria-hidden />
                         </Button>
                       ) : null}
                       {!isSavedBoardActive ? (
@@ -3903,22 +3916,32 @@ function App() {
                           event.preventDefault();
                         }}
                       />
-                      <Button
-                        htmlType="button"
-                        onClick={() =>
-                          runFetch(activeBoardId, column.id, column.handleInput)
-                        }
-                        disabled={
-                          column.loading ||
-                          isSavedBoardActive ||
-                          !hasHandleInput
-                        }
-                        loading={column.loading}
-                        aria-label={`Fetch column ${index + 1}`}
-                        className="inline-fetch-btn"
-                      >
-                        <span className="btn-icon btn-icon-fetch" aria-hidden />
-                      </Button>
+                      {!isSavedBoardActive ? (
+                        <Text
+                          className={`column-video-count ${
+                            filteredVideos.length === 0 ? "is-zero" : ""
+                          }`}
+                        >
+                          {filteredVideos.length}
+                        </Text>
+                      ) : (
+                        <Button
+                          htmlType="button"
+                          onClick={() =>
+                            runFetch(activeBoardId, column.id, column.handleInput)
+                          }
+                          disabled={
+                            column.loading ||
+                            isSavedBoardActive ||
+                            !hasHandleInput
+                          }
+                          loading={column.loading}
+                          aria-label={`Fetch column ${index + 1}`}
+                          className="inline-fetch-btn"
+                        >
+                          <span className="btn-icon btn-icon-fetch" aria-hidden />
+                        </Button>
+                      )}
                     </div>
 
                   </Form>
