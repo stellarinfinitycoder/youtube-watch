@@ -127,6 +127,15 @@ body {
   padding: 2px 0;
 }
 
+.board-option-edit-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .board-option-move-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -305,21 +314,25 @@ body {
   letter-spacing: 0;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to first"] {
+.columns-nav .top-hide-empty-btn.ant-btn {
   order: 11;
   margin-left: auto;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns left"] {
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to first"] {
   order: 12;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] {
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns left"] {
   order: 13;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] {
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] {
   order: 14;
+}
+
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] {
+  order: 15;
 }
 
 .columns-nav [aria-label="Board selector"] {
@@ -387,6 +400,7 @@ body {
 .columns-nav [aria-label="Fetch all channels"],
 .columns-nav [aria-label="Play all videos"],
 .columns-nav .top-wa-btn.ant-btn,
+.columns-nav .top-hide-empty-btn.ant-btn,
 .columns-nav [aria-label="Bulk add channels"] {
   width: 32px;
   min-width: 32px;
@@ -674,6 +688,33 @@ body {
 .btn-icon-link {
   -webkit-mask: url("/svg/btn-link.svg") center / contain no-repeat;
   mask: url("/svg/btn-link.svg") center / contain no-repeat;
+}
+
+.btn-icon-hide {
+  -webkit-mask: url("/svg/btn-hide.svg") center / contain no-repeat;
+  mask: url("/svg/btn-hide.svg") center / contain no-repeat;
+}
+
+.btn-icon-unhide {
+  -webkit-mask: url("/svg/btn-unhide.svg") center / contain no-repeat;
+  mask: url("/svg/btn-unhide.svg") center / contain no-repeat;
+}
+
+.btn-icon-edit-board {
+  -webkit-mask: url("/svg/btn-edit-board.svg") center / contain no-repeat;
+  mask: url("/svg/btn-edit-board.svg") center / contain no-repeat;
+}
+
+.board-option-edit-btn .btn-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.top-hide-empty-btn.ant-btn .btn-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
 }
 
 .column-move-btn.ant-btn[disabled] {

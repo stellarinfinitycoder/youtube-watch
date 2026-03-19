@@ -248,6 +248,7 @@ type BoardState = {
   name: string;
   kind: BoardKind;
   columns: ColumnState[];
+  hideEmptyColumns: boolean;
   watchedVideos: Record<string, boolean>;
   viewCountRefreshedAtByVideoId: Record<string, number>;
   videoFilter: VideoFilter;
@@ -261,6 +262,7 @@ type PersistedBoardState = {
   name: string;
   kind?: BoardKind;
   columns: PersistedColumnState[];
+  hideEmptyColumns?: boolean;
   watchedVideos: Record<string, boolean>;
   viewCountRefreshedAtByVideoId?: Record<string, number>;
   videoFilter: VideoFilter;
@@ -741,6 +743,7 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
       name: "BOARD 1",
       kind: "channels",
       columns,
+      hideEmptyColumns: false,
       watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
       viewCountRefreshedAtByVideoId: {},
       videoFilter:
@@ -837,6 +840,7 @@ function createBoardState(
     name,
     kind: "channels",
     columns: Array.from({ length: initialColumnCount }, () => createColumnState()),
+    hideEmptyColumns: false,
     watchedVideos: {},
     viewCountRefreshedAtByVideoId: {},
     videoFilter: "new",
@@ -952,6 +956,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     name?: unknown;
     kind?: unknown;
     columns?: unknown;
+    hideEmptyColumns?: unknown;
     watchedVideos?: unknown;
     viewCountRefreshedAtByVideoId?: unknown;
     videoFilter?: unknown;
@@ -978,6 +983,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     name: candidate.name,
     kind,
     columns,
+    hideEmptyColumns: candidate.hideEmptyColumns === true,
     watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
     viewCountRefreshedAtByVideoId: sanitizeNumericMap(
       candidate.viewCountRefreshedAtByVideoId
@@ -1028,6 +1034,7 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
         savedManualOrder: column.savedManualOrder ?? []
       })
     ),
+    hideEmptyColumns: board.hideEmptyColumns === true,
     watchedVideos: board.watchedVideos,
     viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
     videoFilter: board.videoFilter,
@@ -1597,6 +1604,7 @@ function App() {
     ? normalizeVideoWindowFilterForKind(activeBoard.kind, activeBoard.videoWindowDays)
     : DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
+  const hideEmptyColumns = activeBoard?.hideEmptyColumns === true;
   const quotaEstimateText = `LAST Q: ${quotaEstimate.lastActionUnits} | TODAY: ${quotaEstimate.todayUnits}`;
   const topbarLastFetchLabel = activeBoard
     ? formatLastFetchTooltipLabel(
@@ -1615,32 +1623,39 @@ function App() {
         }, null)
       )
     : "-";
-  const shownVideosTotal = activeBoard
-    ? (() => {
-        const now = Date.now();
-        return activeBoard.columns.reduce((total, column) => {
-          const sourceVideos =
-            activeBoard.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
-          const shownCount = sourceVideos.filter((video) => {
-            if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
-              return false;
-            }
-            if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
-              return false;
-            }
-            const isWatched = watchedVideos[video.videoId] === true;
-            if (videoFilter === "all") {
-              return true;
-            }
-            if (videoFilter === "watched") {
-              return isWatched;
-            }
-            return !isWatched;
-          }).length;
-          return total + shownCount;
-        }, 0);
-      })()
-    : 0;
+  const shownVideoCountByColumnId = new Map<string, number>();
+  if (activeBoard) {
+    const now = Date.now();
+    activeBoard.columns.forEach((column) => {
+      const sourceVideos =
+        activeBoard.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
+      const shownCount = sourceVideos.filter((video) => {
+        if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
+          return false;
+        }
+        if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
+          return false;
+        }
+        const isWatched = watchedVideos[video.videoId] === true;
+        if (videoFilter === "all") {
+          return true;
+        }
+        if (videoFilter === "watched") {
+          return isWatched;
+        }
+        return !isWatched;
+      }).length;
+      shownVideoCountByColumnId.set(column.id, shownCount);
+    });
+  }
+  const shownVideosTotal = [...shownVideoCountByColumnId.values()].reduce(
+    (total, count) => total + count,
+    0
+  );
+  const visibleColumns =
+    hideEmptyColumns
+      ? columns.filter((column) => (shownVideoCountByColumnId.get(column.id) ?? 0) > 0)
+      : columns;
   const activeBoardDurationBackfillIds = activeBoard
     ? collectBoardMissingDurationNewVideoIds(activeBoard)
     : [];
@@ -1736,6 +1751,7 @@ function App() {
         name: board.name,
         kind: board.kind,
         columns: toPersistedColumns(board.columns),
+        hideEmptyColumns: board.hideEmptyColumns,
         watchedVideos: board.watchedVideos,
         viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
         videoFilter: board.videoFilter,
@@ -2991,6 +3007,7 @@ function App() {
         name: board.name,
         kind: board.kind,
         columns: toPersistedColumns(board.columns),
+        hideEmptyColumns: board.hideEmptyColumns,
         watchedVideos: board.watchedVideos,
         viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
         videoFilter: board.videoFilter,
@@ -3409,6 +3426,7 @@ function App() {
                     <button
                       type="button"
                       className="board-option-edit-btn"
+                      aria-label={`Edit ${board.name}`}
                       onMouseDown={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
@@ -3419,7 +3437,7 @@ function App() {
                         openRenameBoardModal(board.id);
                       }}
                     >
-                      E
+                      <span className="btn-icon btn-icon-edit-board" aria-hidden />
                     </button>
                   </div>
                 ) : null}
@@ -3527,6 +3545,26 @@ function App() {
         <Text className={`topbar-video-count ${shownVideosTotal === 0 ? "is-zero" : ""}`}>
           {shownVideosTotal}
         </Text>
+        <Button
+          htmlType="button"
+          onClick={() => {
+            if (!activeBoard) {
+              return;
+            }
+            setBoard(activeBoard.id, (board) => ({
+              ...board,
+              hideEmptyColumns: !board.hideEmptyColumns
+            }));
+          }}
+          aria-label={hideEmptyColumns ? "Unhide empty columns" : "Hide empty columns"}
+          className="nav-btn top-hide-empty-btn"
+        >
+          {hideEmptyColumns ? (
+            <span className="btn-icon btn-icon-unhide" aria-hidden />
+          ) : (
+            <span className="btn-icon btn-icon-hide" aria-hidden />
+          )}
+        </Button>
         <Button
           htmlType="button"
           onClick={() => scrollToEdge("start")}
@@ -3683,7 +3721,7 @@ function App() {
       >
         <div className="columns-layout">
           <section className="columns-grid">
-            {columns.map((column, index) => {
+            {visibleColumns.map((column, index) => {
               const now = Date.now();
               const brokenThumbKey = `${activeBoardId}:${column.id}`;
               const channelThumbToShow =
@@ -3741,7 +3779,7 @@ function App() {
                       <Button
                         htmlType="button"
                         onClick={() => moveColumnById(column.id, "right")}
-                        disabled={index === columns.length - 1 || column.loading}
+                        disabled={index === visibleColumns.length - 1 || column.loading}
                         aria-label={`Move column ${index + 1} right`}
                         className="column-move-btn"
                       >
