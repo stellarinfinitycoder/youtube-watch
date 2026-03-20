@@ -249,7 +249,7 @@ type BoardState = {
   name: string;
   kind: BoardKind;
   columns: ColumnState[];
-  hideEmptyColumns: boolean;
+  columnScopeFilter: string;
   watchedVideos: Record<string, boolean>;
   viewCountRefreshedAtByVideoId: Record<string, number>;
   videoFilter: VideoFilter;
@@ -263,7 +263,7 @@ type PersistedBoardState = {
   name: string;
   kind?: BoardKind;
   columns: PersistedColumnState[];
-  hideEmptyColumns?: boolean;
+  columnScopeFilter?: string;
   watchedVideos: Record<string, boolean>;
   viewCountRefreshedAtByVideoId?: Record<string, number>;
   videoFilter: VideoFilter;
@@ -320,6 +320,8 @@ type QuotaEstimateState = {
 };
 
 const NEW_BOARD_OPTION_VALUE = "__new__";
+const COLUMN_SCOPE_ALL = "__all__";
+const COLUMN_SCOPE_NOT_EMPTY = "__not_empty__";
 
 function createColumnId(): string {
   return `col-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -744,7 +746,7 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
       name: "BOARD 1",
       kind: "channels",
       columns,
-      hideEmptyColumns: false,
+      columnScopeFilter: COLUMN_SCOPE_ALL,
       watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
       viewCountRefreshedAtByVideoId: {},
       videoFilter:
@@ -832,7 +834,7 @@ function createBoardState(
     name,
     kind: "channels",
     columns: Array.from({ length: initialColumnCount }, () => createColumnState()),
-    hideEmptyColumns: false,
+    columnScopeFilter: COLUMN_SCOPE_ALL,
     watchedVideos: {},
     viewCountRefreshedAtByVideoId: {},
     videoFilter: "new",
@@ -948,7 +950,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     name?: unknown;
     kind?: unknown;
     columns?: unknown;
-    hideEmptyColumns?: unknown;
+    columnScopeFilter?: unknown;
     watchedVideos?: unknown;
     viewCountRefreshedAtByVideoId?: unknown;
     videoFilter?: unknown;
@@ -975,7 +977,10 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     name: candidate.name,
     kind,
     columns,
-    hideEmptyColumns: candidate.hideEmptyColumns === true,
+    columnScopeFilter:
+      typeof candidate.columnScopeFilter === "string"
+        ? candidate.columnScopeFilter
+        : COLUMN_SCOPE_ALL,
     watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
     viewCountRefreshedAtByVideoId: sanitizeNumericMap(
       candidate.viewCountRefreshedAtByVideoId
@@ -1017,7 +1022,7 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
         savedManualOrder: column.savedManualOrder ?? []
       })
     ),
-    hideEmptyColumns: board.hideEmptyColumns === true,
+    columnScopeFilter: board.columnScopeFilter ?? COLUMN_SCOPE_ALL,
     watchedVideos: board.watchedVideos,
     viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
     videoFilter: board.videoFilter,
@@ -1665,7 +1670,14 @@ function App() {
     ? normalizeVideoWindowFilterForKind(activeBoard.kind, activeBoard.videoWindowDays)
     : DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
-  const hideEmptyColumns = activeBoard?.hideEmptyColumns === true;
+  const columnScopeFilterRaw = activeBoard?.columnScopeFilter ?? COLUMN_SCOPE_ALL;
+  const columnScopeFilter =
+    columnScopeFilterRaw === COLUMN_SCOPE_ALL ||
+    columnScopeFilterRaw === COLUMN_SCOPE_NOT_EMPTY ||
+    columns.some((column) => column.id === columnScopeFilterRaw)
+      ? columnScopeFilterRaw
+      : COLUMN_SCOPE_ALL;
+  const isAllColumnsScopeSelected = columnScopeFilter === COLUMN_SCOPE_ALL;
   const quotaEstimateText = `LAST Q: ${quotaEstimate.lastActionUnits} | TODAY: ${quotaEstimate.todayUnits}`;
   const topbarLastFetchLabel = activeBoard
     ? formatLastFetchTooltipLabel(
@@ -1687,7 +1699,7 @@ function App() {
   const shownVideoCountByColumnId = new Map<string, number>();
   if (activeBoard) {
     const now = Date.now();
-    activeBoard.columns.forEach((column) => {
+    columns.forEach((column) => {
       const sourceVideos =
         activeBoard.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
       const shownCount = sourceVideos.filter((video) => {
@@ -1709,14 +1721,43 @@ function App() {
       shownVideoCountByColumnId.set(column.id, shownCount);
     });
   }
-  const shownVideosTotal = [...shownVideoCountByColumnId.values()].reduce(
-    (total, count) => total + count,
+  const scopedColumns =
+    columnScopeFilter === COLUMN_SCOPE_ALL
+      ? columns
+      : columnScopeFilter === COLUMN_SCOPE_NOT_EMPTY
+      ? columns.filter((column) => (shownVideoCountByColumnId.get(column.id) ?? 0) > 0)
+      : columns.filter((column) => column.id === columnScopeFilter);
+  const visibleColumns = scopedColumns;
+  const shownVideosTotal = visibleColumns.reduce(
+    (total, column) => total + (shownVideoCountByColumnId.get(column.id) ?? 0),
     0
   );
-  const visibleColumns =
-    hideEmptyColumns
-      ? columns.filter((column) => (shownVideoCountByColumnId.get(column.id) ?? 0) > 0)
-      : columns;
+  const columnScopeOptions = [
+    {
+      value: COLUMN_SCOPE_ALL,
+      label: isSavedBoardActive ? "ALL LISTS" : "ALL CHANNELS"
+    },
+    {
+      value: COLUMN_SCOPE_NOT_EMPTY,
+      label: "ACTIVE CHANNELS"
+    },
+    ...columns.map((column, index) => {
+      const raw = column.currentHandle.trim() || column.handleInput.trim();
+      const normalized = raw
+        ? raw.startsWith("@")
+          ? raw
+          : isSavedBoardActive
+          ? raw
+          : `@${raw}`
+        : isSavedBoardActive
+        ? `LIST ${index + 1}`
+        : `CHANNEL ${index + 1}`;
+      return {
+        value: column.id,
+        label: normalized.toUpperCase()
+      };
+    })
+  ];
   const activeBoardDurationBackfillIds = activeBoard
     ? collectBoardMissingDurationNewVideoIds(activeBoard)
     : [];
@@ -1815,7 +1856,7 @@ function App() {
         name: board.name,
         kind: board.kind,
         columns: toPersistedColumns(board.columns),
-        hideEmptyColumns: board.hideEmptyColumns,
+        columnScopeFilter: board.columnScopeFilter,
         watchedVideos: board.watchedVideos,
         viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
         videoFilter: board.videoFilter,
@@ -2388,7 +2429,7 @@ function App() {
     if (!activeBoard || activeBoard.kind === "saved") {
       return;
     }
-    columns.forEach((column) => {
+    visibleColumns.forEach((column) => {
       const rawHandle = column.handleInput.trim();
       if (rawHandle.length > 0) {
         runFetch(activeBoard.id, column.id, column.handleInput);
@@ -3071,7 +3112,7 @@ function App() {
         name: board.name,
         kind: board.kind,
         columns: toPersistedColumns(board.columns),
-        hideEmptyColumns: board.hideEmptyColumns,
+        columnScopeFilter: board.columnScopeFilter,
         watchedVideos: board.watchedVideos,
         viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
         videoFilter: board.videoFilter,
@@ -3543,6 +3584,21 @@ function App() {
             NEW BOARD
           </Select.Option>
         </Select>
+        <Select<string>
+          value={columnScopeFilter}
+          onChange={(value) => {
+            if (!activeBoard) {
+              return;
+            }
+            setBoard(activeBoard.id, (board) => ({
+              ...board,
+              columnScopeFilter: value
+            }));
+          }}
+          aria-label="Channel scope filter"
+          className="video-filter-select channel-scope-select"
+          options={columnScopeOptions}
+        />
         {!isSavedBoardActive ? (
           <Select<VideoFilter>
             value={videoFilter}
@@ -3642,26 +3698,6 @@ function App() {
         <Text className={`topbar-video-count ${shownVideosTotal === 0 ? "is-zero" : ""}`}>
           {shownVideosTotal}
         </Text>
-        <Button
-          htmlType="button"
-          onClick={() => {
-            if (!activeBoard) {
-              return;
-            }
-            setBoard(activeBoard.id, (board) => ({
-              ...board,
-              hideEmptyColumns: !board.hideEmptyColumns
-            }));
-          }}
-          aria-label={hideEmptyColumns ? "Unhide empty columns" : "Hide empty columns"}
-          className={`nav-btn top-hide-empty-btn ${hideEmptyColumns ? "is-unhide" : ""}`}
-        >
-          {hideEmptyColumns ? (
-            <span className="btn-icon btn-icon-unhide" aria-hidden />
-          ) : (
-            <span className="btn-icon btn-icon-hide" aria-hidden />
-          )}
-        </Button>
         <Button
           htmlType="button"
           onClick={() => scrollToEdge("start")}
@@ -4260,7 +4296,9 @@ function App() {
                 onClick={addColumn}
                 aria-label="Add column"
                 className="add-column-btn add-column-plus-btn"
-                disabled={!isSavedBoardActive && hideEmptyColumns}
+                disabled={
+                  !isSavedBoardActive && !isAllColumnsScopeSelected
+                }
               >
                 +
               </Button>
@@ -4269,7 +4307,9 @@ function App() {
                 onClick={() => setIsBulkModalOpen(true)}
                 aria-label="Bulk add channels"
                 className="add-column-btn add-column-bulk-btn"
-                disabled={!isSavedBoardActive && hideEmptyColumns}
+                disabled={
+                  !isSavedBoardActive && !isAllColumnsScopeSelected
+                }
               >
                 <img src={PLAYLIST_ADD_ICON} alt="" className="add-column-bulk-icon" />
               </Button>
