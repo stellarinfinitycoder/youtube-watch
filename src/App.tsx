@@ -47,7 +47,7 @@ type VideoFilter = "all" | "new" | "watched";
 type VideoWindowDays = 1 | 3 | 7 | 30 | 60 | 90 | 120 | 180 | 360;
 type ChannelVideoWindowFilter = VideoWindowDays | "older_7" | "older_30" | "older_60";
 type VideoWindowFilter = ChannelVideoWindowFilter | "all";
-type VideoDurationFilter =
+type VideoDurationFilterOption =
   | "all"
   | "under_1"
   | "min_1_3"
@@ -56,6 +56,7 @@ type VideoDurationFilter =
   | "min_30_60"
   | "long"
   | "unknown";
+type VideoDurationFilter = VideoDurationFilterOption[];
 type PlaylistScope = "all" | "channel";
 type BoardKind = "channels" | "saved";
 type SavedSortMode =
@@ -87,7 +88,7 @@ const SAVED_VIDEO_WINDOW_OPTIONS: VideoWindowFilter[] = [
   360,
   "all"
 ];
-const VIDEO_DURATION_FILTER_OPTIONS: Array<{ value: VideoDurationFilter; label: string }> = [
+const VIDEO_DURATION_FILTER_OPTIONS: Array<{ value: VideoDurationFilterOption; label: string }> = [
   { value: "all", label: "ANY LENGTH" },
   { value: "under_1", label: "< 1 MIN" },
   { value: "min_1_3", label: "1 - 3 MIN" },
@@ -753,16 +754,7 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
           ? candidate.videoFilter
           : "new",
       videoDurationFilter:
-        candidate.videoDurationFilter === "all" ||
-        candidate.videoDurationFilter === "under_1" ||
-        candidate.videoDurationFilter === "min_1_3" ||
-        candidate.videoDurationFilter === "min_3_10" ||
-        candidate.videoDurationFilter === "min_10_30" ||
-        candidate.videoDurationFilter === "min_30_60" ||
-        candidate.videoDurationFilter === "long" ||
-        candidate.videoDurationFilter === "unknown"
-          ? candidate.videoDurationFilter
-          : "all",
+        normalizeVideoDurationFilter(candidate.videoDurationFilter),
       videoWindowDays: normalizeVideoWindowFilterForKind(
         "channels",
         candidate.videoWindowDays
@@ -844,7 +836,7 @@ function createBoardState(
     watchedVideos: {},
     viewCountRefreshedAtByVideoId: {},
     videoFilter: "new",
-    videoDurationFilter: "all",
+    videoDurationFilter: ["all"],
     videoWindowDays: DEFAULT_VIDEO_WINDOW_DAYS,
     defaultPlaybackRate: 1.5,
     ...overrides
@@ -856,7 +848,7 @@ function createSavedBoardState(overrides?: Partial<BoardState>): BoardState {
     id: SAVED_BOARD_ID,
     kind: "saved",
     videoFilter: "all",
-    videoDurationFilter: "all",
+    videoDurationFilter: ["all"],
     videoWindowDays: "all",
     ...overrides
   }, 1);
@@ -995,16 +987,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
         ? candidate.videoFilter
         : "new",
     videoDurationFilter:
-      candidate.videoDurationFilter === "all" ||
-      candidate.videoDurationFilter === "under_1" ||
-      candidate.videoDurationFilter === "min_1_3" ||
-      candidate.videoDurationFilter === "min_3_10" ||
-      candidate.videoDurationFilter === "min_10_30" ||
-      candidate.videoDurationFilter === "min_30_60" ||
-      candidate.videoDurationFilter === "long" ||
-      candidate.videoDurationFilter === "unknown"
-        ? candidate.videoDurationFilter
-        : "all",
+      normalizeVideoDurationFilter(candidate.videoDurationFilter),
     videoWindowDays: normalizeVideoWindowFilterForKind(kind, candidate.videoWindowDays),
     defaultPlaybackRate:
       typeof candidate.defaultPlaybackRate === "number" &&
@@ -1038,7 +1021,7 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
     watchedVideos: board.watchedVideos,
     viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
     videoFilter: board.videoFilter,
-    videoDurationFilter: board.videoDurationFilter ?? "all",
+    videoDurationFilter: normalizeVideoDurationFilter(board.videoDurationFilter),
     videoWindowDays: board.videoWindowDays,
     defaultPlaybackRate: board.defaultPlaybackRate
   });
@@ -1131,7 +1114,7 @@ function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string 
     ),
     watchedVideos: legacyWatchedVideos,
     videoFilter: "new",
-    videoDurationFilter: "all",
+    videoDurationFilter: ["all"],
     videoWindowDays: DEFAULT_VIDEO_WINDOW_DAYS,
     defaultPlaybackRate: legacyPlaybackRate
   });
@@ -1214,46 +1197,122 @@ function formatDuration(durationSeconds: number | null | undefined): string {
 
 function matchesDurationFilter(
   durationSeconds: number | null | undefined,
-  filter: VideoDurationFilter
+  filters: VideoDurationFilter
 ): boolean {
-  if (filter === "all") {
+  const normalized =
+    filters.length === 0 || filters.includes("all")
+      ? (["all"] as VideoDurationFilter)
+      : filters;
+  if (normalized.includes("all")) {
     return true;
   }
   if (typeof durationSeconds !== "number" || !Number.isFinite(durationSeconds)) {
-    return filter === "unknown";
+    return normalized.includes("unknown");
   }
-  if (filter === "unknown") {
-    return false;
-  }
-  if (filter === "under_1") {
-    return durationSeconds < 60;
-  }
-  if (filter === "min_1_3") {
-    return durationSeconds >= 60 && durationSeconds < 180;
-  }
-  if (filter === "min_3_10") {
-    return durationSeconds >= 180 && durationSeconds < 600;
-  }
-  if (filter === "min_10_30") {
-    return durationSeconds >= 600 && durationSeconds < 1800;
-  }
-  if (filter === "min_30_60") {
-    return durationSeconds >= 1800 && durationSeconds < 3600;
-  }
-  return durationSeconds >= 3600;
+  return normalized.some((filter) => {
+    if (filter === "unknown" || filter === "all") {
+      return false;
+    }
+    if (filter === "under_1") {
+      return durationSeconds < 60;
+    }
+    if (filter === "min_1_3") {
+      return durationSeconds >= 60 && durationSeconds < 180;
+    }
+    if (filter === "min_3_10") {
+      return durationSeconds >= 180 && durationSeconds < 600;
+    }
+    if (filter === "min_10_30") {
+      return durationSeconds >= 600 && durationSeconds < 1800;
+    }
+    if (filter === "min_30_60") {
+      return durationSeconds >= 1800 && durationSeconds < 3600;
+    }
+    return durationSeconds >= 3600;
+  });
 }
 
 function normalizeVideoDurationFilter(input: unknown): VideoDurationFilter {
-  return input === "all" ||
-    input === "under_1" ||
-    input === "min_1_3" ||
-    input === "min_3_10" ||
-    input === "min_10_30" ||
-    input === "min_30_60" ||
-    input === "long" ||
-    input === "unknown"
-    ? input
-    : "all";
+  const isValid = (value: unknown): value is VideoDurationFilterOption =>
+    value === "all" ||
+    value === "under_1" ||
+    value === "min_1_3" ||
+    value === "min_3_10" ||
+    value === "min_10_30" ||
+    value === "min_30_60" ||
+    value === "long" ||
+    value === "unknown";
+
+  if (Array.isArray(input)) {
+    const next = [...new Set(input.filter((item): item is VideoDurationFilterOption => isValid(item)))];
+    if (next.includes("all") || next.length === 0) {
+      return ["all"];
+    }
+    return next;
+  }
+  if (isValid(input)) {
+    return [input];
+  }
+  return ["all"];
+}
+
+function resolveVideoDurationFilterSelection(
+  nextInput: unknown,
+  previous: VideoDurationFilter
+): VideoDurationFilter {
+  const previousNormalized = normalizeVideoDurationFilter(previous);
+  const raw = Array.isArray(nextInput) ? nextInput : [nextInput];
+  const isValid = (value: unknown): value is VideoDurationFilterOption =>
+    value === "all" ||
+    value === "under_1" ||
+    value === "min_1_3" ||
+    value === "min_3_10" ||
+    value === "min_10_30" ||
+    value === "min_30_60" ||
+    value === "long" ||
+    value === "unknown";
+  const validRaw = [...new Set(raw.filter((value): value is VideoDurationFilterOption => isValid(value)))];
+
+  if (validRaw.includes("all")) {
+    if (validRaw.length > 1) {
+      return previousNormalized.includes("all")
+        ? validRaw.filter((value) => value !== "all")
+        : ["all"];
+    }
+    return ["all"];
+  }
+
+  if (validRaw.includes("unknown")) {
+    if (validRaw.length > 1) {
+      return previousNormalized.includes("unknown")
+        ? validRaw.filter((value) => value !== "unknown")
+        : ["unknown"];
+    }
+    return ["unknown"];
+  }
+
+  if (validRaw.length === 0) {
+    return ["all"];
+  }
+
+  return validRaw;
+}
+
+function getDurationFilterOptionLabel(value: VideoDurationFilterOption): string {
+  return (
+    VIDEO_DURATION_FILTER_OPTIONS.find((option) => option.value === value)?.label ?? "SELECT LENGTH"
+  );
+}
+
+function formatDurationFilterSummary(filters: VideoDurationFilter): string {
+  const normalized = normalizeVideoDurationFilter(filters);
+  if (normalized.includes("all")) {
+    return "ANY LENGTH";
+  }
+  if (normalized.length === 1) {
+    return getDurationFilterOptionLabel(normalized[0]);
+  }
+  return "SELECT LENGTH";
 }
 
 function collectBoardMissingDurationNewVideoIds(board: BoardState): string[] {
@@ -3525,19 +3584,24 @@ function App() {
               : CHANNEL_VIDEO_WINDOW_SELECT_OPTIONS
           }
         />
-        <Select<VideoDurationFilter>
+        <Select
+          mode="multiple"
           value={videoDurationFilter}
           onChange={(value) => {
             if (!activeBoard) {
               return;
             }
+            const next = resolveVideoDurationFilterSelection(value, videoDurationFilter);
             setBoard(activeBoard.id, (board) => ({
               ...board,
-              videoDurationFilter: value
+              videoDurationFilter: next
             }));
           }}
           aria-label="Video duration filter"
           className="video-filter-select video-duration-select"
+          maxTagCount={0}
+          maxTagPlaceholder={() => formatDurationFilterSummary(videoDurationFilter)}
+          showSearch={false}
           options={VIDEO_DURATION_FILTER_OPTIONS}
         />
         <Select<number>
