@@ -1457,6 +1457,7 @@ function App() {
   const playerReadyRef = useRef(false);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
   const linkCopyFeedbackTimeoutRef = useRef<number | null>(null);
+  const logoSpinTimeoutRef = useRef<number | null>(null);
   const [playerHostNode, setPlayerHostNode] = useState<HTMLDivElement | null>(null);
   const initialBoardsState = getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
@@ -1503,6 +1504,7 @@ function App() {
   const [renameBoardInput, setRenameBoardInput] = useState("");
   const [isDeleteBoardModalOpen, setIsDeleteBoardModalOpen] = useState(false);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
+  const [isLogoSpinning, setIsLogoSpinning] = useState(false);
   const [errorLogs, setErrorLogs] = useState<ErrorLogEntry[]>(readStoredErrorLogs);
   const [quotaEstimate, setQuotaEstimate] = useState<QuotaEstimateState>(readStoredQuotaEstimate);
   const [videoStatsBackfillInFlight, setVideoStatsBackfillInFlight] = useState<string[]>(
@@ -1688,6 +1690,9 @@ function App() {
       videoMetaFeedbackTimeoutsRef.current = {};
       if (linkCopyFeedbackTimeoutRef.current) {
         window.clearTimeout(linkCopyFeedbackTimeoutRef.current);
+      }
+      if (logoSpinTimeoutRef.current) {
+        window.clearTimeout(logoSpinTimeoutRef.current);
       }
     };
   }, []);
@@ -3341,6 +3346,20 @@ function App() {
     });
   };
 
+  const triggerLogoSpin = (): void => {
+    setIsLogoSpinning(false);
+    window.requestAnimationFrame(() => {
+      setIsLogoSpinning(true);
+      if (logoSpinTimeoutRef.current) {
+        window.clearTimeout(logoSpinTimeoutRef.current);
+      }
+      logoSpinTimeoutRef.current = window.setTimeout(() => {
+        setIsLogoSpinning(false);
+        logoSpinTimeoutRef.current = null;
+      }, 920);
+    });
+  };
+
   return (
     <main className="app-shell">
       <div className="columns-nav">
@@ -3359,7 +3378,8 @@ function App() {
           <img
             src={TOP_BAR_LOGO_SRC}
             alt="Logo"
-            className="top-bar-logo"
+            className={`top-bar-logo ${isLogoSpinning ? "is-spinning" : ""}`}
+            onClick={triggerLogoSpin}
           />
         </Tooltip>
         {!isSavedBoardActive ? (
