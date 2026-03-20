@@ -2434,7 +2434,7 @@ function App() {
     if (!activeBoard || activeBoard.kind === "saved") {
       return;
     }
-    visibleColumns.forEach((column) => {
+    activeBoard.columns.forEach((column) => {
       const rawHandle = column.handleInput.trim();
       if (rawHandle.length > 0) {
         runFetch(activeBoard.id, column.id, column.handleInput);
