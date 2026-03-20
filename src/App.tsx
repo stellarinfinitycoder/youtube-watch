@@ -3344,11 +3344,24 @@ function App() {
   return (
     <main className="app-shell">
       <div className="columns-nav">
-        <img
-          src={TOP_BAR_LOGO_SRC}
-          alt="Logo"
-          className="top-bar-logo"
-        />
+        <Tooltip
+          title={
+            <>
+              <div>{BUILD_INFO_LABEL}</div>
+              <div>{quotaEstimateText}</div>
+              <div>MAX FETCHED VIDEO AGE: 90 DAYS</div>
+              <div>MAX SAVED VIDEO AGE: UNLIMITED</div>
+            </>
+          }
+          placement="bottom"
+          overlayClassName="fetch-all-tooltip"
+        >
+          <img
+            src={TOP_BAR_LOGO_SRC}
+            alt="Logo"
+            className="top-bar-logo"
+          />
+        </Tooltip>
         {!isSavedBoardActive ? (
           <Tooltip
             title={
@@ -4214,10 +4227,6 @@ function App() {
         >
           BD
         </Button>
-        <Text className="backup-limits-text">
-          {quotaEstimateText} | MAX VIDEO AGE: 90 DAYS | MAX SAVED VIDEO AGE: UNLIMITED |{" "}
-          {BUILD_INFO_LABEL}
-        </Text>
         <input
           ref={importInputRef}
           type="file"
