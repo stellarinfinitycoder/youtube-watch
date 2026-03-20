@@ -135,6 +135,7 @@ const SAVED_VIDEO_WINDOW_SELECT_OPTIONS: Array<{ value: VideoWindowFilter; label
   { value: "all", label: "LAST ALL" }
 ];
 const BOARD_DROPDOWN_MAX_VISIBLE = 25;
+const CHANNEL_SCOPE_DROPDOWN_MAX_VISIBLE = 20;
 const BOARD_DROPDOWN_ITEM_HEIGHT = 36;
 const BOARD_DROPDOWN_PADDING = 8;
 const SAVED_BOARD_ID = "saved-board-system";
@@ -1758,6 +1759,10 @@ function App() {
       };
     })
   ];
+  const channelScopeDropdownListHeight =
+    Math.min(columnScopeOptions.length, CHANNEL_SCOPE_DROPDOWN_MAX_VISIBLE) *
+      BOARD_DROPDOWN_ITEM_HEIGHT +
+    BOARD_DROPDOWN_PADDING;
   const activeBoardDurationBackfillIds = activeBoard
     ? collectBoardMissingDurationNewVideoIds(activeBoard)
     : [];
@@ -3597,6 +3602,7 @@ function App() {
           }}
           aria-label="Channel scope filter"
           className="video-filter-select channel-scope-select"
+          listHeight={channelScopeDropdownListHeight}
           options={columnScopeOptions}
         />
         {!isSavedBoardActive ? (
