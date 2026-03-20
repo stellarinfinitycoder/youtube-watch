@@ -3826,7 +3826,6 @@ function App() {
                             column.loading ||
                             !hasHandleInput
                           }
-                          loading={column.loading}
                           aria-label={`Fetch column ${index + 1}`}
                           className="inline-fetch-btn"
                         >
@@ -4164,6 +4163,7 @@ function App() {
                 onClick={addColumn}
                 aria-label="Add column"
                 className="add-column-btn add-column-plus-btn"
+                disabled={!isSavedBoardActive && hideEmptyColumns}
               >
                 +
               </Button>
@@ -4172,6 +4172,7 @@ function App() {
                 onClick={() => setIsBulkModalOpen(true)}
                 aria-label="Bulk add channels"
                 className="add-column-btn add-column-bulk-btn"
+                disabled={!isSavedBoardActive && hideEmptyColumns}
               >
                 <img src={PLAYLIST_ADD_ICON} alt="" className="add-column-bulk-icon" />
               </Button>
