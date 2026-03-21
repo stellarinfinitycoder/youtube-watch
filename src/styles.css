@@ -1376,9 +1376,9 @@ body {
   }
 
   .ant-modal {
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
+    width: calc(100vw - 6px) !important;
+    max-width: calc(100vw - 6px) !important;
+    margin: 0 auto !important;
   }
 
   .columns-nav {
@@ -1616,9 +1616,9 @@ body {
   }
 
   .video-player-modal .ant-modal {
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
+    width: calc(100vw - 6px) !important;
+    max-width: calc(100vw - 6px) !important;
+    margin: 0 auto !important;
     top: 0;
     padding-bottom: 0;
   }
@@ -1636,9 +1636,9 @@ body {
   }
 
   .save-video-modal .ant-modal {
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
+    width: calc(100vw - 6px) !important;
+    max-width: calc(100vw - 6px) !important;
+    margin: 0 auto !important;
   }
 
   .save-video-modal .ant-modal-content {
