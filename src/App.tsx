@@ -30,7 +30,6 @@ const DEFAULT_COLUMN_COUNT = 3;
 const CHANGE_STAMP = "180326090731";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
-const PLAYLIST_ADD_ICON = "/svg/btn-batch-add.svg";
 const CHANNEL_PLACEHOLDER_ICON = "/svg/placeholder-channel.svg";
 const PLAYBACK_RATE_OPTIONS = [1, 1.5, 2] as const;
 const BUILD_INFO_LABEL = CHANGE_STAMP;
@@ -1774,6 +1773,18 @@ function App() {
     activeBoardDurationBackfillIds.length / 50
   );
 
+  const focusBulkModalInput = (): void => {
+    const focusNow = () => {
+      const textarea = document.querySelector<HTMLTextAreaElement>(
+        ".add-channels-modal textarea"
+      );
+      textarea?.focus();
+      textarea?.select();
+    };
+    requestAnimationFrame(focusNow);
+    window.setTimeout(focusNow, 120);
+  };
+
   useEffect(() => {
     setBoards((previous) => ensureSavedBoard(previous));
   }, []);
@@ -1790,6 +1801,26 @@ function App() {
   useEffect(() => {
     setPlaybackRate(preferredPlaybackRate);
   }, [preferredPlaybackRate]);
+
+  useEffect(() => {
+    if (!isBulkModalOpen) {
+      return;
+    }
+    focusBulkModalInput();
+  }, [isBulkModalOpen]);
+
+  useEffect(() => {
+    if (!editingChannelColumnId) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLInputElement>(
+        ".ant-modal input[placeholder='@channel']"
+      );
+      input?.focus();
+      input?.select();
+    });
+  }, [editingChannelColumnId]);
 
   useEffect(() => {
     return () => {
@@ -2359,11 +2390,8 @@ function App() {
       scrollToColumnsEndSoon();
       return;
     }
-    setBoard(activeBoard.id, (board) => ({
-      ...board,
-      columns: [...board.columns, createColumnState()]
-    }));
-    scrollToColumnsEndSoon();
+    setBulkInput("");
+    setIsBulkModalOpen(true);
   };
 
   const removeColumnById = (columnIdToRemove: string): void => {
@@ -3792,6 +3820,11 @@ function App() {
         open={isBulkModalOpen}
         onCancel={() => setIsBulkModalOpen(false)}
         onOk={handleBulkAddConfirm}
+        afterOpenChange={(open) => {
+          if (open) {
+            focusBulkModalInput();
+          }
+        }}
         okText="Add"
         className="add-channels-modal"
       >
@@ -4356,17 +4389,6 @@ function App() {
                 }
               >
                 +
-              </Button>
-              <Button
-                htmlType="button"
-                onClick={() => setIsBulkModalOpen(true)}
-                aria-label="Bulk add channels"
-                className="add-column-btn add-column-bulk-btn"
-                disabled={
-                  !isSavedBoardActive && !isAllColumnsScopeSelected
-                }
-              >
-                <img src={PLAYLIST_ADD_ICON} alt="" className="add-column-bulk-icon" />
               </Button>
             </aside>
           </section>

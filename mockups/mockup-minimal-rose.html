@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Board Mockup</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap");
+
+      :root {
+        --bg-top: #101014;
+        --bg-bottom: #050507;
+        --shell: #070709;
+        --surface: #121317;
+        --amber: #ff8f1f;
+        --amber-soft: #5b3a12;
+        --amber-deep: #1f1205;
+        --text: #f4d4aa;
+        --text-strong: #ffe6c7;
+        --muted: #b08b5e;
+        --danger: rgba(204, 106, 106, 0.65);
+      }
+
+      * {
+        box-sizing: border-box;
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background:
+          linear-gradient(180deg, var(--bg-top), var(--bg-bottom)),
+          repeating-linear-gradient(90deg, rgba(255, 143, 31, 0.03) 0 1px, transparent 1px 11px);
+      }
+
+      button,
+      input,
+      select {
+        -webkit-appearance: none;
+        appearance: none;
+        border-radius: 0;
+      }
+
+      .app {
+        min-height: 100vh;
+        padding: 12px;
+      }
+
+      .topbar {
+        width: calc(100% + 24px);
+        margin: 0 -12px 10px;
+        padding: 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(255, 143, 31, 0.12);
+      }
+
+      .logo {
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--amber-soft);
+        background: #0b0b0d;
+        color: var(--amber);
+        display: grid;
+        place-items: center;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .ctrl,
+      .select {
+        height: 32px;
+        border: 1px solid var(--amber-soft);
+        background: #0b0b0d;
+        color: var(--text);
+        font: inherit;
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+
+      .ctrl {
+        padding: 0 12px;
+        cursor: pointer;
+      }
+
+      .ctrl.primary {
+        background: var(--amber);
+        color: #18110a;
+        border-color: var(--amber);
+      }
+
+      .ctrl.square {
+        width: 32px;
+        padding: 0;
+      }
+
+      .select {
+        min-width: 110px;
+        padding: 0 30px 0 10px;
+      }
+
+      .columns-wrap {
+        overflow-x: auto;
+        padding-bottom: 8px;
+      }
+
+      .columns {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        min-width: max-content;
+      }
+
+      .column {
+        width: 320px;
+        border: 1px solid var(--amber-soft);
+        background: var(--surface);
+        padding: 10px;
+      }
+
+      .col-actions,
+      .col-header,
+      .video-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .col-actions {
+        margin-bottom: 10px;
+      }
+
+      .col-actions .left { display: flex; gap: 8px; }
+      .col-actions .right { margin-left: auto; display: flex; gap: 8px; }
+
+      .action {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid var(--amber-soft);
+        background: #0b0b0d;
+        color: var(--text);
+        font: inherit;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .action.watch {
+        background: var(--amber-deep);
+        color: var(--amber);
+      }
+
+      .action.delete {
+        border-color: rgba(204, 106, 106, 0.52);
+        color: var(--danger);
+        background: transparent;
+      }
+
+      .avatar {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--amber-soft);
+        background: #0b0b0d;
+        color: var(--amber);
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        flex: 0 0 30px;
+      }
+
+      .handle {
+        height: 32px;
+        border: 1px solid var(--amber-soft);
+        background: #120b05;
+        color: var(--text-strong);
+        font: inherit;
+        font-weight: 700;
+        padding: 0 10px;
+        flex: 1;
+        text-transform: uppercase;
+      }
+
+      .inline-fetch {
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--amber-soft);
+        background: #0b0b0d;
+        color: var(--text);
+        font: inherit;
+        font-weight: 700;
+      }
+
+      .video {
+        margin-top: 10px;
+        padding: 10px;
+        margin-inline: -10px;
+        border-bottom: 1px solid rgba(255, 143, 31, 0.14);
+        transition: background-color 120ms ease;
+      }
+
+      .video:last-child { border-bottom: 0; }
+      .video:hover { background: rgba(255, 143, 31, 0.12); }
+
+      .video-meta {
+        color: #c08f56;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+
+      .video-meta .grow { flex: 1; }
+
+      .thumb {
+        width: 100%;
+        height: 170px;
+        border: 1px solid var(--amber-soft);
+        background: linear-gradient(135deg, #082434, #0c1117 52%, #301a08);
+        margin-bottom: 8px;
+      }
+
+      .title {
+        margin: 0;
+        color: #ffe0b7;
+        font-size: 16px;
+        line-height: 1.4;
+        text-transform: none;
+      }
+
+      .add-rail {
+        width: 40px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .add-btn {
+        width: 40px;
+        height: 40px;
+        border: 1px solid var(--amber-soft);
+        background: #0b0b0d;
+        color: var(--text);
+        font: inherit;
+        font-size: 26px;
+        font-weight: 700;
+      }
+
+      .footer {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .limits {
+        margin-left: auto;
+        color: #c08f56;
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+    </style>
+    <style>
+      /* Theme variant: minimal rose */
+      * { letter-spacing: 0 !important; }
+      body { background: #f8eef1 !important; color: #35222a !important; }
+      .topbar { background: #fff6f8 !important; border-bottom: 1px solid #e3c8d2 !important; }
+      .logo, .ctrl, .select, .action, .inline-fetch, .add-btn {
+        background: #fffafb !important;
+        border-color: #e3c8d2 !important;
+        color: #4a2e39 !important;
+        border-radius: 8px !important;
+      }
+      .ctrl.primary { background: #7f3d56 !important; color: #fff7fa !important; border-color: #7f3d56 !important; }
+      .column { background: #fffafb !important; border-color: #e3c8d2 !important; border-radius: 10px !important; }
+      .handle { background: #faedf2 !important; border-color: #e3c8d2 !important; color: #35222a !important; border-radius: 8px !important; }
+      .avatar { background: #f6e6ec !important; border-color: #e3c8d2 !important; color: #93697b !important; border-radius: 8px !important; }
+      .thumb { background: linear-gradient(135deg,#f3dde5,#fdf4f7) !important; border-color: #e3c8d2 !important; border-radius: 10px !important; }
+      .video { border-bottom: 1px solid #edd9e0 !important; }
+      .video:hover { background: #fbf0f4 !important; }
+      .title { color: #35222a !important; font-size: 15px !important; }
+      .video-meta, .limits { color: #8f6576 !important; }
+      .action.watch, .watch { background: #f6e6ec !important; color: #7f3d56 !important; border-color: #d8afbe !important; }
+      .action.delete { background: #fff2f1 !important; color: #b25a66 !important; border-color: #e4b9c0 !important; }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div class="logo">▶</div>
+        <select class="select"><option>MARKET</option></select>
+        <select class="select"><option>NEW</option></select>
+        <select class="select"><option>180D</option></select>
+        <select class="select"><option>1.5X</option></select>
+        <button class="ctrl primary">FETCH</button>
+        <button class="ctrl">PLAY</button>
+        <button class="ctrl square">&laquo;</button>
+        <button class="ctrl square">&lsaquo;</button>
+        <button class="ctrl square">&rsaquo;</button>
+        <button class="ctrl square">&raquo;</button>
+      </header>
+
+      <div class="columns-wrap">
+        <section class="columns">
+          <article class="column">
+            <div class="col-actions">
+              <div class="left">
+                <button class="action">&lsaquo;</button>
+                <button class="action">&rsaquo;</button>
+              </div>
+              <div class="right">
+                <button class="action">P</button>
+                <button class="action">M</button>
+                <button class="action watch">WA</button>
+                <button class="action delete">X</button>
+              </div>
+            </div>
+
+            <div class="col-header">
+              <div class="avatar">YT</div>
+              <input class="handle" value="@NATEBJONES" />
+              <button class="inline-fetch">F</button>
+            </div>
+
+            <div class="video">
+              <div class="video-meta">
+                <span class="grow">13.03.26 | 22:45 | 38K</span>
+                <button class="action watch">W</button>
+              </div>
+              <div class="thumb"></div>
+              <h3 class="title">Stop trusting AI agents to guess your intent.</h3>
+            </div>
+
+            <div class="video">
+              <div class="video-meta">
+                <span class="grow">12.03.26 | 11:21 | 6K</span>
+                <button class="action watch">W</button>
+              </div>
+              <div class="thumb"></div>
+              <h3 class="title">4 AI labs built the same system without talking.</h3>
+            </div>
+          </article>
+
+          <article class="column">
+            <div class="col-actions">
+              <div class="left">
+                <button class="action">&lsaquo;</button>
+                <button class="action">&rsaquo;</button>
+              </div>
+              <div class="right">
+                <button class="action">P</button>
+                <button class="action">M</button>
+                <button class="action watch">WA</button>
+                <button class="action delete">X</button>
+              </div>
+            </div>
+
+            <div class="col-header">
+              <div class="avatar">YT</div>
+              <input class="handle" value="@CLEARMUD" />
+              <button class="inline-fetch">F</button>
+            </div>
+
+            <div class="video">
+              <div class="video-meta">
+                <span class="grow">14.03.26 | 09:03 | 12K</span>
+                <button class="action watch">W</button>
+              </div>
+              <div class="thumb"></div>
+              <h3 class="title">I gave my AI agent a full operating system.</h3>
+            </div>
+
+            <div class="video">
+              <div class="video-meta">
+                <span class="grow">11.03.26 | 20:10 | 4K</span>
+                <button class="action watch">W</button>
+              </div>
+              <div class="thumb"></div>
+              <h3 class="title">OpenClaw agents vs sub-agents: how it works.</h3>
+            </div>
+          </article>
+
+          <article class="column">
+            <div class="col-actions">
+              <div class="left">
+                <button class="action">&lsaquo;</button>
+                <button class="action">&rsaquo;</button>
+              </div>
+              <div class="right">
+                <button class="action">P</button>
+                <button class="action">M</button>
+                <button class="action watch">UA</button>
+                <button class="action delete">X</button>
+              </div>
+            </div>
+
+            <div class="col-header">
+              <div class="avatar">YT</div>
+              <input class="handle" value="@DAVIDONDREJ" />
+              <button class="inline-fetch">F</button>
+            </div>
+
+            <div class="video">
+              <div class="video-meta">
+                <span class="grow">10.03.26 | 18:22 | 21K</span>
+                <button class="action">U</button>
+              </div>
+              <div class="thumb"></div>
+              <h3 class="title">OpenClaw 2.0 is here.</h3>
+            </div>
+
+            <div class="video">
+              <div class="video-meta">
+                <span class="grow">09.03.26 | 07:12 | 9K</span>
+                <button class="action">U</button>
+              </div>
+              <div class="thumb"></div>
+              <h3 class="title">How to build robust board workflows in practice.</h3>
+            </div>
+          </article>
+
+          <aside class="add-rail">
+            <button class="add-btn">+</button>
+            <button class="add-btn">A</button>
+          </aside>
+        </section>
+      </div>
+
+      <footer class="footer">
+        <button class="ctrl">BACKUP</button>
+        <button class="ctrl">RESTORE</button>
+        <button class="ctrl">LOGS</button>
+        <span class="limits">MAX FETCH LIMIT: 50 VIDEOS | MAX VIDEO AGE: 180 DAYS | BUILD: STATIC MOCKUP</span>
+      </footer>
+    </main>
+  </body>
+</html>
