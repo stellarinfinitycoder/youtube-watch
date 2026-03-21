@@ -10,6 +10,7 @@ import {
   fetchViewCountsByVideoIds,
   getLatestVideosAndChannelByHandle,
   normalizeHandle,
+  resolveChannelByInputWithThumbnail,
   resolveChannelByHandleWithThumbnail
 } from "./api/_lib/youtube";
 
@@ -101,6 +102,13 @@ export default defineConfig(({ mode }) => {
               if (url.pathname === "/api/youtube/resolve" && method === "GET") {
                 const handle = normalizeHandle(url.searchParams.get("handle") ?? "");
                 const data = await resolveChannelByHandleWithThumbnail(handle);
+                sendJson(res, 200, data);
+                return;
+              }
+
+              if (url.pathname === "/api/youtube/resolve-input" && method === "GET") {
+                const input = String(url.searchParams.get("input") ?? "");
+                const data = await resolveChannelByInputWithThumbnail(input);
                 sendJson(res, 200, data);
                 return;
               }

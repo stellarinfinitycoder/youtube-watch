@@ -19,6 +19,7 @@ import type { FetchState } from "./types/youtube";
 import {
   fetchPlaylistDiscoveryPage,
   fetchVideoStatsByVideoIds,
+  resolveChannelByInputWithThumbnail,
   resolveChannelByHandleWithThumbnail
 } from "./api/youtube";
 import { normalizeHandle } from "./utils/handle";
@@ -1400,10 +1401,13 @@ function parseBulkHandles(raw: string): string[] {
 
   const unique = new Set<string>();
   for (const token of tokens) {
-    try {
-      unique.add(normalizeHandle(token));
-    } catch {
-      // Ignore invalid handles in bulk mode.
+    const lower = token.toLowerCase();
+    if (lower.includes("youtu.be/") || lower.includes("youtube.com/")) {
+      unique.add(token);
+      continue;
+    }
+    if (/^[A-Za-z0-9._-]{3,30}$/.test(token) || token.startsWith("@")) {
+      unique.add(token);
     }
   }
 
@@ -2178,7 +2182,16 @@ function App() {
     setColumn(boardId, columnId, (prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      const normalized = normalizeHandle(handle);
+      let normalized = "";
+      let resolvedFromInput: Awaited<
+        ReturnType<typeof resolveChannelByInputWithThumbnail>
+      > | null = null;
+      try {
+        normalized = normalizeHandle(handle);
+      } catch {
+        resolvedFromInput = await resolveChannelByInputWithThumbnail(handle);
+        normalized = resolvedFromInput.normalizedHandle;
+      }
       const boardState = boards.find((board) => board.id === boardId);
       const currentColumn = boardState?.columns.find((column) => column.id === columnId);
       if (!currentColumn) {
@@ -2200,8 +2213,17 @@ function App() {
       let channelId = currentColumn.channelId;
       let uploadsPlaylistId = currentColumn.uploadsPlaylistId;
       let nextChannelThumbnailUrl = currentColumn.channelThumbnailUrl;
+      if (resolvedFromInput) {
+        channelId = resolvedFromInput.channelId;
+        uploadsPlaylistId = resolvedFromInput.uploadsPlaylistId;
+        nextChannelThumbnailUrl =
+          resolvedFromInput.channelThumbnailUrl || nextChannelThumbnailUrl;
+      }
 
-      if (!channelId || !uploadsPlaylistId || currentColumn.currentHandle !== normalized) {
+      if (
+        !resolvedFromInput &&
+        (!channelId || !uploadsPlaylistId || currentColumn.currentHandle !== normalized)
+      ) {
         estimatedQuotaUnits += 1; // channels.list for handle resolve + uploads playlist
         const lookup = await resolveChannelByHandleWithThumbnail(normalized);
         channelId = lookup.channelId;
@@ -2283,6 +2305,7 @@ function App() {
             (a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a)
           );
         })(),
+        handleInput: normalized,
         currentHandle: normalized,
         channelId: channelId || prev.channelId,
         uploadsPlaylistId: uploadsPlaylistId || prev.uploadsPlaylistId,

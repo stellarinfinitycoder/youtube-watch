@@ -10,6 +10,11 @@ export type ChannelLookupResult = {
   uploadsPlaylistId: string;
 };
 
+export type ChannelInputLookupResult = ChannelLookupResult & {
+  normalizedHandle: string;
+  resolutionType: "handle" | "video";
+};
+
 export type ChannelVideosResult = {
   channelThumbnailUrl: string;
   videos: VideoItem[];
@@ -75,6 +80,14 @@ export async function resolveChannelByHandleWithThumbnail(
   const normalized = normalizeHandle(handle);
   return fetchJson<ChannelLookupResult>(
     buildInternalUrl("/api/youtube/resolve", { handle: normalized })
+  );
+}
+
+export async function resolveChannelByInputWithThumbnail(
+  input: string
+): Promise<ChannelInputLookupResult> {
+  return fetchJson<ChannelInputLookupResult>(
+    buildInternalUrl("/api/youtube/resolve-input", { input: input.trim() })
   );
 }
 

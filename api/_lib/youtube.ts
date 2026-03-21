@@ -41,10 +41,27 @@ type ChannelSnippetByIdResponse = {
 
 type ChannelDetailsResponse = {
   items?: Array<{
+    id?: string;
+    snippet?: {
+      customUrl?: string;
+      thumbnails?: {
+        high?: { url?: string };
+        medium?: { url?: string };
+        default?: { url?: string };
+      };
+    };
     contentDetails?: {
       relatedPlaylists?: {
         uploads?: string;
       };
+    };
+  }>;
+};
+
+type VideoByIdResponse = {
+  items?: Array<{
+    snippet?: {
+      channelId?: string;
     };
   }>;
 };
@@ -264,6 +281,141 @@ export async function resolveChannelByHandleWithThumbnail(
     channelId,
     channelThumbnailUrl: normalizeImageUrl(channelThumbnailUrl),
     uploadsPlaylistId
+  };
+}
+
+function extractYouTubeVideoId(input: string): string | null {
+  const raw = input
+    .trim()
+    .replace(/^[<(\["']+/, "")
+    .replace(/[>)\]"',.;:!?]+$/, "");
+  if (!raw) {
+    return null;
+  }
+
+  const directVideoIdMatch = raw.match(/^[A-Za-z0-9_-]{11}$/);
+  if (directVideoIdMatch) {
+    return raw;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+
+  const host = url.hostname.toLowerCase();
+  const isYouTubeHost =
+    host === "youtube.com" ||
+    host === "www.youtube.com" ||
+    host === "m.youtube.com" ||
+    host === "music.youtube.com" ||
+    host === "youtu.be" ||
+    host === "www.youtu.be";
+  if (!isYouTubeHost) {
+    return null;
+  }
+
+  if (host.includes("youtu.be")) {
+    const segment = url.pathname.split("/").filter(Boolean)[0] ?? "";
+    return /^[A-Za-z0-9_-]{11}$/.test(segment) ? segment : null;
+  }
+
+  const watchId = url.searchParams.get("v") ?? "";
+  if (/^[A-Za-z0-9_-]{11}$/.test(watchId)) {
+    return watchId;
+  }
+
+  const parts = url.pathname.split("/").filter(Boolean);
+  const shortsIndex = parts.findIndex((part) => part === "shorts");
+  if (shortsIndex >= 0) {
+    const maybeId = parts[shortsIndex + 1] ?? "";
+    return /^[A-Za-z0-9_-]{11}$/.test(maybeId) ? maybeId : null;
+  }
+
+  const embedIndex = parts.findIndex((part) => part === "embed");
+  if (embedIndex >= 0) {
+    const maybeId = parts[embedIndex + 1] ?? "";
+    return /^[A-Za-z0-9_-]{11}$/.test(maybeId) ? maybeId : null;
+  }
+
+  return null;
+}
+
+export async function resolveChannelByInputWithThumbnail(input: string): Promise<{
+  normalizedHandle: string;
+  channelId: string;
+  channelThumbnailUrl: string;
+  uploadsPlaylistId: string;
+  resolutionType: "handle" | "video";
+}> {
+  const raw = input.trim();
+  if (!raw) {
+    throw new Error("Channel not found.");
+  }
+
+  try {
+    const normalizedHandle = normalizeHandle(raw);
+    const data = await resolveChannelByHandleWithThumbnail(normalizedHandle);
+    return {
+      normalizedHandle,
+      channelId: data.channelId,
+      channelThumbnailUrl: data.channelThumbnailUrl,
+      uploadsPlaylistId: data.uploadsPlaylistId,
+      resolutionType: "handle"
+    };
+  } catch {
+    // Fall through to video-link resolution.
+  }
+
+  const videoId = extractYouTubeVideoId(raw);
+  if (!videoId) {
+    throw new Error("Channel not found.");
+  }
+
+  const apiKey = getApiKey();
+  const videoUrl = buildUrl("/videos", {
+    part: "snippet",
+    id: videoId,
+    key: apiKey
+  });
+  const videoData = await fetchJson<VideoByIdResponse>(videoUrl);
+  const channelId = videoData.items?.[0]?.snippet?.channelId;
+  if (!channelId) {
+    throw new Error("Channel not found.");
+  }
+
+  const channelUrl = buildUrl("/channels", {
+    part: "snippet,contentDetails",
+    id: channelId,
+    key: apiKey
+  });
+  const channelData = await fetchJson<ChannelDetailsResponse>(channelUrl);
+  const channel = channelData.items?.[0];
+  const uploadsPlaylistId = channel?.contentDetails?.relatedPlaylists?.uploads;
+  if (!uploadsPlaylistId) {
+    throw new Error("Uploads playlist not found for this channel.");
+  }
+
+  const handleCandidate = channel?.snippet?.customUrl?.trim() ?? "";
+  const normalizedHandle = normalizeHandle(
+    handleCandidate.startsWith("@") ? handleCandidate : `@${handleCandidate}`
+  );
+
+  const channelThumbnailUrl = normalizeImageUrl(
+    channel?.snippet?.thumbnails?.high?.url ??
+      channel?.snippet?.thumbnails?.medium?.url ??
+      channel?.snippet?.thumbnails?.default?.url ??
+      ""
+  );
+
+  return {
+    normalizedHandle,
+    channelId,
+    channelThumbnailUrl,
+    uploadsPlaylistId,
+    resolutionType: "video"
   };
 }
 
