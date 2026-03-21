@@ -4615,7 +4615,7 @@ function App() {
             confirmEditChannelName();
           }}
           placeholder="@channel"
-          maxLength={30}
+          maxLength={100}
           autoFocus
         />
       </Modal>
