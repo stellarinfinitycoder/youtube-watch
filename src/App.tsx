@@ -250,7 +250,7 @@ type BoardState = {
   name: string;
   kind: BoardKind;
   columns: ColumnState[];
-  columnScopeFilter: string;
+  columnScopeFilter: string[];
   watchedVideos: Record<string, boolean>;
   viewCountRefreshedAtByVideoId: Record<string, number>;
   videoFilter: VideoFilter;
@@ -264,7 +264,7 @@ type PersistedBoardState = {
   name: string;
   kind?: BoardKind;
   columns: PersistedColumnState[];
-  columnScopeFilter?: string;
+  columnScopeFilter?: string | string[];
   watchedVideos: Record<string, boolean>;
   viewCountRefreshedAtByVideoId?: Record<string, number>;
   videoFilter: VideoFilter;
@@ -747,7 +747,7 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
       name: "BOARD 1",
       kind: "channels",
       columns,
-      columnScopeFilter: COLUMN_SCOPE_ALL,
+      columnScopeFilter: [COLUMN_SCOPE_ALL],
       watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
       viewCountRefreshedAtByVideoId: {},
       videoFilter:
@@ -835,7 +835,7 @@ function createBoardState(
     name,
     kind: "channels",
     columns: Array.from({ length: initialColumnCount }, () => createColumnState()),
-    columnScopeFilter: COLUMN_SCOPE_ALL,
+    columnScopeFilter: [COLUMN_SCOPE_ALL],
     watchedVideos: {},
     viewCountRefreshedAtByVideoId: {},
     videoFilter: "new",
@@ -979,9 +979,10 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     kind,
     columns,
     columnScopeFilter:
-      typeof candidate.columnScopeFilter === "string"
+      typeof candidate.columnScopeFilter === "string" ||
+      Array.isArray(candidate.columnScopeFilter)
         ? candidate.columnScopeFilter
-        : COLUMN_SCOPE_ALL,
+        : [COLUMN_SCOPE_ALL],
     watchedVideos: sanitizeWatchedVideos(candidate.watchedVideos),
     viewCountRefreshedAtByVideoId: sanitizeNumericMap(
       candidate.viewCountRefreshedAtByVideoId
@@ -1005,25 +1006,27 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
 }
 
 function fromPersistedBoard(board: PersistedBoardState): BoardState {
+  const restoredColumns = board.columns.map((column) =>
+    createColumnState({
+      id: column.id,
+      handleInput: column.handleInput,
+      currentHandle: column.currentHandle,
+      channelId: column.channelId ?? "",
+      uploadsPlaylistId: column.uploadsPlaylistId ?? "",
+      channelThumbnailUrl: column.channelThumbnailUrl,
+      videos: column.videos,
+      lastFetchAt: column.lastFetchAt,
+      savedSortMode: column.savedSortMode ?? DEFAULT_SAVED_SORT_MODE,
+      savedAddedAtByVideoId: column.savedAddedAtByVideoId ?? {},
+      savedManualOrder: column.savedManualOrder ?? []
+    })
+  );
+
   return createBoardState(board.name, {
     id: board.id,
     kind: board.kind === "saved" ? "saved" : "channels",
-    columns: board.columns.map((column) =>
-      createColumnState({
-        id: column.id,
-        handleInput: column.handleInput,
-        currentHandle: column.currentHandle,
-        channelId: column.channelId ?? "",
-        uploadsPlaylistId: column.uploadsPlaylistId ?? "",
-        channelThumbnailUrl: column.channelThumbnailUrl,
-        videos: column.videos,
-        lastFetchAt: column.lastFetchAt,
-        savedSortMode: column.savedSortMode ?? DEFAULT_SAVED_SORT_MODE,
-        savedAddedAtByVideoId: column.savedAddedAtByVideoId ?? {},
-        savedManualOrder: column.savedManualOrder ?? []
-      })
-    ),
-    columnScopeFilter: board.columnScopeFilter ?? COLUMN_SCOPE_ALL,
+    columns: restoredColumns,
+    columnScopeFilter: normalizeColumnScopeFilter(board.columnScopeFilter, restoredColumns),
     watchedVideos: board.watchedVideos,
     viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
     videoFilter: board.videoFilter,
@@ -1260,6 +1263,104 @@ function normalizeVideoDurationFilter(input: unknown): VideoDurationFilter {
     return [input];
   }
   return ["all"];
+}
+
+function normalizeColumnScopeFilter(
+  input: unknown,
+  columns: ColumnState[]
+): string[] {
+  const validValues = new Set<string>([
+    COLUMN_SCOPE_ALL,
+    COLUMN_SCOPE_NOT_EMPTY,
+    ...columns.map((column) => column.id)
+  ]);
+  const raw = Array.isArray(input) ? input : [input];
+  const next = [
+    ...new Set(
+      raw.filter((value): value is string => typeof value === "string" && validValues.has(value))
+    )
+  ];
+  if (next.length === 0 || next.includes(COLUMN_SCOPE_ALL)) {
+    return [COLUMN_SCOPE_ALL];
+  }
+  if (next.includes(COLUMN_SCOPE_NOT_EMPTY)) {
+    return [COLUMN_SCOPE_NOT_EMPTY];
+  }
+  return next;
+}
+
+function resolveColumnScopeFilterSelection(
+  nextInput: unknown,
+  previous: string[],
+  columns: ColumnState[]
+): string[] {
+  const previousNormalized = normalizeColumnScopeFilter(previous, columns);
+  const raw = Array.isArray(nextInput) ? nextInput : [nextInput];
+  const validValues = new Set<string>([
+    COLUMN_SCOPE_ALL,
+    COLUMN_SCOPE_NOT_EMPTY,
+    ...columns.map((column) => column.id)
+  ]);
+  const validRaw = [
+    ...new Set(
+      raw.filter((value): value is string => typeof value === "string" && validValues.has(value))
+    )
+  ];
+
+  if (validRaw.includes(COLUMN_SCOPE_ALL)) {
+    if (validRaw.length > 1) {
+      return previousNormalized.includes(COLUMN_SCOPE_ALL)
+        ? validRaw.filter((value) => value !== COLUMN_SCOPE_ALL)
+        : [COLUMN_SCOPE_ALL];
+    }
+    return [COLUMN_SCOPE_ALL];
+  }
+
+  if (validRaw.includes(COLUMN_SCOPE_NOT_EMPTY)) {
+    if (validRaw.length > 1) {
+      return previousNormalized.includes(COLUMN_SCOPE_NOT_EMPTY)
+        ? validRaw.filter((value) => value !== COLUMN_SCOPE_NOT_EMPTY)
+        : [COLUMN_SCOPE_NOT_EMPTY];
+    }
+    return [COLUMN_SCOPE_NOT_EMPTY];
+  }
+
+  if (validRaw.length === 0) {
+    return [COLUMN_SCOPE_ALL];
+  }
+
+  return validRaw;
+}
+
+function formatColumnScopeSummary(
+  values: string[],
+  isSavedBoardActive: boolean,
+  columns: ColumnState[]
+): string {
+  const normalized = normalizeColumnScopeFilter(values, columns);
+  if (normalized.includes(COLUMN_SCOPE_ALL)) {
+    return isSavedBoardActive ? "ALL LISTS" : "ALL CHANNELS";
+  }
+  if (normalized.includes(COLUMN_SCOPE_NOT_EMPTY)) {
+    return "ACTIVE CHANNELS";
+  }
+  if (normalized.length === 1) {
+    const selectedColumn = columns.find((column) => column.id === normalized[0]);
+    if (!selectedColumn) {
+      return "1 SELECTED";
+    }
+    const raw = selectedColumn.currentHandle.trim() || selectedColumn.handleInput.trim();
+    if (raw.length === 0) {
+      return isSavedBoardActive ? "1 LIST" : "1 CHANNEL";
+    }
+    const label = isSavedBoardActive
+      ? raw
+      : raw.startsWith("@")
+      ? raw
+      : `@${raw}`;
+    return label.toUpperCase();
+  }
+  return `${normalized.length} SELECTED`;
 }
 
 function resolveVideoDurationFilterSelection(
@@ -1674,14 +1775,11 @@ function App() {
     ? normalizeVideoWindowFilterForKind(activeBoard.kind, activeBoard.videoWindowDays)
     : DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
-  const columnScopeFilterRaw = activeBoard?.columnScopeFilter ?? COLUMN_SCOPE_ALL;
-  const columnScopeFilter =
-    columnScopeFilterRaw === COLUMN_SCOPE_ALL ||
-    columnScopeFilterRaw === COLUMN_SCOPE_NOT_EMPTY ||
-    columns.some((column) => column.id === columnScopeFilterRaw)
-      ? columnScopeFilterRaw
-      : COLUMN_SCOPE_ALL;
-  const isAllColumnsScopeSelected = columnScopeFilter === COLUMN_SCOPE_ALL;
+  const columnScopeFilter = normalizeColumnScopeFilter(
+    activeBoard?.columnScopeFilter ?? [COLUMN_SCOPE_ALL],
+    columns
+  );
+  const isAllColumnsScopeSelected = columnScopeFilter.includes(COLUMN_SCOPE_ALL);
   const quotaEstimateText = `LAST Q: ${quotaEstimate.lastActionUnits} | TODAY: ${quotaEstimate.todayUnits}`;
   const topbarLastFetchLabel = activeBoard
     ? formatLastFetchTooltipLabel(
@@ -1726,11 +1824,11 @@ function App() {
     });
   }
   const scopedColumns =
-    columnScopeFilter === COLUMN_SCOPE_ALL
+    columnScopeFilter.includes(COLUMN_SCOPE_ALL)
       ? columns
-      : columnScopeFilter === COLUMN_SCOPE_NOT_EMPTY
+      : columnScopeFilter.includes(COLUMN_SCOPE_NOT_EMPTY)
       ? columns.filter((column) => (shownVideoCountByColumnId.get(column.id) ?? 0) > 0)
-      : columns.filter((column) => column.id === columnScopeFilter);
+      : columns.filter((column) => columnScopeFilter.includes(column.id));
   const visibleColumns = scopedColumns;
   const shownVideosTotal = visibleColumns.reduce(
     (total, column) => total + (shownVideoCountByColumnId.get(column.id) ?? 0),
@@ -3666,20 +3764,31 @@ function App() {
             NEW BOARD
           </Select.Option>
         </Select>
-        <Select<string>
+        <Select
+          mode="multiple"
           value={columnScopeFilter}
-          onChange={(value) => {
+          onChange={(value: string[]) => {
             if (!activeBoard) {
               return;
             }
+            const next = resolveColumnScopeFilterSelection(
+              value,
+              columnScopeFilter,
+              columns
+            );
             setBoard(activeBoard.id, (board) => ({
               ...board,
-              columnScopeFilter: value
+              columnScopeFilter: next
             }));
           }}
           aria-label="Channel scope filter"
           className="video-filter-select channel-scope-select"
           listHeight={channelScopeDropdownListHeight}
+          maxTagCount={0}
+          maxTagPlaceholder={() =>
+            formatColumnScopeSummary(columnScopeFilter, isSavedBoardActive, columns)
+          }
+          showSearch={false}
           options={columnScopeOptions}
         />
         {!isSavedBoardActive ? (

@@ -178,6 +178,39 @@ body {
   max-width: 320px;
 }
 
+.channel-scope-select.ant-select-multiple .ant-select-selector {
+  min-height: 32px !important;
+  height: 32px !important;
+  padding-block: 0 !important;
+  padding-inline: 10px 28px !important;
+  align-items: center !important;
+}
+
+.channel-scope-select.ant-select-multiple .ant-select-selection-overflow {
+  flex-wrap: nowrap;
+  align-items: center;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.channel-scope-select.ant-select-multiple .ant-select-selection-item {
+  margin: 0 !important;
+  padding: 0 !important;
+  height: auto;
+  line-height: 30px !important;
+  text-transform: uppercase;
+}
+
+.channel-scope-select.ant-select-multiple .ant-select-selection-search {
+  margin-inline-start: 0 !important;
+  margin-inline-end: 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .video-duration-select {
   width: 180px;
   min-width: 180px;
@@ -1517,6 +1550,16 @@ body {
     padding-inline: 10px 28px !important;
     justify-content: flex-start !important;
     text-align: left !important;
+  }
+
+  .channel-scope-select.ant-select-multiple .ant-select-selector {
+    height: 44px !important;
+    min-height: 44px !important;
+    padding-inline: 10px 28px !important;
+  }
+
+  .channel-scope-select.ant-select-multiple .ant-select-selection-item {
+    line-height: 42px !important;
   }
 
   .video-duration-select.ant-select-multiple .ant-select-selection-overflow {
