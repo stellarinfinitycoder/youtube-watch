@@ -1325,13 +1325,25 @@ body {
 }
 
 @media (max-width: 760px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   .app-shell {
     padding: 10px;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .columns-nav {
-    width: calc(100% + 20px);
-    margin: 0 -10px 8px;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 0 8px;
     padding: 10px;
     position: sticky;
     top: 0;
@@ -1470,6 +1482,8 @@ body {
   }
 
   .columns-scroll {
+    width: 100%;
+    max-width: 100%;
     padding: 4px 0 10px;
     overflow-x: hidden;
     overflow-y: visible;
@@ -1490,6 +1504,7 @@ body {
 
   .channel-column {
     width: 100%;
+    max-width: 100%;
     flex: 0 0 auto;
     min-height: 0;
   }
@@ -1515,9 +1530,9 @@ body {
   }
 
   .video-player-modal .ant-modal {
-    width: calc(100vw - 2px) !important;
-    max-width: calc(100vw - 2px) !important;
-    margin: 1px auto;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
     top: 0;
     padding-bottom: 0;
   }
