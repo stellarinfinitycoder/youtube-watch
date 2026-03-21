@@ -2185,14 +2185,17 @@ function App() {
         throw new Error("Column not found.");
       }
       const cutoffTime = getWindowCutoffTime(STORAGE_VIDEO_WINDOW_DAYS);
-      const previousVideosById = new Map(
-        currentColumn.videos.map((video) => [video.videoId, video])
-      );
+      const isChannelSwitch = currentColumn.currentHandle !== normalized;
+      const previousVideosById = isChannelSwitch
+        ? new Map<string, VideoItem>()
+        : new Map(currentColumn.videos.map((video) => [video.videoId, video]));
 
-      const newestKnownPublishedTime = currentColumn.videos.reduce((latest, video) => {
-        const publishedTime = getVideoPublishedTime(video);
-        return publishedTime > latest ? publishedTime : latest;
-      }, 0);
+      const newestKnownPublishedTime = isChannelSwitch
+        ? 0
+        : currentColumn.videos.reduce((latest, video) => {
+            const publishedTime = getVideoPublishedTime(video);
+            return publishedTime > latest ? publishedTime : latest;
+          }, 0);
 
       let channelId = currentColumn.channelId;
       let uploadsPlaylistId = currentColumn.uploadsPlaylistId;
@@ -2259,11 +2262,13 @@ function App() {
         error: null,
         videos: (() => {
           const mergedById = new Map<string, VideoItem>();
-          prev.videos.forEach((video) => {
-            if (getVideoPublishedTime(video) >= cutoffTime) {
-              mergedById.set(video.videoId, video);
-            }
-          });
+          if (!isChannelSwitch) {
+            prev.videos.forEach((video) => {
+              if (getVideoPublishedTime(video) >= cutoffTime) {
+                mergedById.set(video.videoId, video);
+              }
+            });
+          }
 
           discoveredNewVideos.forEach((video) => {
             const stats = statsByVideoId[video.videoId];
@@ -3257,14 +3262,23 @@ function App() {
     if (!activeBoard || activeBoard.kind !== "channels" || !editingChannelColumnId) {
       return;
     }
+    const currentColumn = activeBoard.columns.find(
+      (column) => column.id === editingChannelColumnId
+    );
     const nextName = channelNameInput.trim();
     if (nextName.length === 0) {
       return;
     }
+    const didHandleChange =
+      (currentColumn?.handleInput.trim().toLowerCase() ?? "") !==
+      nextName.toLowerCase();
     setColumn(activeBoard.id, editingChannelColumnId, (prev) => ({
       ...prev,
       handleInput: nextName
     }));
+    if (didHandleChange) {
+      void runFetch(activeBoard.id, editingChannelColumnId, nextName);
+    }
     setEditingChannelColumnId(null);
     setChannelNameInput("");
   };
