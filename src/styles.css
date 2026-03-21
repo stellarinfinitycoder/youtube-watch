@@ -1329,11 +1329,235 @@ body {
     padding: 10px;
   }
 
-  .channel-column {
-    flex-basis: 300px;
+  .columns-nav {
+    width: calc(100% + 20px);
+    margin: 0 -10px 8px;
+    padding: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    gap: 8px;
   }
 
-  .columns-nav {
-    padding: 8px;
+  .columns-nav .nav-btn.ant-btn,
+  .video-filter-select .ant-select-selector,
+  .columns-nav .video-filter-select.ant-select,
+  .columns-nav [aria-label="Fetch all channels"],
+  .columns-nav [aria-label="Play all videos"],
+  .columns-nav .top-wa-btn.ant-btn,
+  .columns-nav [aria-label="Bulk add channels"],
+  .scroll-btn.ant-btn,
+  .top-bar-logo {
+    height: 44px !important;
+    min-height: 44px !important;
+  }
+
+  .top-bar-logo,
+  .columns-nav [aria-label="Fetch all channels"],
+  .columns-nav [aria-label="Play all videos"],
+  .columns-nav .top-wa-btn.ant-btn,
+  .columns-nav [aria-label="Bulk add channels"],
+  .scroll-btn.ant-btn {
+    width: 44px;
+    min-width: 44px;
+    flex: 0 0 44px;
+  }
+
+  .topbar-video-count.ant-typography {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+  }
+
+  .columns-nav [aria-label="Board selector"],
+  .columns-nav [aria-label="Channel scope filter"],
+  .columns-nav [aria-label="Video filter"],
+  .columns-nav [aria-label="Video age window"],
+  .columns-nav [aria-label="Video duration filter"],
+  .columns-nav [aria-label="Default playback speed"] {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    order: unset;
+  }
+
+  .columns-nav .top-bar-logo {
+    order: 1;
+  }
+
+  .columns-nav [aria-label="Fetch all channels"] {
+    order: 2;
+  }
+
+  .columns-nav .topbar-video-count.ant-typography {
+    order: 3;
+  }
+
+  .columns-nav [aria-label="Bulk add channels"] {
+    order: 4;
+  }
+
+  .columns-nav [aria-label="Board selector"] {
+    order: 10;
+  }
+
+  .columns-nav [aria-label="Channel scope filter"] {
+    order: 11;
+  }
+
+  .columns-nav [aria-label="Video filter"] {
+    order: 12;
+  }
+
+  .columns-nav [aria-label="Video age window"] {
+    order: 13;
+  }
+
+  .columns-nav [aria-label="Video duration filter"] {
+    order: 14;
+  }
+
+  .columns-nav [aria-label="Default playback speed"] {
+    order: 15;
+  }
+
+  .columns-nav [aria-label="Play all videos"],
+  .columns-nav .top-wa-btn.ant-btn,
+  .columns-nav [aria-label="Scroll columns to first"],
+  .columns-nav [aria-label="Scroll columns left"],
+  .columns-nav [aria-label="Scroll columns right"],
+  .columns-nav [aria-label="Scroll columns to last"] {
+    display: none !important;
+  }
+
+  .video-filter-select .ant-select-selection-item,
+  .video-filter-select .ant-select-selection-placeholder {
+    line-height: 42px !important;
+  }
+
+  .video-duration-select.ant-select-multiple .ant-select-selector {
+    height: 44px !important;
+    min-height: 44px !important;
+    padding-inline: 10px 28px !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+  }
+
+  .video-duration-select.ant-select-multiple .ant-select-selection-overflow {
+    width: 100%;
+    height: 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: center;
+  }
+
+  .video-duration-select.ant-select-multiple .ant-select-selection-item {
+    height: 32px;
+    line-height: 32px !important;
+    text-align: left;
+  }
+
+  .video-duration-select.ant-select-multiple
+    .ant-select-selection-overflow-item-rest
+    .ant-select-selection-item {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .columns-scroll {
+    padding: 4px 0 10px;
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+
+  .columns-layout {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .columns-grid {
+    width: 100%;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 10px;
+    padding-bottom: 0;
+  }
+
+  .channel-column {
+    width: 100%;
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+
+  .channel-column .column-actions {
+    display: none;
+  }
+
+  .add-column-rail {
+    width: 100%;
+    min-width: 0;
+    flex-direction: row;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 2px;
+  }
+
+  .add-column-btn.ant-btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .video-player-modal .ant-modal {
+    width: calc(100vw - 2px) !important;
+    max-width: calc(100vw - 2px) !important;
+    margin: 1px auto;
+    top: 0;
+    padding-bottom: 0;
+  }
+
+  .video-player-modal .ant-modal-content {
+    padding: 6px !important;
+  }
+
+  .video-player-modal .ant-modal-header {
+    padding: 0 0 6px !important;
+  }
+
+  .video-player-modal .ant-modal-body {
+    padding: 0 !important;
+  }
+
+  .speed-controls {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+  }
+
+  .speed-controls-left,
+  .speed-controls-right {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+
+  .backup-actions {
+    padding-left: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .backup-limits-text.ant-typography {
+    margin-left: 0;
+    width: 100%;
+    text-align: left;
   }
 }
