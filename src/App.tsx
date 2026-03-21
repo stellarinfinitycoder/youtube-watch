@@ -2356,12 +2356,14 @@ function App() {
         ...board,
         columns: [...board.columns, createSavedListColumn(board.columns)]
       }));
+      scrollToColumnsEndSoon();
       return;
     }
     setBoard(activeBoard.id, (board) => ({
       ...board,
       columns: [...board.columns, createColumnState()]
     }));
+    scrollToColumnsEndSoon();
   };
 
   const removeColumnById = (columnIdToRemove: string): void => {
@@ -2428,6 +2430,7 @@ function App() {
         ...board,
         columns: [...board.columns, ...created]
       }));
+      scrollToColumnsEndSoon();
       setIsBulkModalOpen(false);
       setBulkInput("");
       return;
@@ -2447,6 +2450,7 @@ function App() {
       ...board,
       columns: [...board.columns, ...created]
     }));
+    scrollToColumnsEndSoon();
     setPendingBulkFetch(
       created.map((column) => ({
         boardId: activeBoard.id,
@@ -2549,6 +2553,14 @@ function App() {
 
     const maxLeft = Math.max(0, node.scrollWidth - node.clientWidth);
     node.scrollTo({ left: maxLeft, behavior: "smooth" });
+  };
+
+  const scrollToColumnsEndSoon = (): void => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollToEdge("end");
+      });
+    });
   };
 
   const handlePlaybackRateClick = (rate: number): void => {
