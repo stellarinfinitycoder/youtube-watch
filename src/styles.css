@@ -1296,6 +1296,15 @@ body {
   border-color: var(--amber-soft) !important;
 }
 
+.video-player-modal .ant-modal-header {
+  padding-top: 28px !important;
+}
+
+.video-player-modal .ant-modal-close {
+  top: 4px !important;
+  right: 8px !important;
+}
+
 .board-edit-footer {
   width: 100%;
   display: flex;
@@ -1628,7 +1637,7 @@ body {
   }
 
   .video-player-modal .ant-modal-header {
-    padding: 0 0 6px !important;
+    padding: 28px 0 6px !important;
   }
 
   .video-player-modal .ant-modal-body {
@@ -1661,6 +1670,7 @@ body {
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;
+    margin-bottom: 8px;
   }
 
   .speed-controls-left,
