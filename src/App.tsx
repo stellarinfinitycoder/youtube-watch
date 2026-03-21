@@ -4583,6 +4583,7 @@ function App() {
         okButtonProps={{ disabled: !saveTargetColumnId }}
         width={360}
         zIndex={1300}
+        className="save-video-modal"
       >
         <Space direction="vertical" size={10} className="full-width">
           <Text>Save video?</Text>

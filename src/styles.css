@@ -188,24 +188,44 @@ body {
   min-height: 32px !important;
   height: 32px !important;
   padding-block: 0 !important;
+  padding-inline: 10px 28px !important;
   align-items: center !important;
 }
 
 .video-duration-select.ant-select-multiple .ant-select-selection-overflow {
   flex-wrap: nowrap;
   align-items: center;
+  margin: 0 !important;
+  padding: 0 !important;
+  justify-content: flex-start;
 }
 
 .video-duration-select.ant-select-multiple .ant-select-selection-item {
   margin-block: 0;
+  margin-inline: 0 !important;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
   height: 22px;
+  padding-inline: 0 !important;
+  text-align: left;
+  width: 100%;
+}
+
+.video-duration-select.ant-select-multiple .ant-select-selection-search {
+  margin-inline-start: 0 !important;
+  margin-inline-end: 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .video-duration-select.ant-select-multiple
   .ant-select-selection-overflow-item-rest {
   max-width: 100%;
+  margin-inline-start: 0 !important;
 }
 
 .video-duration-select.ant-select-multiple
@@ -1249,6 +1269,21 @@ body {
   border-color: var(--amber) !important;
 }
 
+.save-video-modal .ant-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px !important;
+  padding-top: 10px !important;
+  border-top: 0 !important;
+  clear: both;
+}
+
+.save-video-modal .ant-modal-footer .ant-btn {
+  margin: 0 !important;
+}
+
 .video-player-modal .speed-btn.ant-btn.ant-btn-primary {
   background: var(--amber) !important;
   color: #18110a !important;
@@ -1340,6 +1375,12 @@ body {
     overflow-x: hidden;
   }
 
+  .ant-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+
   .columns-nav {
     width: 100%;
     max-width: 100%;
@@ -1411,6 +1452,20 @@ body {
     order: 4;
   }
 
+  .columns-nav [aria-label="Play all videos"] {
+    order: 4;
+    display: inline-flex !important;
+  }
+
+  .columns-nav .top-wa-btn.ant-btn {
+    order: 5;
+    display: inline-flex !important;
+  }
+
+  .columns-nav [aria-label="Bulk add channels"] {
+    order: 6;
+  }
+
   .columns-nav [aria-label="Board selector"] {
     order: 10;
   }
@@ -1435,8 +1490,6 @@ body {
     order: 15;
   }
 
-  .columns-nav [aria-label="Play all videos"],
-  .columns-nav .top-wa-btn.ant-btn,
   .columns-nav [aria-label="Scroll columns to first"],
   .columns-nav [aria-label="Scroll columns left"],
   .columns-nav [aria-label="Scroll columns right"],
@@ -1463,11 +1516,14 @@ body {
     flex-wrap: nowrap;
     justify-content: flex-start;
     align-items: center;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   .video-duration-select.ant-select-multiple .ant-select-selection-item {
-    height: 32px;
-    line-height: 32px !important;
+    margin: 0 !important;
+    height: auto;
+    line-height: 42px !important;
     text-align: left;
   }
 
@@ -1479,6 +1535,14 @@ body {
     align-items: center;
     justify-content: flex-start;
     text-align: left;
+  }
+
+  .video-duration-select.ant-select-multiple .ant-select-selection-overflow-item {
+    margin: 0 !important;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
   }
 
   .columns-scroll {
@@ -1510,7 +1574,29 @@ body {
   }
 
   .channel-column .column-actions {
-    display: none;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 8px;
+  }
+
+  .is-channel-column .column-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .is-channel-column .column-actions-left,
+  .is-channel-column .column-actions-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: max-content;
   }
 
   .add-column-rail {
@@ -1547,6 +1633,25 @@ body {
 
   .video-player-modal .ant-modal-body {
     padding: 0 !important;
+  }
+
+  .save-video-modal .ant-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .save-video-modal .ant-modal-content {
+    padding: 8px !important;
+  }
+
+  .save-video-modal .ant-modal-body {
+    padding: 0 0 10px !important;
+  }
+
+  .save-video-modal .ant-modal-footer {
+    margin-top: 10px !important;
+    padding-top: 10px !important;
   }
 
   .speed-controls {
