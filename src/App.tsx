@@ -1834,6 +1834,10 @@ function App() {
     (total, column) => total + (shownVideoCountByColumnId.get(column.id) ?? 0),
     0
   );
+  const visibleColumnIdSet = new Set(visibleColumns.map((column) => column.id));
+  const hiddenColumns = isSavedBoardActive
+    ? []
+    : columns.filter((column) => !visibleColumnIdSet.has(column.id));
   const columnScopeOptions = [
     {
       value: COLUMN_SCOPE_ALL,
@@ -2687,6 +2691,18 @@ function App() {
         scrollToEdge("end");
       });
     });
+  };
+
+  const revealHiddenColumn = (columnId: string): void => {
+    if (!activeBoard || activeBoard.kind === "saved") {
+      return;
+    }
+    const visibleIds = visibleColumns.map((column) => column.id);
+    const next = [...new Set([...visibleIds, columnId])];
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      columnScopeFilter: next.length > 0 ? next : [columnId]
+    }));
   };
 
   const handlePlaybackRateClick = (rate: number): void => {
@@ -4488,17 +4504,66 @@ function App() {
               );
             })}
             <aside className="add-column-rail">
-              <Button
-                htmlType="button"
-                onClick={addColumn}
-                aria-label="Add column"
-                className="add-column-btn add-column-plus-btn"
-                disabled={
-                  !isSavedBoardActive && !isAllColumnsScopeSelected
-                }
-              >
-                +
-              </Button>
+              <div className="add-column-stack">
+                <Button
+                  htmlType="button"
+                  onClick={addColumn}
+                  aria-label="Add column"
+                  className="add-column-btn add-column-plus-btn"
+                  disabled={
+                    !isSavedBoardActive && !isAllColumnsScopeSelected
+                  }
+                >
+                  +
+                </Button>
+                {!isSavedBoardActive && hiddenColumns.length > 0 ? (
+                  <div className="hidden-channel-thumbs">
+                    {hiddenColumns.map((column, index) => {
+                      const brokenKey = `${activeBoardId}:${column.id}`;
+                      const thumbnailUrl = brokenChannelThumbnailKeys.includes(brokenKey)
+                        ? column.videos[0]?.thumbnailUrl ?? ""
+                        : column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
+                      const rawName = column.currentHandle.trim() || column.handleInput.trim();
+                      const displayName = rawName
+                        ? rawName.startsWith("@")
+                          ? rawName
+                          : `@${rawName}`
+                        : `CHANNEL ${index + 1}`;
+                      return (
+                        <button
+                          type="button"
+                          key={column.id}
+                          className="hidden-channel-thumb"
+                          title={displayName.toUpperCase()}
+                          aria-label={`Hidden ${displayName}`}
+                          onClick={() => revealHiddenColumn(column.id)}
+                        >
+                          {thumbnailUrl ? (
+                            <img
+                              src={thumbnailUrl}
+                              alt={displayName}
+                              className="hidden-channel-thumb-image"
+                              onError={() => {
+                                setBrokenChannelThumbnailKeys((prev) =>
+                                  prev.includes(brokenKey) ? prev : [...prev, brokenKey]
+                                );
+                              }}
+                            />
+                          ) : (
+                            <div className="hidden-channel-thumb-placeholder">
+                              <img
+                                src={CHANNEL_PLACEHOLDER_ICON}
+                                alt=""
+                                className="channel-avatar-placeholder-icon"
+                              />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
             </aside>
           </section>
         </div>
