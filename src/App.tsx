@@ -2505,10 +2505,14 @@ function App() {
     if (!activeBoard) {
       return;
     }
-    setBoard(activeBoard.id, (board) => ({
-      ...board,
-      columns: board.columns.filter((column) => column.id !== columnIdToRemove)
-    }));
+    setBoard(activeBoard.id, (board) => {
+      const nextColumns = board.columns.filter((column) => column.id !== columnIdToRemove);
+      return {
+        ...board,
+        columns: nextColumns,
+        columnScopeFilter: normalizeColumnScopeFilter(board.columnScopeFilter, nextColumns)
+      };
+    });
   };
 
   const moveColumnById = (columnIdToMove: string, direction: "left" | "right"): void => {
@@ -2706,6 +2710,9 @@ function App() {
     const normalizedScope = normalizeColumnScopeFilter(board.columnScopeFilter, board.columns);
     if (normalizedScope.includes(COLUMN_SCOPE_ALL)) {
       return [COLUMN_SCOPE_ALL];
+    }
+    if (normalizedScope.includes(COLUMN_SCOPE_NOT_EMPTY)) {
+      return [COLUMN_SCOPE_NOT_EMPTY];
     }
     const withoutSpecial = normalizedScope.filter(
       (value) => value !== COLUMN_SCOPE_NOT_EMPTY && value !== COLUMN_SCOPE_ALL
