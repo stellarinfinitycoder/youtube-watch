@@ -1709,7 +1709,11 @@ body {
   }
 
   .add-column-stack {
-    width: 44px;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
   }
 
   .add-column-btn.ant-btn {
@@ -1721,6 +1725,15 @@ body {
   .hidden-channel-thumb {
     width: 44px;
     height: 44px;
+  }
+
+  .hidden-channel-thumbs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .video-player-modal .ant-modal {
