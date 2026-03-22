@@ -1798,27 +1798,33 @@ function App() {
       )
     : "-";
   const shownVideoCountByColumnId = new Map<string, number>();
+  const getShownVideosForColumn = (column: ColumnState, now: number): VideoItem[] => {
+    if (!activeBoard) {
+      return [];
+    }
+    const sourceVideos =
+      activeBoard.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
+    return sourceVideos.filter((video) => {
+      if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
+        return false;
+      }
+      if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
+        return false;
+      }
+      const isWatched = watchedVideos[video.videoId] === true;
+      if (videoFilter === "all") {
+        return true;
+      }
+      if (videoFilter === "watched") {
+        return isWatched;
+      }
+      return !isWatched;
+    });
+  };
   if (activeBoard) {
     const now = Date.now();
     columns.forEach((column) => {
-      const sourceVideos =
-        activeBoard.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
-      const shownCount = sourceVideos.filter((video) => {
-        if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
-          return false;
-        }
-        if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
-          return false;
-        }
-        const isWatched = watchedVideos[video.videoId] === true;
-        if (videoFilter === "all") {
-          return true;
-        }
-        if (videoFilter === "watched") {
-          return isWatched;
-        }
-        return !isWatched;
-      }).length;
+      const shownCount = getShownVideosForColumn(column, now).length;
       shownVideoCountByColumnId.set(column.id, shownCount);
     });
   }
@@ -3037,21 +3043,8 @@ function App() {
     const markWatched = videoFilter !== "watched";
     const now = Date.now();
     const uniqueVideoIds = new Set<string>();
-    activeBoard.columns.forEach((column) => {
-      column.videos.forEach((video) => {
-        if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
-          return;
-        }
-        if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
-          return;
-        }
-        const isWatched = watchedVideos[video.videoId] === true;
-        if (videoFilter === "watched" && !isWatched) {
-          return;
-        }
-        if (videoFilter === "new" && isWatched) {
-          return;
-        }
+    visibleColumns.forEach((column) => {
+      getShownVideosForColumn(column, now).forEach((video) => {
         uniqueVideoIds.add(video.videoId);
       });
     });
@@ -3094,32 +3087,15 @@ function App() {
 
     const now = Date.now();
     const mergedById = new Map<string, VideoItem>();
-    columns.forEach((column) => {
-      const sourceVideos =
-        activeBoard.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
-      sourceVideos.forEach((video) => {
-        if (matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
-          if (!mergedById.has(video.videoId)) {
-            mergedById.set(video.videoId, video);
-          }
+    visibleColumns.forEach((column) => {
+      getShownVideosForColumn(column, now).forEach((video) => {
+        if (!mergedById.has(video.videoId)) {
+          mergedById.set(video.videoId, video);
         }
       });
     });
 
-    const queue = [...mergedById.values()]
-      .filter((video) => {
-        const isWatched = watchedVideos[video.videoId] === true;
-        if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
-          return false;
-        }
-        if (videoFilter === "all") {
-          return true;
-        }
-        if (videoFilter === "watched") {
-          return isWatched;
-        }
-        return !isWatched;
-      });
+    const queue = [...mergedById.values()];
     if (activeBoard.kind !== "saved") {
       queue.sort((a, b) => getVideoPublishedTime(b) - getVideoPublishedTime(a));
     }
