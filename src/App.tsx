@@ -1779,7 +1779,6 @@ function App() {
     activeBoard?.columnScopeFilter ?? [COLUMN_SCOPE_ALL],
     columns
   );
-  const isAllColumnsScopeSelected = columnScopeFilter.includes(COLUMN_SCOPE_ALL);
   const quotaEstimateText = `LAST Q: ${quotaEstimate.lastActionUnits} | TODAY: ${quotaEstimate.todayUnits}`;
   const topbarLastFetchLabel = activeBoard
     ? formatLastFetchTooltipLabel(
@@ -2578,7 +2577,11 @@ function App() {
     );
     setBoard(activeBoard.id, (board) => ({
       ...board,
-      columns: [...board.columns, ...created]
+      columns: [...board.columns, ...created],
+      columnScopeFilter: includeNewColumnsInScope(
+        board,
+        created.map((column) => column.id)
+      )
     }));
     scrollToColumnsEndSoon();
     setPendingBulkFetch(
@@ -2691,6 +2694,18 @@ function App() {
         scrollToEdge("end");
       });
     });
+  };
+
+  const includeNewColumnsInScope = (board: BoardState, newColumnIds: string[]): string[] => {
+    const normalizedScope = normalizeColumnScopeFilter(board.columnScopeFilter, board.columns);
+    if (normalizedScope.includes(COLUMN_SCOPE_ALL)) {
+      return [COLUMN_SCOPE_ALL];
+    }
+    const withoutSpecial = normalizedScope.filter(
+      (value) => value !== COLUMN_SCOPE_NOT_EMPTY && value !== COLUMN_SCOPE_ALL
+    );
+    const merged = [...new Set([...withoutSpecial, ...newColumnIds])];
+    return merged.length > 0 ? merged : [COLUMN_SCOPE_ALL];
   };
 
   const revealHiddenColumn = (columnId: string): void => {
@@ -4554,9 +4569,6 @@ function App() {
                   onClick={addColumn}
                   aria-label="Add column"
                   className="add-column-btn add-column-plus-btn"
-                  disabled={
-                    !isSavedBoardActive && !isAllColumnsScopeSelected
-                  }
                 >
                   +
                 </Button>
