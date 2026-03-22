@@ -2705,6 +2705,24 @@ function App() {
     }));
   };
 
+  const hideVisibleColumn = (columnId: string): void => {
+    if (!activeBoard || activeBoard.kind === "saved") {
+      return;
+    }
+    const visibleIds = visibleColumns.map((column) => column.id);
+    if (visibleIds.length <= 1) {
+      return;
+    }
+    const next = visibleIds.filter((id) => id !== columnId);
+    if (next.length === 0) {
+      return;
+    }
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      columnScopeFilter: next
+    }));
+  };
+
   const handlePlaybackRateClick = (rate: number): void => {
     if (!activeBoard) {
       return;
@@ -4251,37 +4269,63 @@ function App() {
                     className="full-width"
                   >
                     <div className="column-header">
-                      {channelThumbToShow ? (
-                        <img
-                          src={channelThumbToShow}
-                          alt={`Channel ${index + 1}`}
-                          className="channel-avatar"
-                          onError={() => {
-                            const brokenKey = `${activeBoardId}:${column.id}`;
-                            setBrokenChannelThumbnailKeys((prev) =>
-                              prev.includes(brokenKey) ? prev : [...prev, brokenKey]
-                            );
-                          }}
-                        />
-                      ) : (
-                        <div
-                          className="channel-avatar channel-avatar-placeholder"
-                          aria-label={`Channel ${index + 1} placeholder`}
-                        >
-                          {isSavedBoardActive ? (
+                      {isSavedBoardActive ? (
+                        channelThumbToShow ? (
+                          <img
+                            src={channelThumbToShow}
+                            alt={`Channel ${index + 1}`}
+                            className="channel-avatar"
+                            onError={() => {
+                              const brokenKey = `${activeBoardId}:${column.id}`;
+                              setBrokenChannelThumbnailKeys((prev) =>
+                                prev.includes(brokenKey) ? prev : [...prev, brokenKey]
+                              );
+                            }}
+                          />
+                        ) : (
+                          <div
+                            className="channel-avatar channel-avatar-placeholder"
+                            aria-label={`Channel ${index + 1} placeholder`}
+                          >
                             <img
                               src={SAVED_LIST_PLACEHOLDER_ICON}
                               alt=""
                               className="channel-avatar-placeholder-icon"
                             />
-                          ) : (
+                          </div>
+                        )
+                      ) : (
+                        <button
+                          type="button"
+                          className="channel-avatar-toggle-btn"
+                          aria-label={`Hide ${column.handleInput || column.currentHandle || `channel ${index + 1}`}`}
+                          onClick={() => hideVisibleColumn(column.id)}
+                        >
+                          {channelThumbToShow ? (
                             <img
-                              src={CHANNEL_PLACEHOLDER_ICON}
-                              alt=""
-                              className="channel-avatar-placeholder-icon"
+                              src={channelThumbToShow}
+                              alt={`Channel ${index + 1}`}
+                              className="channel-avatar"
+                              onError={() => {
+                                const brokenKey = `${activeBoardId}:${column.id}`;
+                                setBrokenChannelThumbnailKeys((prev) =>
+                                  prev.includes(brokenKey) ? prev : [...prev, brokenKey]
+                                );
+                              }}
                             />
+                          ) : (
+                            <div
+                              className="channel-avatar channel-avatar-placeholder"
+                              aria-label={`Channel ${index + 1} placeholder`}
+                            >
+                              <img
+                                src={CHANNEL_PLACEHOLDER_ICON}
+                                alt=""
+                                className="channel-avatar-placeholder-icon"
+                              />
+                            </div>
                           )}
-                        </div>
+                        </button>
                       )}
                       <Input
                         placeholder={isSavedBoardActive ? "List name" : "@channel"}
