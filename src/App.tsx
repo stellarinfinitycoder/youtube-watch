@@ -2706,6 +2706,48 @@ function App() {
     });
   };
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (activeVideo || event.defaultPrevented) {
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (shouldIgnoreShortcutTarget(event.target)) {
+        return;
+      }
+      const isAnyModalOpen = Boolean(
+        document.querySelector(".ant-modal-root .ant-modal-wrap")
+      );
+      if (isAnyModalOpen) {
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          scrollToEdge("start");
+        } else {
+          scrollColumns("left");
+        }
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          scrollToEdge("end");
+        } else {
+          scrollColumns("right");
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [activeVideo]);
+
   const includeNewColumnsInScope = (board: BoardState, newColumnIds: string[]): string[] => {
     const normalizedScope = normalizeColumnScopeFilter(board.columnScopeFilter, board.columns);
     if (normalizedScope.includes(COLUMN_SCOPE_ALL)) {
