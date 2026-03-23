@@ -45,7 +45,13 @@ const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 
 type VideoFilter = "all" | "new" | "watched";
 type VideoWindowDays = 1 | 3 | 7 | 30 | 60 | 90 | 120 | 180 | 360;
-type ChannelVideoWindowFilter = VideoWindowDays | "older_7" | "older_30" | "older_60";
+type ChannelVideoWindowFilter =
+  | VideoWindowDays
+  | "older_1"
+  | "older_3"
+  | "older_7"
+  | "older_30"
+  | "older_60";
 type VideoWindowFilter = ChannelVideoWindowFilter | "all";
 type VideoDurationFilterOption =
   | "all"
@@ -72,6 +78,8 @@ const CHANNEL_VIDEO_WINDOW_OPTIONS: ChannelVideoWindowFilter[] = [
   30,
   60,
   90,
+  "older_1",
+  "older_3",
   "older_7",
   "older_30",
   "older_60"
@@ -118,6 +126,8 @@ const CHANNEL_VIDEO_WINDOW_SELECT_OPTIONS: Array<{
   { value: 30, label: "LAST 30D" },
   { value: 60, label: "LAST 60D" },
   { value: 90, label: "LAST 90D" },
+  { value: "older_1", label: ">1D" },
+  { value: "older_3", label: ">3D" },
   { value: "older_7", label: ">7D" },
   { value: "older_30", label: ">30D" },
   { value: "older_60", label: ">60D" }
@@ -527,6 +537,8 @@ function sanitizeWatchedVideos(raw: unknown): Record<string, boolean> {
 function isVideoWindowFilter(value: unknown): value is VideoWindowFilter {
   return (
     value === "all" ||
+    value === "older_1" ||
+    value === "older_3" ||
     value === "older_7" ||
     value === "older_30" ||
     value === "older_60" ||
@@ -1451,7 +1463,13 @@ function getWindowCutoffTime(days: VideoWindowFilter, now = Date.now()): number 
   if (days === "all") {
     return 0;
   }
-  if (days === "older_7" || days === "older_30" || days === "older_60") {
+  if (
+    days === "older_1" ||
+    days === "older_3" ||
+    days === "older_7" ||
+    days === "older_30" ||
+    days === "older_60"
+  ) {
     return 0;
   }
   return now - days * 24 * 60 * 60 * 1000;
@@ -1467,6 +1485,12 @@ function matchesVideoWindowFilter(
   }
   if (windowFilter === "all") {
     return true;
+  }
+  if (windowFilter === "older_1") {
+    return publishedTime <= now - 1 * 24 * 60 * 60 * 1000;
+  }
+  if (windowFilter === "older_3") {
+    return publishedTime <= now - 3 * 24 * 60 * 60 * 1000;
   }
   if (windowFilter === "older_7") {
     return publishedTime <= now - 7 * 24 * 60 * 60 * 1000;
