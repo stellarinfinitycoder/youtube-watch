@@ -2741,14 +2741,11 @@ function App() {
       if (shouldIgnoreShortcutTarget(event.target)) {
         return;
       }
-      const isAnyModalOpen = Boolean(
-        document.querySelector(".ant-modal-root .ant-modal-wrap")
-      );
-      if (isAnyModalOpen) {
-        return;
-      }
       if (event.key === "ArrowLeft") {
         event.preventDefault();
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
         if (event.shiftKey) {
           scrollToEdge("start");
         } else {
@@ -2758,6 +2755,9 @@ function App() {
       }
       if (event.key === "ArrowRight") {
         event.preventDefault();
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
         if (event.shiftKey) {
           scrollToEdge("end");
         } else {
