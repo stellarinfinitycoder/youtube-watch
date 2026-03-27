@@ -4444,7 +4444,12 @@ function App() {
                         );
                         const metaFeedback = videoMetaFeedbackById[video.videoId];
                         return (
-                          <List.Item key={video.videoId} className="video-tile-item">
+                          <List.Item
+                            key={video.videoId}
+                            className="video-tile-item"
+                            data-url={video.videoUrl}
+                            data-video-id={video.videoId}
+                          >
                             <Space direction="vertical" size="small" className="full-width">
                               <div className="video-meta-row">
                                 <button
