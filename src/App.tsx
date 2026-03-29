@@ -341,6 +341,7 @@ type AgentActionResult = {
     videoIds?: string[];
     columnIds?: string[];
   };
+  data?: Record<string, unknown>;
   error?: {
     code: string;
     message: string;
@@ -388,6 +389,15 @@ type AppAgentApi = {
     hiddenColumns: string[];
   };
   actions: {
+    ping: () => Promise<AgentActionResult>;
+    selectBoard: (boardId: string) => Promise<AgentActionResult>;
+    setFilters: (patch: {
+      videoFilter?: VideoFilter;
+      videoWindowDays?: VideoWindowFilter;
+      videoDurationFilter?: VideoDurationFilter;
+      columnScopeFilter?: string[];
+      playbackRate?: number;
+    }) => Promise<AgentActionResult>;
     fetchAllShownBoardChannels: () => Promise<AgentActionResult>;
     fetchChannel: (columnId: string) => Promise<AgentActionResult>;
     playBoardShownVideos: () => Promise<AgentActionResult>;
@@ -3987,12 +3997,19 @@ function App() {
   const runAgentAction = async (
     action: string,
     scope: AgentScope,
-    executor: () => Promise<AgentActionResult> | AgentActionResult
+    executor: () => Promise<AgentActionResult> | AgentActionResult,
+    options?: { allowReadOnly?: boolean }
   ): Promise<AgentActionResult> => {
     const actionId = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    emitAgentEvent("app:action-start", { actionId, action, scope });
+    const before = readAgentState();
+    const beforeCounters = {
+      shownVideosTotal: before.shownVideosTotal,
+      visibleColumnCount: before.visibleColumns.length,
+      hiddenColumnCount: before.hiddenColumns.length
+    };
+    emitAgentEvent("app:action-start", { actionId, action, scope, counters: { before: beforeCounters } });
     try {
-      if (agentPermission === "read-only") {
+      if (agentPermission === "read-only" && !options?.allowReadOnly) {
         const denied: AgentActionResult = {
           ok: false,
           action,
@@ -4003,11 +4020,31 @@ function App() {
           }
         };
         emitAgentEvent("app:error", { actionId, action, scope, error: denied.error });
-        emitAgentEvent("app:action-end", { actionId, ...denied });
+        emitAgentEvent("app:action-end", {
+          actionId,
+          ...denied,
+          counters: {
+            before: beforeCounters,
+            after: beforeCounters
+          }
+        });
         return denied;
       }
       const result = await executor();
-      emitAgentEvent("app:action-end", { actionId, ...result });
+      const after = readAgentState();
+      const afterCounters = {
+        shownVideosTotal: after.shownVideosTotal,
+        visibleColumnCount: after.visibleColumns.length,
+        hiddenColumnCount: after.hiddenColumns.length
+      };
+      emitAgentEvent("app:action-end", {
+        actionId,
+        ...result,
+        counters: {
+          before: beforeCounters,
+          after: afterCounters
+        }
+      });
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unexpected action error.";
@@ -4021,7 +4058,20 @@ function App() {
         }
       };
       emitAgentEvent("app:error", { actionId, action, scope, error: failed.error });
-      emitAgentEvent("app:action-end", { actionId, ...failed });
+      const after = readAgentState();
+      const afterCounters = {
+        shownVideosTotal: after.shownVideosTotal,
+        visibleColumnCount: after.visibleColumns.length,
+        hiddenColumnCount: after.hiddenColumns.length
+      };
+      emitAgentEvent("app:action-end", {
+        actionId,
+        ...failed,
+        counters: {
+          before: beforeCounters,
+          after: afterCounters
+        }
+      });
       return failed;
     }
   };
@@ -4048,6 +4098,99 @@ function App() {
       },
       readState: readAgentState,
       actions: {
+        ping: async () =>
+          runAgentAction("ping", "board", async () => {
+            const state = readAgentState();
+            return {
+              ok: true,
+              action: "ping",
+              scope: "board",
+              data: {
+                version: "1.0.0",
+                mode: agentModeEnabled ? "enabled" : "disabled",
+                permission: agentPermission,
+                activeBoardId: state.activeBoardId,
+                shownVideosTotal: state.shownVideosTotal
+              }
+            };
+          }, { allowReadOnly: true }),
+        selectBoard: async (boardId: string) =>
+          runAgentAction("selectBoard", "board", async () => {
+            const targetBoard = boards.find((board) => board.id === boardId);
+            if (!targetBoard) {
+              return {
+                ok: false,
+                action: "selectBoard",
+                scope: "board",
+                error: {
+                  code: "BOARD_NOT_FOUND",
+                  message: "Board not found."
+                }
+              };
+            }
+            setActiveBoardId(boardId);
+            return {
+              ok: true,
+              action: "selectBoard",
+              scope: "board",
+              changed: { columnIds: targetBoard.columns.map((column) => column.id) },
+              data: { activeBoardId: boardId }
+            };
+          }),
+        setFilters: async (patch) =>
+          runAgentAction("setFilters", "board", async () => {
+            if (!activeBoard) {
+              return {
+                ok: false,
+                action: "setFilters",
+                scope: "board",
+                error: {
+                  code: "NO_ACTIVE_BOARD",
+                  message: "No active board."
+                }
+              };
+            }
+            const nextRate =
+              typeof patch.playbackRate === "number" && Number.isFinite(patch.playbackRate) && patch.playbackRate > 0
+                ? patch.playbackRate
+                : activeBoard.defaultPlaybackRate;
+            setBoard(activeBoard.id, (board) => ({
+              ...board,
+              videoFilter:
+                patch.videoFilter === "all" || patch.videoFilter === "new" || patch.videoFilter === "watched"
+                  ? patch.videoFilter
+                  : board.videoFilter,
+              videoWindowDays:
+                typeof patch.videoWindowDays !== "undefined"
+                  ? normalizeVideoWindowFilterForKind(board.kind, patch.videoWindowDays)
+                  : board.videoWindowDays,
+              videoDurationFilter:
+                typeof patch.videoDurationFilter !== "undefined"
+                  ? normalizeVideoDurationFilter(patch.videoDurationFilter)
+                  : board.videoDurationFilter,
+              columnScopeFilter:
+                Array.isArray(patch.columnScopeFilter)
+                  ? normalizeColumnScopeFilter(patch.columnScopeFilter, board.columns)
+                  : board.columnScopeFilter,
+              defaultPlaybackRate: nextRate
+            }));
+            setPlaybackRate(nextRate);
+            if (playerRef.current) {
+              try {
+                playerRef.current.setPlaybackRate(nextRate);
+              } catch {
+                // Ignore unsupported playback-rate calls.
+              }
+            }
+            return {
+              ok: true,
+              action: "setFilters",
+              scope: "board",
+              data: {
+                activeBoardId: activeBoard.id
+              }
+            };
+          }),
         fetchAllShownBoardChannels: async () =>
           runAgentAction("fetchAllShownBoardChannels", "board", async () => {
             if (!activeBoard || activeBoard.kind === "saved") {

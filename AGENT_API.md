@@ -18,6 +18,9 @@ window.appAgent = {
   capabilities: { canRead, canWrite, canDelete },
   readState: () => AgentState,
   actions: {
+    ping(),
+    selectBoard(boardId),
+    setFilters(patch),
     fetchAllShownBoardChannels(),
     fetchChannel(columnId),
     playBoardShownVideos(),
@@ -59,6 +62,25 @@ The app dispatches `CustomEvent`s on `window`:
 - `app:error`
 
 Payloads include a timestamp (`ts`) and action metadata when applicable.
+
+`app:action-end` includes counters:
+
+```ts
+{
+  counters: {
+    before: {
+      shownVideosTotal: number;
+      visibleColumnCount: number;
+      hiddenColumnCount: number;
+    },
+    after: {
+      shownVideosTotal: number;
+      visibleColumnCount: number;
+      hiddenColumnCount: number;
+    }
+  }
+}
+```
 
 ## DOM Contract (Fallback Automation)
 
