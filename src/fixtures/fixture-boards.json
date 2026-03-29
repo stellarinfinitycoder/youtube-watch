@@ -1,0 +1,57 @@
+{
+  "boardName": "FIXTURE BOARD",
+  "channels": [
+    {
+      "handle": "@NATEBJONES",
+      "channelId": "fixture-channel-nate",
+      "uploadsPlaylistId": "fixture-uploads-nate",
+      "channelThumbnailUrl": "https://yt3.googleusercontent.com/ytc/AIdro_kqGMoQQqY2n8kQF8vknP5zbw5k1b3EeE3ZivQH=s88-c-k-c0x00ffffff-no-rj",
+      "videos": [
+        {
+          "videoId": "fixture-nate-001",
+          "title": "Fixture: AI Agent Daily Brief",
+          "publishedAt": "2026-03-28T08:15:00.000Z",
+          "durationSeconds": 412,
+          "thumbnailUrl": "https://i.ytimg.com/vi/fixture-nate-001/hqdefault.jpg",
+          "channelTitle": "NATEBJONES",
+          "videoUrl": "https://www.youtube.com/watch?v=fixture-nate-001",
+          "viewCount": 12840
+        },
+        {
+          "videoId": "fixture-nate-002",
+          "title": "Fixture: Market Signals Today",
+          "publishedAt": "2026-03-27T11:30:00.000Z",
+          "durationSeconds": 1260,
+          "thumbnailUrl": "https://i.ytimg.com/vi/fixture-nate-002/hqdefault.jpg",
+          "channelTitle": "NATEBJONES",
+          "videoUrl": "https://www.youtube.com/watch?v=fixture-nate-002",
+          "viewCount": 9734
+        }
+      ]
+    },
+    {
+      "handle": "@DAVIDONDREJ",
+      "channelId": "fixture-channel-david",
+      "uploadsPlaylistId": "fixture-uploads-david",
+      "channelThumbnailUrl": "https://yt3.googleusercontent.com/ytc/AIdro_mA1fJYy4xj6m5w9eP9d5v1hVv8E2lM-2gN4Xzv=s88-c-k-c0x00ffffff-no-rj",
+      "videos": [
+        {
+          "videoId": "fixture-david-001",
+          "title": "Fixture: Product Launch Breakdown",
+          "publishedAt": "2026-03-29T06:05:00.000Z",
+          "durationSeconds": 214,
+          "thumbnailUrl": "https://i.ytimg.com/vi/fixture-david-001/hqdefault.jpg",
+          "channelTitle": "DAVIDONDREJ",
+          "videoUrl": "https://www.youtube.com/watch?v=fixture-david-001",
+          "viewCount": 4211
+        }
+      ]
+    }
+  ],
+  "savedLists": [
+    {
+      "name": "WATCH LATER",
+      "videos": []
+    }
+  ]
+}

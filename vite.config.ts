@@ -1,6 +1,7 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { execSync } from "node:child_process";
+import { configDefaults } from "vitest/config";
 
 function getShortCommitSha(): string {
   const vercelSha =
@@ -34,7 +35,8 @@ export default defineConfig(({ mode }) => {
       environment: "jsdom",
       globals: true,
       setupFiles: "./src/setupTests.ts",
-      css: true
+      css: true,
+      exclude: [...configDefaults.exclude, "tests/**"]
     }
   };
 });

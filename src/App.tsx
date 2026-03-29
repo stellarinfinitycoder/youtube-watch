@@ -24,6 +24,7 @@ import {
 } from "./api/youtube";
 import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
+import fixtureBoards from "./fixtures/fixture-boards.json";
 
 const { Title, Text } = Typography;
 const DEFAULT_COLUMN_COUNT = 3;
@@ -150,6 +151,23 @@ const BOARD_DROPDOWN_ITEM_HEIGHT = 36;
 const BOARD_DROPDOWN_PADDING = 8;
 const SAVED_BOARD_ID = "saved-board-system";
 const SAVED_BOARD_NAME = "SAVED LISTS";
+
+type FixturePayload = {
+  boardName: string;
+  channels: Array<{
+    handle: string;
+    channelId: string;
+    uploadsPlaylistId: string;
+    channelThumbnailUrl: string;
+    videos: VideoItem[];
+  }>;
+  savedLists: Array<{
+    name: string;
+    videos: VideoItem[];
+  }>;
+};
+
+const FIXTURE_DATA = fixtureBoards as FixturePayload;
 
 type YouTubePlayer = {
   destroy: () => void;
@@ -1013,6 +1031,79 @@ function ensureSavedBoard(boards: BoardState[]): BoardState[] {
   return [...boards, normalizeSavedBoard(createSavedBoardState())];
 }
 
+function cloneVideo(video: VideoItem): VideoItem {
+  return {
+    ...video
+  };
+}
+
+function createFixtureBoardsState(): { boards: BoardState[]; activeBoardId: string } {
+  const channelColumns = FIXTURE_DATA.channels.map((channel, index) =>
+    createColumnState({
+      id: `fixture-channel-${index + 1}`,
+      handleInput: channel.handle,
+      currentHandle: channel.handle,
+      channelId: channel.channelId,
+      uploadsPlaylistId: channel.uploadsPlaylistId,
+      channelThumbnailUrl: channel.channelThumbnailUrl,
+      videos: [],
+      lastFetchAt: null
+    })
+  );
+
+  const channelBoard = createBoardState(FIXTURE_DATA.boardName, {
+    id: "fixture-board-main",
+    kind: "channels",
+    columns: channelColumns,
+    columnScopeFilter: [COLUMN_SCOPE_ALL],
+    watchedVideos: {},
+    viewCountRefreshedAtByVideoId: {},
+    videoFilter: "new",
+    videoDurationFilter: ["all"],
+    videoWindowDays: DEFAULT_VIDEO_WINDOW_DAYS,
+    defaultPlaybackRate: 1.5
+  }, 0);
+
+  const savedColumns = FIXTURE_DATA.savedLists.map((list, index) =>
+    createColumnState({
+      id: `fixture-list-${index + 1}`,
+      handleInput: list.name,
+      currentHandle: "",
+      channelId: "",
+      uploadsPlaylistId: "",
+      channelThumbnailUrl: "",
+      videos: list.videos.map(cloneVideo),
+      savedSortMode: DEFAULT_SAVED_SORT_MODE,
+      savedAddedAtByVideoId: Object.fromEntries(
+        list.videos.map((video, offset) => [video.videoId, Date.now() - offset])
+      ),
+      savedManualOrder: list.videos.map((video) => video.videoId)
+    })
+  );
+
+  const savedBoard = createSavedBoardState({
+    columns: savedColumns.length > 0 ? savedColumns : [createSavedListColumn([])],
+    watchedVideos: {}
+  });
+
+  const boards = ensureSavedBoard([channelBoard, savedBoard]);
+  return {
+    boards,
+    activeBoardId: channelBoard.id
+  };
+}
+
+function getFixtureChannelByHandle(
+  rawHandle: string
+): FixturePayload["channels"][number] | null {
+  try {
+    const normalized = normalizeHandle(rawHandle).toUpperCase();
+    return FIXTURE_DATA.channels.find((channel) => channel.handle.toUpperCase() === normalized) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function getNextBoardName(boards: BoardState[]): string {
   let index = 1;
   while (boards.some((board) => board.name === `BOARD ${index}`)) {
@@ -1178,6 +1269,13 @@ function readStoredActiveBoardId(): string | null {
   } catch {
     return null;
   }
+}
+
+function isFixtureModeEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).get("fixture") === "1";
 }
 
 function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string } {
@@ -1725,6 +1823,7 @@ function readStoredQuotaEstimate(): QuotaEstimateState {
 }
 
 function App() {
+  const fixtureMode = isFixtureModeEnabled();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const playerHostRef = useRef<HTMLDivElement | null>(null);
@@ -1736,7 +1835,7 @@ function App() {
   const linkCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const logoSpinTimeoutRef = useRef<number | null>(null);
   const [playerHostNode, setPlayerHostNode] = useState<HTMLDivElement | null>(null);
-  const initialBoardsState = getInitialBoardsState();
+  const initialBoardsState = fixtureMode ? createFixtureBoardsState() : getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
   const [activeBoardId, setActiveBoardId] = useState<string>(
     initialBoardsState.activeBoardId
@@ -2056,6 +2155,9 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (fixtureMode) {
+      return;
+    }
     if (typeof window === "undefined") {
       return;
     }
@@ -2065,9 +2167,12 @@ function App() {
     } catch {
       // Ignore local storage write errors.
     }
-  }, [quotaEstimate]);
+  }, [fixtureMode, quotaEstimate]);
 
   useEffect(() => {
+    if (fixtureMode) {
+      return;
+    }
     const cutoffTime = getWindowCutoffTime(STORAGE_VIDEO_WINDOW_DAYS);
     setBoards((previous) => {
       let changed = false;
@@ -2100,9 +2205,12 @@ function App() {
       });
       return changed ? next : previous;
     });
-  }, []);
+  }, [fixtureMode]);
 
   useEffect(() => {
+    if (fixtureMode) {
+      return;
+    }
     try {
       const storage = window.localStorage;
       if (!storage || typeof storage.setItem !== "function") {
@@ -2127,9 +2235,12 @@ function App() {
     } catch {
       // Ignore write failures (private mode / restricted environments).
     }
-  }, [activeBoardId, boards]);
+  }, [activeBoardId, boards, fixtureMode]);
 
   useEffect(() => {
+    if (fixtureMode) {
+      return;
+    }
     try {
       const storage = window.localStorage;
       if (!storage || typeof storage.setItem !== "function") {
@@ -2139,7 +2250,7 @@ function App() {
     } catch {
       // Ignore write failures.
     }
-  }, [errorLogs]);
+  }, [errorLogs, fixtureMode]);
 
   useEffect(() => {
     if (pendingBulkFetch.length === 0) {
@@ -2424,6 +2535,34 @@ function App() {
     const boardState = boards.find((board) => board.id === boardId);
     let estimatedQuotaUnits = 0;
     if (boardState?.kind === "saved") {
+      recordEstimatedQuotaUsage(0);
+      return;
+    }
+
+    if (fixtureMode) {
+      setColumn(boardId, columnId, (prev) => ({ ...prev, loading: true, error: null }));
+      const fixtureChannel = getFixtureChannelByHandle(handle);
+      if (!fixtureChannel) {
+        setColumn(boardId, columnId, (prev) => ({
+          ...prev,
+          loading: false,
+          error: "Channel not found."
+        }));
+        recordEstimatedQuotaUsage(0);
+        return;
+      }
+      setColumn(boardId, columnId, (prev) => ({
+        ...prev,
+        loading: false,
+        error: null,
+        handleInput: fixtureChannel.handle,
+        currentHandle: fixtureChannel.handle,
+        channelId: fixtureChannel.channelId,
+        uploadsPlaylistId: fixtureChannel.uploadsPlaylistId,
+        channelThumbnailUrl: fixtureChannel.channelThumbnailUrl,
+        videos: fixtureChannel.videos.map(cloneVideo),
+        lastFetchAt: new Date().toLocaleString()
+      }));
       recordEstimatedQuotaUsage(0);
       return;
     }

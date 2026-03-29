@@ -53,6 +53,34 @@ The key is used server-side only and is not exposed to browser clients.
 npm run test
 ```
 
+## Fixture Mode (Deterministic)
+
+Use fixture mode for stable local checks without API variability:
+
+```text
+http://localhost:5173/?fixture=1
+```
+
+In this mode, data is loaded from:
+
+- `src/fixtures/fixture-boards.json`
+
+and fetch actions use fixture data (no external API calls).
+
+## Verify Pipeline
+
+Run one command before deploy:
+
+```bash
+npm run verify
+```
+
+This runs:
+
+- TypeScript lint check
+- Unit tests (`src/utils/handle.test.ts`, `src/api/youtube.test.ts`)
+- Playwright smoke suite (`tests/smoke.spec.ts`)
+
 ## Notes
 
 - Input format is strictly `@handle`.
