@@ -3998,7 +3998,7 @@ function App() {
     action: string,
     scope: AgentScope,
     executor: () => Promise<AgentActionResult> | AgentActionResult,
-    options?: { allowReadOnly?: boolean }
+    options?: { allowReadOnly?: boolean; allowSafeWrite?: boolean }
   ): Promise<AgentActionResult> => {
     const actionId = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const before = readAgentState();
@@ -4017,6 +4017,27 @@ function App() {
           error: {
             code: "READ_ONLY",
             message: "Agent is in read-only mode."
+          }
+        };
+        emitAgentEvent("app:error", { actionId, action, scope, error: denied.error });
+        emitAgentEvent("app:action-end", {
+          actionId,
+          ...denied,
+          counters: {
+            before: beforeCounters,
+            after: beforeCounters
+          }
+        });
+        return denied;
+      }
+      if (agentPermission === "safe-write" && options?.allowSafeWrite === false) {
+        const denied: AgentActionResult = {
+          ok: false,
+          action,
+          scope,
+          error: {
+            code: "SAFE_WRITE_BLOCKED",
+            message: "Action is blocked in safe-write mode."
           }
         };
         emitAgentEvent("app:error", { actionId, action, scope, error: denied.error });
@@ -4312,7 +4333,7 @@ function App() {
               scope: "board",
               changed: { videoIds }
             };
-          }),
+          }, { allowSafeWrite: false }),
         markBoardShownVideosNew: async () =>
           runAgentAction("markBoardShownVideosNew", "board", async () => {
             if (!activeBoard) {
@@ -4345,7 +4366,7 @@ function App() {
               scope: "board",
               changed: { videoIds }
             };
-          }),
+          }, { allowSafeWrite: false }),
         markChannelShownVideosWatched: async (columnId: string) =>
           runAgentAction("markChannelShownVideosWatched", "channel", async () => {
             if (!activeBoard) {
@@ -4382,7 +4403,7 @@ function App() {
               scope: "channel",
               changed: { videoIds, columnIds: [column.id] }
             };
-          }),
+          }, { allowSafeWrite: false }),
         markChannelShownVideosNew: async (columnId: string) =>
           runAgentAction("markChannelShownVideosNew", "channel", async () => {
             if (!activeBoard) {
@@ -4422,7 +4443,7 @@ function App() {
               scope: "channel",
               changed: { videoIds, columnIds: [column.id] }
             };
-          }),
+          }, { allowSafeWrite: false }),
         markVideoWatched: async (videoId: string) =>
           runAgentAction("markVideoWatched", "video", async () => {
             const resolved = resolveVideoById(videoId);
@@ -4447,7 +4468,7 @@ function App() {
               scope: "video",
               changed: { videoIds: [videoId], columnIds: [resolved.column.id] }
             };
-          }),
+          }, { allowSafeWrite: false }),
         markVideoNew: async (videoId: string) =>
           runAgentAction("markVideoNew", "video", async () => {
             const resolved = resolveVideoById(videoId);
@@ -4473,7 +4494,7 @@ function App() {
               scope: "video",
               changed: { videoIds: [videoId], columnIds: [resolved.column.id] }
             };
-          }),
+          }, { allowSafeWrite: false }),
         saveVideo: async (videoId: string, listId: string) =>
           runAgentAction("saveVideo", "video", async () => {
             const resolved = resolveVideoById(videoId);
@@ -4529,7 +4550,7 @@ function App() {
               scope: "video",
               changed: { videoIds: [videoId], columnIds: [listId] }
             };
-          }),
+          }, { allowSafeWrite: false }),
         copyVideoLink: async (videoId: string) =>
           runAgentAction("copyVideoLink", "video", async () => {
             const resolved = resolveVideoById(videoId);

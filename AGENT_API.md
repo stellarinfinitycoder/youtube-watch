@@ -8,6 +8,22 @@ This app exposes a runtime API on `window.appAgent` for automation agents.
 - Optional permission flag: `?agentPerm=read-only|safe-write|full`
 - If omitted, permission defaults to `full`.
 
+## Permissions
+
+- `read-only`: only read APIs and `ping()`.
+- `safe-write`: allows navigation/fetch/play/open/copy/filter actions, blocks persistent state mutations.
+- `full`: allows all exposed actions.
+
+Blocked in `safe-write`:
+
+- `markBoardShownVideosWatched`
+- `markBoardShownVideosNew`
+- `markChannelShownVideosWatched`
+- `markChannelShownVideosNew`
+- `markVideoWatched`
+- `markVideoNew`
+- `saveVideo`
+
 ## Surface
 
 ```ts
