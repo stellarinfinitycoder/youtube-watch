@@ -1,4 +1,8 @@
-import { fetchYouTubeTranscript } from "./_lib/transcript.js";
+import {
+  fetchYouTubeTranscript,
+  getTranscriptErrorDebug,
+  getTranscriptErrorReason
+} from "./_lib/transcript.js";
 
 function parseBody(req: any): Record<string, unknown> {
   if (req.body && typeof req.body === "object") {
@@ -36,6 +40,18 @@ function parseVideoInput(req: any): string {
   return "";
 }
 
+function parseDebug(req: any): boolean {
+  const body = parseBody(req);
+  const queryDebug = req.query?.debug;
+  const bodyDebug = body.debug;
+  const isTrue = (value: unknown): boolean =>
+    value === true ||
+    value === "true" ||
+    value === "1" ||
+    (Array.isArray(value) && value.some((item) => item === true || item === "true" || item === "1"));
+  return isTrue(queryDebug) || isTrue(bodyDebug);
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== "GET" && req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -43,16 +59,30 @@ export default async function handler(req: any, res: any) {
   }
 
   const input = parseVideoInput(req);
+  const debug = parseDebug(req);
   if (!input) {
     res.status(400).json({ error: "Missing videoId or url." });
     return;
   }
 
   try {
-    const payload = await fetchYouTubeTranscript(input);
+    const payload = await fetchYouTubeTranscript(input, undefined, { debug });
     res.status(200).json(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch transcript.";
+    const reason = getTranscriptErrorReason(error);
+    const debugPayload = getTranscriptErrorDebug(error);
+    if (debug) {
+      res.status(200).json({
+        ok: false,
+        error: /transcript|caption|subtitles|disabled|unavailable|not available/i.test(message)
+          ? "No transcript available."
+          : `Transcript fetch failed: ${message}`,
+        reason: reason ?? "unknown",
+        debug: debugPayload
+      });
+      return;
+    }
     if (/transcript|caption|subtitles|disabled|unavailable|not available/i.test(message)) {
       res.status(404).json({ error: "No transcript available." });
       return;
