@@ -1706,6 +1706,9 @@ function App() {
   const [videoMetaFeedbackById, setVideoMetaFeedbackById] = useState<
     Record<string, InlineMetaFeedback>
   >({});
+  const [videoThumbnailFallbackUrlById, setVideoThumbnailFallbackUrlById] = useState<
+    Record<string, string>
+  >({});
   const [copiedLinkVideoId, setCopiedLinkVideoId] = useState<string | null>(null);
   const [bulkInput, setBulkInput] = useState("");
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
@@ -2910,6 +2913,22 @@ function App() {
   const openVideo = (video: VideoItem): void => {
     stopPlaylist();
     setActiveVideo(video);
+  };
+
+  const getVideoThumbnailSrc = (video: VideoItem): string => {
+    return videoThumbnailFallbackUrlById[video.videoId] || video.thumbnailUrl;
+  };
+
+  const handleVideoThumbnailError = (video: VideoItem): void => {
+    setVideoThumbnailFallbackUrlById((previous) => {
+      if (previous[video.videoId]) {
+        return previous;
+      }
+      return {
+        ...previous,
+        [video.videoId]: `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`
+      };
+    });
   };
 
   const toggleWatched = (videoId: string): void => {
@@ -4585,16 +4604,17 @@ function App() {
                                   </>
                                 )}
                               </div>
-                              {video.thumbnailUrl ? (
+                              {getVideoThumbnailSrc(video) ? (
                                 <button
                                   type="button"
                                   className="video-thumb-btn"
                                   onClick={() => openVideo(video)}
                                 >
                                   <img
-                                    src={video.thumbnailUrl}
+                                    src={getVideoThumbnailSrc(video)}
                                     alt={video.title}
                                     className="video-thumb"
+                                    onError={() => handleVideoThumbnailError(video)}
                                   />
                                 </button>
                               ) : null}
