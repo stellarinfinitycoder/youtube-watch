@@ -109,11 +109,33 @@ type VideoMetadataResponse = {
     contentDetails?: {
       duration?: string;
     };
+    snippet?: {
+      thumbnails?: {
+        maxres?: { url?: string };
+        standard?: { url?: string };
+        high?: { url?: string };
+        medium?: { url?: string };
+        default?: { url?: string };
+      };
+    };
   }>;
 };
 
+type VideoSnippet = {
+  thumbnails?: {
+    maxres?: { url?: string };
+    standard?: { url?: string };
+    high?: { url?: string };
+    medium?: { url?: string };
+    default?: { url?: string };
+  };
+};
+
 type ViewCountMap = Record<string, number>;
-type VideoMetadataMap = Record<string, { viewCount?: number; durationSeconds?: number }>;
+type VideoMetadataMap = Record<
+  string,
+  { viewCount?: number; durationSeconds?: number; thumbnailUrl?: string }
+>;
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 
@@ -148,6 +170,17 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 function pickThumbnailUrl(snippet?: PlaylistSnippet): string {
+  return (
+    snippet?.thumbnails?.maxres?.url ??
+    snippet?.thumbnails?.standard?.url ??
+    snippet?.thumbnails?.high?.url ??
+    snippet?.thumbnails?.medium?.url ??
+    snippet?.thumbnails?.default?.url ??
+    ""
+  );
+}
+
+function pickVideoSnippetThumbnailUrl(snippet?: VideoSnippet): string {
   return (
     snippet?.thumbnails?.maxres?.url ??
     snippet?.thumbnails?.standard?.url ??
@@ -473,7 +506,7 @@ export async function fetchVideoStatsByVideoIds(videoIds: string[]): Promise<Vid
     }
 
     const metadataUrl = buildUrl("/videos", {
-      part: "statistics,contentDetails",
+      part: "statistics,contentDetails,snippet",
       id: chunk.join(","),
       key: apiKey
     });
@@ -485,11 +518,13 @@ export async function fetchVideoStatsByVideoIds(videoIds: string[]): Promise<Vid
       }
       const parsedViewCount = Number(item.statistics?.viewCount ?? "");
       const parsedDurationSeconds = parseIsoDurationToSeconds(item.contentDetails?.duration);
+      const parsedThumbnailUrl = normalizeImageUrl(pickVideoSnippetThumbnailUrl(item.snippet));
       result[item.id] = {
         ...(Number.isFinite(parsedViewCount) ? { viewCount: parsedViewCount } : {}),
         ...(typeof parsedDurationSeconds === "number"
           ? { durationSeconds: parsedDurationSeconds }
-          : {})
+          : {}),
+        ...(parsedThumbnailUrl ? { thumbnailUrl: parsedThumbnailUrl } : {})
       };
     }
   }

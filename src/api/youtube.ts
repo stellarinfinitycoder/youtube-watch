@@ -2,7 +2,10 @@ import type { VideoItem } from "../types/youtube";
 import { normalizeHandle } from "../utils/handle";
 
 const DEFAULT_LIMIT = 25;
-type VideoStatsMap = Record<string, { viewCount?: number; durationSeconds?: number }>;
+type VideoStatsMap = Record<
+  string,
+  { viewCount?: number; durationSeconds?: number; thumbnailUrl?: string }
+>;
 
 export type ChannelLookupResult = {
   channelId: string;

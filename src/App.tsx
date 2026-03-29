@@ -2999,6 +2999,7 @@ function App() {
           ? previousVideo.durationSeconds
           : nextStats.durationSeconds ?? null;
       const nextViewCount = nextStats.viewCount ?? previousVideo?.viewCount;
+      const nextThumbnailUrl = nextStats.thumbnailUrl ?? previousVideo?.thumbnailUrl;
       setBoards((previous) =>
         previous.map((board) => ({
           ...board,
@@ -3010,7 +3011,8 @@ function App() {
                 : {
                     ...video,
                     viewCount: nextViewCount ?? video.viewCount,
-                    durationSeconds: nextDurationSeconds
+                    durationSeconds: nextDurationSeconds,
+                    thumbnailUrl: nextThumbnailUrl ?? video.thumbnailUrl
                   }
             )
           })),
@@ -3020,9 +3022,20 @@ function App() {
           }
         }))
       );
+      if (nextStats.thumbnailUrl) {
+        setVideoThumbnailFallbackUrlById((previous) => {
+          if (!previous[videoId]) {
+            return previous;
+          }
+          const next = { ...previous };
+          delete next[videoId];
+          return next;
+        });
+      }
       const didChange =
         previousVideo?.viewCount !== nextViewCount ||
-        previousVideo?.durationSeconds !== nextDurationSeconds;
+        previousVideo?.durationSeconds !== nextDurationSeconds ||
+        previousVideo?.thumbnailUrl !== nextThumbnailUrl;
       setInlineMetaFeedback(
         didChange ? "success" : typeof nextStats.durationSeconds === "number" ? "info" : "error",
         didChange
