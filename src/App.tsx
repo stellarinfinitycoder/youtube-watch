@@ -189,6 +189,7 @@ declare global {
   interface Window {
     YT?: YouTubeNamespace;
     onYouTubeIframeAPIReady?: () => void;
+    appAgent?: AppAgentApi;
   }
 }
 
@@ -328,6 +329,79 @@ type QuotaEstimateState = {
   dayKey: string;
   todayUnits: number;
   lastActionUnits: number;
+};
+
+type AgentScope = "board" | "channel" | "video";
+
+type AgentActionResult = {
+  ok: boolean;
+  action: string;
+  scope: AgentScope;
+  changed?: {
+    videoIds?: string[];
+    columnIds?: string[];
+  };
+  error?: {
+    code: string;
+    message: string;
+  };
+};
+
+type AgentPermission = "read-only" | "safe-write" | "full";
+
+type AppAgentApi = {
+  version: string;
+  mode: "enabled" | "disabled";
+  permission: AgentPermission;
+  capabilities: {
+    canRead: boolean;
+    canWrite: boolean;
+    canDelete: boolean;
+  };
+  readState: () => {
+    activeBoardId: string | null;
+    activeBoardKind: BoardKind | null;
+    selectedFilters: {
+      videoFilter: VideoFilter;
+      videoWindowDays: VideoWindowFilter;
+      videoDurationFilter: VideoDurationFilter;
+      columnScopeFilter: string[];
+      playbackRate: number;
+    } | null;
+    shownVideosTotal: number;
+    boards: Array<{
+      id: string;
+      name: string;
+      kind: BoardKind;
+      columnCount: number;
+      columns: Array<{
+        id: string;
+        handle: string;
+        shownVideoCount: number;
+        hidden: boolean;
+        loading: boolean;
+        error: string | null;
+        videoIds: string[];
+      }>;
+    }>;
+    visibleColumns: string[];
+    hiddenColumns: string[];
+  };
+  actions: {
+    fetchAllShownBoardChannels: () => Promise<AgentActionResult>;
+    fetchChannel: (columnId: string) => Promise<AgentActionResult>;
+    playBoardShownVideos: () => Promise<AgentActionResult>;
+    playChannelShownVideos: (columnId: string) => Promise<AgentActionResult>;
+    markBoardShownVideosWatched: () => Promise<AgentActionResult>;
+    markBoardShownVideosNew: () => Promise<AgentActionResult>;
+    markChannelShownVideosWatched: (columnId: string) => Promise<AgentActionResult>;
+    markChannelShownVideosNew: (columnId: string) => Promise<AgentActionResult>;
+    markVideoWatched: (videoId: string) => Promise<AgentActionResult>;
+    markVideoNew: (videoId: string) => Promise<AgentActionResult>;
+    saveVideo: (videoId: string, listId: string) => Promise<AgentActionResult>;
+    copyVideoLink: (videoId: string) => Promise<AgentActionResult>;
+    openVideo: (videoId: string) => Promise<AgentActionResult>;
+  };
 };
 
 const NEW_BOARD_OPTION_VALUE = "__new__";
@@ -3770,6 +3844,597 @@ function App() {
     });
   };
 
+  const agentModeEnabled =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("agent") === "1";
+  const agentPermission: AgentPermission = (() => {
+    if (typeof window === "undefined") {
+      return "full";
+    }
+    const value = new URLSearchParams(window.location.search).get("agentPerm");
+    if (value === "read-only" || value === "safe-write" || value === "full") {
+      return value;
+    }
+    return "full";
+  })();
+
+  const emitAgentEvent = (eventName: string, detail: Record<string, unknown>): void => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent(eventName, {
+        detail: {
+          ts: Date.now(),
+          ...detail
+        }
+      })
+    );
+  };
+
+  const getShownVideosForColumnInBoard = (board: BoardState, column: ColumnState): VideoItem[] => {
+    const watched = board.watchedVideos ?? {};
+    const now = Date.now();
+    const sourceVideos = board.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
+    return sourceVideos.filter((video) => {
+      if (!matchesVideoWindowFilter(getVideoPublishedTime(video), board.videoWindowDays, now)) {
+        return false;
+      }
+      if (!matchesDurationFilter(video.durationSeconds, board.videoDurationFilter)) {
+        return false;
+      }
+      const isWatched = watched[video.videoId] === true;
+      if (board.videoFilter === "all") {
+        return true;
+      }
+      if (board.videoFilter === "watched") {
+        return isWatched;
+      }
+      return !isWatched;
+    });
+  };
+
+  const getVisibleColumnsForBoard = (board: BoardState): ColumnState[] => {
+    const scope = normalizeColumnScopeFilter(board.columnScopeFilter, board.columns);
+    if (scope.includes(COLUMN_SCOPE_ALL)) {
+      return board.columns;
+    }
+    if (scope.includes(COLUMN_SCOPE_NOT_EMPTY)) {
+      return board.columns.filter((column) => getShownVideosForColumnInBoard(board, column).length > 0);
+    }
+    return board.columns.filter((column) => scope.includes(column.id));
+  };
+
+  const readAgentState = (): ReturnType<AppAgentApi["readState"]> => {
+    const currentActiveBoard =
+      boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
+    const visible = currentActiveBoard ? getVisibleColumnsForBoard(currentActiveBoard) : [];
+    const visibleSet = new Set(visible.map((column) => column.id));
+    const totalShown = currentActiveBoard
+      ? visible.reduce(
+          (sum, column) => sum + getShownVideosForColumnInBoard(currentActiveBoard, column).length,
+          0
+        )
+      : 0;
+
+    return {
+      activeBoardId: currentActiveBoard?.id ?? null,
+      activeBoardKind: currentActiveBoard?.kind ?? null,
+      selectedFilters: currentActiveBoard
+        ? {
+            videoFilter: currentActiveBoard.videoFilter,
+            videoWindowDays: currentActiveBoard.videoWindowDays,
+            videoDurationFilter: currentActiveBoard.videoDurationFilter,
+            columnScopeFilter: normalizeColumnScopeFilter(
+              currentActiveBoard.columnScopeFilter,
+              currentActiveBoard.columns
+            ),
+            playbackRate: currentActiveBoard.defaultPlaybackRate
+          }
+        : null,
+      shownVideosTotal: totalShown,
+      boards: boards.map((board) => {
+        const boardVisibleSet = new Set(getVisibleColumnsForBoard(board).map((column) => column.id));
+        return {
+          id: board.id,
+          name: board.name,
+          kind: board.kind,
+          columnCount: board.columns.length,
+          columns: board.columns.map((column) => {
+            const shown = getShownVideosForColumnInBoard(board, column);
+            return {
+              id: column.id,
+              handle: column.currentHandle || column.handleInput,
+              shownVideoCount: shown.length,
+              hidden: !boardVisibleSet.has(column.id),
+              loading: column.loading,
+              error: column.error,
+              videoIds: shown.map((video) => video.videoId)
+            };
+          })
+        };
+      }),
+      visibleColumns: visible.map((column) => column.id),
+      hiddenColumns: currentActiveBoard
+        ? currentActiveBoard.columns
+            .filter((column) => !visibleSet.has(column.id))
+            .map((column) => column.id)
+        : []
+    };
+  };
+
+  const resolveVideoById = (
+    videoId: string
+  ): { board: BoardState; column: ColumnState; video: VideoItem } | null => {
+    for (const board of boards) {
+      for (const column of board.columns) {
+        const video = column.videos.find((item) => item.videoId === videoId);
+        if (video) {
+          return { board, column, video };
+        }
+      }
+    }
+    return null;
+  };
+
+  const resolveColumnOnActiveBoard = (columnId: string): ColumnState | null => {
+    if (!activeBoard) {
+      return null;
+    }
+    return activeBoard.columns.find((column) => column.id === columnId) ?? null;
+  };
+
+  const runAgentAction = async (
+    action: string,
+    scope: AgentScope,
+    executor: () => Promise<AgentActionResult> | AgentActionResult
+  ): Promise<AgentActionResult> => {
+    const actionId = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    emitAgentEvent("app:action-start", { actionId, action, scope });
+    try {
+      if (agentPermission === "read-only") {
+        const denied: AgentActionResult = {
+          ok: false,
+          action,
+          scope,
+          error: {
+            code: "READ_ONLY",
+            message: "Agent is in read-only mode."
+          }
+        };
+        emitAgentEvent("app:error", { actionId, action, scope, error: denied.error });
+        emitAgentEvent("app:action-end", { actionId, ...denied });
+        return denied;
+      }
+      const result = await executor();
+      emitAgentEvent("app:action-end", { actionId, ...result });
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected action error.";
+      const failed: AgentActionResult = {
+        ok: false,
+        action,
+        scope,
+        error: {
+          code: "ACTION_FAILED",
+          message
+        }
+      };
+      emitAgentEvent("app:error", { actionId, action, scope, error: failed.error });
+      emitAgentEvent("app:action-end", { actionId, ...failed });
+      return failed;
+    }
+  };
+
+  useEffect(() => {
+    emitAgentEvent("app:state-changed", {
+      activeBoardId,
+      shownVideosTotal
+    });
+  }, [activeBoardId, boards, shownVideosTotal]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const api: AppAgentApi = {
+      version: "1.0.0",
+      mode: agentModeEnabled ? "enabled" : "disabled",
+      permission: agentPermission,
+      capabilities: {
+        canRead: true,
+        canWrite: agentPermission !== "read-only",
+        canDelete: agentPermission === "full"
+      },
+      readState: readAgentState,
+      actions: {
+        fetchAllShownBoardChannels: async () =>
+          runAgentAction("fetchAllShownBoardChannels", "board", async () => {
+            if (!activeBoard || activeBoard.kind === "saved") {
+              return {
+                ok: false,
+                action: "fetchAllShownBoardChannels",
+                scope: "board",
+                error: {
+                  code: "BOARD_NOT_FETCHABLE",
+                  message: "Active board is not a channels board."
+                }
+              };
+            }
+            const targetColumns = activeBoard.columns.filter(
+              (column) => column.handleInput.trim().length > 0
+            );
+            await Promise.all(
+              targetColumns.map((column) =>
+                runFetch(activeBoard.id, column.id, column.handleInput)
+              )
+            );
+            return {
+              ok: true,
+              action: "fetchAllShownBoardChannels",
+              scope: "board",
+              changed: { columnIds: targetColumns.map((column) => column.id) }
+            };
+          }),
+        fetchChannel: async (columnId: string) =>
+          runAgentAction("fetchChannel", "channel", async () => {
+            if (!activeBoard || activeBoard.kind === "saved") {
+              return {
+                ok: false,
+                action: "fetchChannel",
+                scope: "channel",
+                error: {
+                  code: "BOARD_NOT_FETCHABLE",
+                  message: "Active board is not a channels board."
+                }
+              };
+            }
+            const column = resolveColumnOnActiveBoard(columnId);
+            if (!column) {
+              return {
+                ok: false,
+                action: "fetchChannel",
+                scope: "channel",
+                error: {
+                  code: "COLUMN_NOT_FOUND",
+                  message: "Column not found on active board."
+                }
+              };
+            }
+            await runFetch(activeBoard.id, column.id, column.handleInput);
+            return {
+              ok: true,
+              action: "fetchChannel",
+              scope: "channel",
+              changed: { columnIds: [column.id] }
+            };
+          }),
+        playBoardShownVideos: async () =>
+          runAgentAction("playBoardShownVideos", "board", async () => {
+            playAllVideos();
+            return {
+              ok: true,
+              action: "playBoardShownVideos",
+              scope: "board"
+            };
+          }),
+        playChannelShownVideos: async (columnId: string) =>
+          runAgentAction("playChannelShownVideos", "channel", async () => {
+            const column = resolveColumnOnActiveBoard(columnId);
+            if (!column) {
+              return {
+                ok: false,
+                action: "playChannelShownVideos",
+                scope: "channel",
+                error: {
+                  code: "COLUMN_NOT_FOUND",
+                  message: "Column not found on active board."
+                }
+              };
+            }
+            playChannelVideos(column);
+            return {
+              ok: true,
+              action: "playChannelShownVideos",
+              scope: "channel",
+              changed: { columnIds: [column.id] }
+            };
+          }),
+        markBoardShownVideosWatched: async () =>
+          runAgentAction("markBoardShownVideosWatched", "board", async () => {
+            if (!activeBoard) {
+              return {
+                ok: false,
+                action: "markBoardShownVideosWatched",
+                scope: "board",
+                error: { code: "NO_ACTIVE_BOARD", message: "No active board." }
+              };
+            }
+            const now = Date.now();
+            const ids = new Set<string>();
+            visibleColumns.forEach((column) => {
+              getShownVideosForColumn(column, now).forEach((video) => ids.add(video.videoId));
+            });
+            const videoIds = [...ids];
+            setBoard(activeBoard.id, (board) => ({
+              ...board,
+              watchedVideos: {
+                ...board.watchedVideos,
+                ...Object.fromEntries(videoIds.map((videoId) => [videoId, true]))
+              }
+            }));
+            return {
+              ok: true,
+              action: "markBoardShownVideosWatched",
+              scope: "board",
+              changed: { videoIds }
+            };
+          }),
+        markBoardShownVideosNew: async () =>
+          runAgentAction("markBoardShownVideosNew", "board", async () => {
+            if (!activeBoard) {
+              return {
+                ok: false,
+                action: "markBoardShownVideosNew",
+                scope: "board",
+                error: { code: "NO_ACTIVE_BOARD", message: "No active board." }
+              };
+            }
+            const now = Date.now();
+            const ids = new Set<string>();
+            visibleColumns.forEach((column) => {
+              getShownVideosForColumn(column, now).forEach((video) => ids.add(video.videoId));
+            });
+            const videoIds = [...ids];
+            setBoard(activeBoard.id, (board) => {
+              const next = { ...board.watchedVideos };
+              videoIds.forEach((videoId) => {
+                delete next[videoId];
+              });
+              return {
+                ...board,
+                watchedVideos: next
+              };
+            });
+            return {
+              ok: true,
+              action: "markBoardShownVideosNew",
+              scope: "board",
+              changed: { videoIds }
+            };
+          }),
+        markChannelShownVideosWatched: async (columnId: string) =>
+          runAgentAction("markChannelShownVideosWatched", "channel", async () => {
+            if (!activeBoard) {
+              return {
+                ok: false,
+                action: "markChannelShownVideosWatched",
+                scope: "channel",
+                error: { code: "NO_ACTIVE_BOARD", message: "No active board." }
+              };
+            }
+            const column = resolveColumnOnActiveBoard(columnId);
+            if (!column) {
+              return {
+                ok: false,
+                action: "markChannelShownVideosWatched",
+                scope: "channel",
+                error: {
+                  code: "COLUMN_NOT_FOUND",
+                  message: "Column not found on active board."
+                }
+              };
+            }
+            const videoIds = getShownVideosForColumn(column, Date.now()).map((video) => video.videoId);
+            setBoard(activeBoard.id, (board) => ({
+              ...board,
+              watchedVideos: {
+                ...board.watchedVideos,
+                ...Object.fromEntries(videoIds.map((videoId) => [videoId, true]))
+              }
+            }));
+            return {
+              ok: true,
+              action: "markChannelShownVideosWatched",
+              scope: "channel",
+              changed: { videoIds, columnIds: [column.id] }
+            };
+          }),
+        markChannelShownVideosNew: async (columnId: string) =>
+          runAgentAction("markChannelShownVideosNew", "channel", async () => {
+            if (!activeBoard) {
+              return {
+                ok: false,
+                action: "markChannelShownVideosNew",
+                scope: "channel",
+                error: { code: "NO_ACTIVE_BOARD", message: "No active board." }
+              };
+            }
+            const column = resolveColumnOnActiveBoard(columnId);
+            if (!column) {
+              return {
+                ok: false,
+                action: "markChannelShownVideosNew",
+                scope: "channel",
+                error: {
+                  code: "COLUMN_NOT_FOUND",
+                  message: "Column not found on active board."
+                }
+              };
+            }
+            const videoIds = getShownVideosForColumn(column, Date.now()).map((video) => video.videoId);
+            setBoard(activeBoard.id, (board) => {
+              const next = { ...board.watchedVideos };
+              videoIds.forEach((videoId) => {
+                delete next[videoId];
+              });
+              return {
+                ...board,
+                watchedVideos: next
+              };
+            });
+            return {
+              ok: true,
+              action: "markChannelShownVideosNew",
+              scope: "channel",
+              changed: { videoIds, columnIds: [column.id] }
+            };
+          }),
+        markVideoWatched: async (videoId: string) =>
+          runAgentAction("markVideoWatched", "video", async () => {
+            const resolved = resolveVideoById(videoId);
+            if (!resolved) {
+              return {
+                ok: false,
+                action: "markVideoWatched",
+                scope: "video",
+                error: { code: "VIDEO_NOT_FOUND", message: "Video not found." }
+              };
+            }
+            setBoard(resolved.board.id, (board) => ({
+              ...board,
+              watchedVideos: {
+                ...board.watchedVideos,
+                [videoId]: true
+              }
+            }));
+            return {
+              ok: true,
+              action: "markVideoWatched",
+              scope: "video",
+              changed: { videoIds: [videoId], columnIds: [resolved.column.id] }
+            };
+          }),
+        markVideoNew: async (videoId: string) =>
+          runAgentAction("markVideoNew", "video", async () => {
+            const resolved = resolveVideoById(videoId);
+            if (!resolved) {
+              return {
+                ok: false,
+                action: "markVideoNew",
+                scope: "video",
+                error: { code: "VIDEO_NOT_FOUND", message: "Video not found." }
+              };
+            }
+            setBoard(resolved.board.id, (board) => {
+              const next = { ...board.watchedVideos };
+              delete next[videoId];
+              return {
+                ...board,
+                watchedVideos: next
+              };
+            });
+            return {
+              ok: true,
+              action: "markVideoNew",
+              scope: "video",
+              changed: { videoIds: [videoId], columnIds: [resolved.column.id] }
+            };
+          }),
+        saveVideo: async (videoId: string, listId: string) =>
+          runAgentAction("saveVideo", "video", async () => {
+            const resolved = resolveVideoById(videoId);
+            if (!resolved) {
+              return {
+                ok: false,
+                action: "saveVideo",
+                scope: "video",
+                error: { code: "VIDEO_NOT_FOUND", message: "Video not found." }
+              };
+            }
+            if (!savedBoard || !savedBoard.columns.some((column) => column.id === listId)) {
+              return {
+                ok: false,
+                action: "saveVideo",
+                scope: "video",
+                error: { code: "LIST_NOT_FOUND", message: "Destination list not found." }
+              };
+            }
+            const now = Date.now();
+            setBoard(savedBoard.id, (board) => ({
+              ...board,
+              columns: board.columns.map((column) => {
+                if (column.id !== listId) {
+                  return column;
+                }
+                const exists = column.videos.some((video) => video.videoId === videoId);
+                if (exists) {
+                  return column;
+                }
+                return {
+                  ...column,
+                  videos: [resolved.video, ...column.videos],
+                  savedAddedAtByVideoId: {
+                    ...column.savedAddedAtByVideoId,
+                    [videoId]: now
+                  },
+                  savedManualOrder: [videoId, ...column.savedManualOrder.filter((id) => id !== videoId)]
+                };
+              }),
+              watchedVideos: {
+                ...board.watchedVideos,
+                [videoId]: true
+              },
+              viewCountRefreshedAtByVideoId: {
+                ...board.viewCountRefreshedAtByVideoId,
+                [videoId]: now
+              }
+            }));
+            return {
+              ok: true,
+              action: "saveVideo",
+              scope: "video",
+              changed: { videoIds: [videoId], columnIds: [listId] }
+            };
+          }),
+        copyVideoLink: async (videoId: string) =>
+          runAgentAction("copyVideoLink", "video", async () => {
+            const resolved = resolveVideoById(videoId);
+            if (!resolved) {
+              return {
+                ok: false,
+                action: "copyVideoLink",
+                scope: "video",
+                error: { code: "VIDEO_NOT_FOUND", message: "Video not found." }
+              };
+            }
+            await copyVideoLink(resolved.video);
+            return {
+              ok: true,
+              action: "copyVideoLink",
+              scope: "video",
+              changed: { videoIds: [videoId], columnIds: [resolved.column.id] }
+            };
+          }),
+        openVideo: async (videoId: string) =>
+          runAgentAction("openVideo", "video", async () => {
+            const resolved = resolveVideoById(videoId);
+            if (!resolved) {
+              return {
+                ok: false,
+                action: "openVideo",
+                scope: "video",
+                error: { code: "VIDEO_NOT_FOUND", message: "Video not found." }
+              };
+            }
+            openVideo(resolved.video);
+            return {
+              ok: true,
+              action: "openVideo",
+              scope: "video",
+              changed: { videoIds: [videoId], columnIds: [resolved.column.id] }
+            };
+          })
+      }
+    };
+    window.appAgent = api;
+    return () => {
+      if (window.appAgent === api) {
+        delete window.appAgent;
+      }
+    };
+  });
+
   return (
     <main className="app-shell">
       <div className="columns-nav">
@@ -3790,6 +4455,7 @@ function App() {
             alt="Logo"
             className={`top-bar-logo ${isLogoSpinning ? "is-spinning" : ""}`}
             onClick={triggerLogoSpin}
+            data-testid="topbar-logo"
           />
         </Tooltip>
         {!isSavedBoardActive ? (
@@ -3809,6 +4475,7 @@ function App() {
               onClick={fetchAllColumns}
               aria-label="Fetch all channels"
               className="nav-btn"
+              data-testid="topbar-fetch-all"
             >
               <span className="btn-icon btn-icon-fetch" aria-hidden />
             </Button>
@@ -3819,6 +4486,7 @@ function App() {
           onChange={handleBoardSelectChange}
           aria-label="Board selector"
           className="video-filter-select board-select"
+          data-testid="topbar-board-select"
           optionLabelProp="title"
           listHeight={boardDropdownListHeight}
         >
@@ -3913,6 +4581,7 @@ function App() {
           }}
           aria-label="Channel scope filter"
           className="video-filter-select channel-scope-select"
+          data-testid="topbar-channel-scope-select"
           listHeight={channelScopeDropdownListHeight}
           maxTagCount={0}
           maxTagPlaceholder={() =>
@@ -3935,6 +4604,7 @@ function App() {
             }}
             aria-label="Video filter"
             className="video-filter-select video-status-select"
+            data-testid="topbar-status-select"
             options={[
               { value: "all", label: "ALL" },
               { value: "new", label: "NEW" },
@@ -3955,6 +4625,7 @@ function App() {
           }}
           aria-label="Video age window"
           className="video-filter-select video-window-select"
+          data-testid="topbar-days-select"
           listHeight={360}
           options={
             isSavedBoardActive
@@ -3977,6 +4648,7 @@ function App() {
           }}
           aria-label="Video duration filter"
           className="video-filter-select video-duration-select"
+          data-testid="topbar-duration-select"
           maxTagCount={0}
           maxTagPlaceholder={() => formatDurationFilterSummary(videoDurationFilter)}
           showSearch={false}
@@ -3987,6 +4659,7 @@ function App() {
           onChange={handlePreferredPlaybackRateChange}
           aria-label="Default playback speed"
           className="video-filter-select playback-speed-select"
+          data-testid="topbar-speed-select"
           options={PLAYBACK_RATE_OPTIONS.map((value) => ({
             value,
             label: `${value}X`
@@ -3997,6 +4670,7 @@ function App() {
           onClick={playAllVideos}
           aria-label="Play all videos"
           className="nav-btn"
+          data-testid="topbar-play-all"
         >
           <span className="btn-icon btn-icon-play" aria-hidden />
         </Button>
@@ -4009,6 +4683,7 @@ function App() {
             }`}
             className="nav-btn top-wa-btn"
             disabled={videoFilter === "all" || shownVideosTotal === 0}
+            data-testid="topbar-mark-all"
           >
             {videoFilter === "watched" ? (
               <span className="btn-icon btn-icon-undo" aria-hidden />
@@ -4224,6 +4899,10 @@ function App() {
                   className={`channel-column ${
                     isSavedBoardActive ? "is-saved-column" : "is-channel-column"
                   }`}
+                  data-board-id={activeBoardId}
+                  data-column-id={column.id}
+                  data-handle={(column.currentHandle || column.handleInput || "").trim()}
+                  data-hidden={hiddenColumns.some((item) => item.id === column.id) ? "true" : "false"}
                 >
                   <div className="column-actions">
                     <div className="column-actions-left">
@@ -4288,6 +4967,7 @@ function App() {
                           }
                           aria-label={`Fetch column ${index + 1}`}
                           className="inline-fetch-btn"
+                          data-testid="column-fetch"
                         >
                           <span className="btn-icon btn-icon-fetch" aria-hidden />
                         </Button>
@@ -4298,6 +4978,7 @@ function App() {
                         disabled={column.loading || !hasChannelPlaylistVideos}
                         aria-label={`Play channel ${index + 1} playlist`}
                         className="column-move-btn"
+                        data-testid="column-play"
                       >
                         <span className="btn-icon btn-icon-play" aria-hidden />
                       </Button>
@@ -4340,6 +5021,7 @@ function App() {
                             videoFilter === "watched" ? "new" : "watched"
                           }`}
                           className="bulk-watch-column-btn"
+                          data-testid="column-mark-all"
                         >
                           {videoFilter === "watched" ? (
                             <span className="btn-icon btn-icon-undo" aria-hidden />
@@ -4354,6 +5036,7 @@ function App() {
                         disabled={column.loading || (isSavedBoardActive && columns.length <= 1)}
                         aria-label={`Remove column ${index + 1}`}
                         className="remove-column-btn"
+                        data-testid="column-delete"
                       >
                         <span className="btn-icon btn-icon-delete" aria-hidden />
                       </Button>
@@ -4481,6 +5164,10 @@ function App() {
                             className="video-tile-item"
                             data-url={video.videoUrl}
                             data-video-id={video.videoId}
+                            data-board-id={activeBoardId}
+                            data-column-id={column.id}
+                            data-handle={(column.currentHandle || column.handleInput || "").trim()}
+                            data-state={isWatched ? "watched" : "new"}
                           >
                             <Space direction="vertical" size="small" className="full-width">
                               <div className="video-meta-row">
@@ -4490,6 +5177,7 @@ function App() {
                                   onClick={() => void backfillVideoStats(video.videoId)}
                                   aria-label={`Refresh metadata for ${video.title}`}
                                   disabled={isMetaRefreshInFlight}
+                                  data-testid="video-meta-refresh"
                                 >
                                   <Text className="video-meta">
                                     {metaFeedback ? (
@@ -4551,6 +5239,7 @@ function App() {
                                       }`}
                                       aria-label={`Copy link for ${video.title}`}
                                       onClick={() => void copyVideoLink(video)}
+                                      data-testid="video-copy-link"
                                     >
                                       <span className="btn-icon btn-icon-link" aria-hidden />
                                     </Button>
@@ -4597,6 +5286,7 @@ function App() {
                                       aria-label={`Save ${video.title}`}
                                       onClick={() => openSaveVideoModal(video)}
                                       disabled={saveDestinationColumns.length === 0}
+                                      data-testid="video-save"
                                     >
                                       <span className="btn-icon btn-icon-star" aria-hidden />
                                     </Button>
@@ -4607,6 +5297,7 @@ function App() {
                                         isWatched ? "new" : "watched"
                                       }`}
                                       onClick={() => toggleWatched(video.videoId)}
+                                      data-testid="video-mark-toggle"
                                     >
                                       {isWatched ? (
                                         <span className="btn-icon btn-icon-undo" aria-hidden />
