@@ -1394,6 +1394,25 @@ body {
   right: 8px !important;
 }
 
+.transcript-modal .ant-modal-body {
+  padding-top: 8px !important;
+}
+
+.transcript-modal-body {
+  max-height: 68vh;
+  overflow: auto;
+}
+
+.transcript-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .board-edit-footer {
   width: 100%;
   display: flex;
@@ -1766,6 +1785,12 @@ body {
   }
 
   .save-video-modal .ant-modal {
+    width: calc(100vw - 6px) !important;
+    max-width: calc(100vw - 6px) !important;
+    margin: 0 auto !important;
+  }
+
+  .transcript-modal .ant-modal {
     width: calc(100vw - 6px) !important;
     max-width: calc(100vw - 6px) !important;
     margin: 0 auto !important;

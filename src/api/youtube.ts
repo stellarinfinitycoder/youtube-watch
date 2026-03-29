@@ -178,3 +178,18 @@ export async function fetchVideoStatsByVideoIds(
     }
   );
 }
+
+export async function fetchTranscriptByVideoId(
+  videoId: string
+): Promise<{ videoId: string; text: string }> {
+  const trimmed = videoId.trim();
+  if (!trimmed) {
+    throw new Error("Invalid videoId.");
+  }
+  return fetchJson<{ videoId: string; text: string }>(
+    buildInternalUrl("/api/youtube/transcript", { videoId: trimmed }),
+    {
+      cache: "no-store"
+    }
+  );
+}

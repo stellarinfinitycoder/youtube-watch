@@ -17,6 +17,7 @@ import {
 } from "antd";
 import type { FetchState } from "./types/youtube";
 import {
+  fetchTranscriptByVideoId,
   fetchPlaylistDiscoveryPage,
   fetchVideoStatsByVideoIds,
   resolveChannelByInputWithThumbnail,
@@ -1831,6 +1832,7 @@ function App() {
   const fallbackIframeRef = useRef<HTMLIFrameElement | null>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerReadyRef = useRef(false);
+  const transcriptRequestIdRef = useRef(0);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
   const linkCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const logoSpinTimeoutRef = useRef<number | null>(null);
@@ -1895,6 +1897,10 @@ function App() {
   const [copiedLinkVideoId, setCopiedLinkVideoId] = useState<string | null>(null);
   const [bulkInput, setBulkInput] = useState("");
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
+  const [transcriptVideo, setTranscriptVideo] = useState<VideoItem | null>(null);
+  const [transcriptLoading, setTranscriptLoading] = useState(false);
+  const [transcriptText, setTranscriptText] = useState("");
+  const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
   const [playlistIndex, setPlaylistIndex] = useState<number>(-1);
   const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
@@ -3136,6 +3142,37 @@ function App() {
   const openVideo = (video: VideoItem): void => {
     stopPlaylist();
     setActiveVideo(video);
+  };
+
+  const openTranscript = async (video: VideoItem): Promise<void> => {
+    setTranscriptVideo(video);
+    setTranscriptLoading(true);
+    setTranscriptError(null);
+    setTranscriptText("");
+    transcriptRequestIdRef.current += 1;
+    const requestId = transcriptRequestIdRef.current;
+    try {
+      const payload = await fetchTranscriptByVideoId(video.videoId);
+      if (requestId !== transcriptRequestIdRef.current) {
+        return;
+      }
+      const text = payload.text.trim();
+      if (!text) {
+        setTranscriptError("No transcript.");
+        return;
+      }
+      setTranscriptText(text);
+    } catch (error) {
+      if (requestId !== transcriptRequestIdRef.current) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "No transcript.";
+      setTranscriptError(message);
+    } finally {
+      if (requestId === transcriptRequestIdRef.current) {
+        setTranscriptLoading(false);
+      }
+    }
   };
 
   const getVideoThumbnailSrc = (video: VideoItem): string => {
@@ -5153,6 +5190,32 @@ function App() {
         ) : null}
       </Modal>
 
+      <Modal
+        title={transcriptVideo ? `Transcript: ${transcriptVideo.title}` : "Transcript"}
+        open={transcriptVideo !== null}
+        onCancel={() => {
+          transcriptRequestIdRef.current += 1;
+          setTranscriptVideo(null);
+          setTranscriptLoading(false);
+          setTranscriptText("");
+          setTranscriptError(null);
+        }}
+        footer={null}
+        width={900}
+        destroyOnHidden
+        className="transcript-modal"
+      >
+        <div className="transcript-modal-body">
+          {transcriptLoading ? <Text>FETCHING TRANSCRIPT...</Text> : null}
+          {!transcriptLoading && transcriptError ? (
+            <Text type="danger">{transcriptError}</Text>
+          ) : null}
+          {!transcriptLoading && !transcriptError ? (
+            <pre className="transcript-text">{transcriptText}</pre>
+          ) : null}
+        </div>
+      </Modal>
+
       <div
         ref={scrollRef}
         className="columns-scroll"
@@ -5537,6 +5600,14 @@ function App() {
                                     ) : null}
                                     <Button
                                       htmlType="button"
+                                      className="column-move-btn"
+                                      aria-label={`Open transcript for ${video.title}`}
+                                      onClick={() => void openTranscript(video)}
+                                    >
+                                      T
+                                    </Button>
+                                    <Button
+                                      htmlType="button"
                                       className={`column-move-btn link-copy-btn ${
                                         copiedLinkVideoId === video.videoId ? "is-copied" : ""
                                       }`}
@@ -5573,6 +5644,14 @@ function App() {
                                   </>
                                 ) : (
                                   <>
+                                    <Button
+                                      htmlType="button"
+                                      className="column-move-btn"
+                                      aria-label={`Open transcript for ${video.title}`}
+                                      onClick={() => void openTranscript(video)}
+                                    >
+                                      T
+                                    </Button>
                                     <Button
                                       htmlType="button"
                                       className={`column-move-btn link-copy-btn ${
