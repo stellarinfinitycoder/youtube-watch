@@ -17,7 +17,7 @@ import {
 } from "antd";
 import type { FetchState } from "./types/youtube";
 import {
-  fetchTranscriptByVideoId,
+  fetchTranscriptByVideoInput,
   fetchPlaylistDiscoveryPage,
   fetchVideoStatsByVideoIds,
   resolveChannelByInputWithThumbnail,
@@ -3152,7 +3152,10 @@ function App() {
     transcriptRequestIdRef.current += 1;
     const requestId = transcriptRequestIdRef.current;
     try {
-      const payload = await fetchTranscriptByVideoId(video.videoId);
+      const payload = await fetchTranscriptByVideoInput({
+        videoId: video.videoId,
+        videoUrl: video.videoUrl
+      });
       if (requestId !== transcriptRequestIdRef.current) {
         return;
       }

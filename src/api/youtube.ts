@@ -179,20 +179,22 @@ export async function fetchVideoStatsByVideoIds(
   );
 }
 
-export async function fetchTranscriptByVideoId(
-  videoId: string
+export async function fetchTranscriptByVideoInput(
+  input: { videoId?: string; videoUrl?: string }
 ): Promise<{ videoId: string; text: string }> {
-  const trimmed = videoId.trim();
-  if (!trimmed) {
-    throw new Error("Invalid videoId.");
+  const trimmedUrl = (input.videoUrl ?? "").trim();
+  const trimmedVideoId = (input.videoId ?? "").trim();
+  if (!trimmedUrl && !trimmedVideoId) {
+    throw new Error("Invalid video input.");
   }
+  const url = trimmedUrl || `https://www.youtube.com/watch?v=${trimmedVideoId}`;
   return fetchJson<{ videoId: string; text: string }>("/api/transcript", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      url: `https://www.youtube.com/watch?v=${trimmed}`
+      url
     }),
     cache: "no-store"
   });
