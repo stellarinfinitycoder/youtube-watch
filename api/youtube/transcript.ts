@@ -1,26 +1,4 @@
-type TranscriptSegment = {
-  text?: string;
-  duration?: number;
-  offset?: number;
-};
-
-let cachedFetchTranscript: ((videoIdOrUrl: string) => Promise<TranscriptSegment[]>) | null =
-  null;
-
-async function getFetchTranscript(): Promise<
-  (videoIdOrUrl: string) => Promise<TranscriptSegment[]>
-> {
-  if (cachedFetchTranscript) {
-    return cachedFetchTranscript;
-  }
-  const module = await import("youtube-transcript/dist/youtube-transcript.esm.js");
-  const fn = (module as any).fetchTranscript;
-  if (typeof fn !== "function") {
-    throw new Error("Transcript library export is unavailable.");
-  }
-  cachedFetchTranscript = fn as (videoIdOrUrl: string) => Promise<TranscriptSegment[]>;
-  return cachedFetchTranscript;
-}
+import { fetchYouTubeTranscript } from "../_lib/transcript.js";
 
 function getVideoId(req: any): string {
   const queryVideoId = typeof req.query?.videoId === "string" ? req.query.videoId.trim() : "";
@@ -60,22 +38,8 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const fetchTranscriptFn = await getFetchTranscript();
-    const segments = (await fetchTranscriptFn(videoId)) as TranscriptSegment[];
-    const text = segments
-      .map((segment) => (segment.text ?? "").trim())
-      .filter(Boolean)
-      .join("\n");
-
-    if (!text) {
-      res.status(404).json({ error: "No transcript available." });
-      return;
-    }
-
-    res.status(200).json({
-      videoId,
-      text
-    });
+    const payload = await fetchYouTubeTranscript(videoId);
+    res.status(200).json(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch transcript.";
     if (/transcript|caption|subtitles|disabled|unavailable|not available/i.test(message)) {

@@ -186,10 +186,14 @@ export async function fetchTranscriptByVideoId(
   if (!trimmed) {
     throw new Error("Invalid videoId.");
   }
-  return fetchJson<{ videoId: string; text: string }>(
-    buildInternalUrl("/api/youtube/transcript", { videoId: trimmed }),
-    {
-      cache: "no-store"
-    }
-  );
+  return fetchJson<{ videoId: string; text: string }>("/api/transcript", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      url: `https://www.youtube.com/watch?v=${trimmed}`
+    }),
+    cache: "no-store"
+  });
 }
