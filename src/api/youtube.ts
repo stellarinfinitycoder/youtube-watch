@@ -205,6 +205,7 @@ export async function fetchSummaryByVideoInput(input: {
   videoUrl?: string;
   transcriptText?: string;
   mode?: "short" | "detailed" | "bullets";
+  prompt?: string;
 }): Promise<{
   videoId: string;
   model: string;
@@ -233,7 +234,11 @@ export async function fetchSummaryByVideoInput(input: {
         typeof input.transcriptText === "string" && input.transcriptText.trim().length > 0
           ? input.transcriptText
           : undefined,
-      mode: input.mode ?? "short"
+      mode: input.mode ?? "short",
+      prompt:
+        typeof input.prompt === "string" && input.prompt.trim().length > 0
+          ? input.prompt
+          : undefined
     }),
     cache: "no-store"
   });

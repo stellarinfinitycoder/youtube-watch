@@ -153,6 +153,7 @@ async function fetchOpenRouterSummary(params: {
   model: string;
   transcriptText: string;
   mode: SummaryMode;
+  prompt?: string;
   referer?: string;
   title?: string;
 }): Promise<{ summary: string; keyPoints: string[] }> {
@@ -170,7 +171,10 @@ async function fetchOpenRouterSummary(params: {
       messages: [
         {
           role: "system",
-          content: getPrompt(params.mode)
+          content:
+            typeof params.prompt === "string" && params.prompt.trim().length > 0
+              ? params.prompt.trim()
+              : getPrompt(params.mode)
         },
         {
           role: "user",
@@ -213,6 +217,10 @@ export default async function handler(req: any, res: any) {
   }
 
   const mode = parseMode(body);
+  const prompt =
+    typeof body.prompt === "string" && body.prompt.trim().length > 0
+      ? body.prompt.trim()
+      : undefined;
   const requestedModel =
     typeof body.model === "string" && body.model.trim().length > 0
       ? body.model.trim()
@@ -242,6 +250,7 @@ export default async function handler(req: any, res: any) {
       model: requestedModel,
       transcriptText,
       mode,
+      prompt,
       referer: process.env.OPENROUTER_HTTP_REFERER,
       title: process.env.OPENROUTER_APP_TITLE || "Youtube Watch"
     });

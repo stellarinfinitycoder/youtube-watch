@@ -1400,7 +1400,8 @@ body {
 
 .transcript-modal-body {
   max-height: 68vh;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .transcript-copy-btn {
@@ -1440,6 +1441,40 @@ body {
 
 .transcript-mode-select {
   width: 180px;
+}
+
+.transcript-prompt-btn.is-active {
+  background: var(--amber) !important;
+  color: #18110a !important;
+  border-color: var(--amber) !important;
+}
+
+.summary-prompt-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.summary-prompt-editor .ant-input {
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.summary-prompt-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.summary-prompt-action-btn.ant-btn {
+  min-width: 96px;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 14px;
 }
 
 .transcript-copy-btn.is-copied {

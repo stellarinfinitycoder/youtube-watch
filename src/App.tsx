@@ -44,6 +44,14 @@ const TRANSCRIPT_CACHE_KEY_PREFIX = "youtube-watch:transcript:v1:";
 const TRANSCRIPT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const SUMMARY_CACHE_KEY_PREFIX = "youtube-watch:summary:v1:";
 const SUMMARY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const SUMMARY_PROMPT_STORAGE_KEY = "youtube-watch:summary-prompt:v1";
+const DEFAULT_SUMMARY_PROMPT = [
+  "You summarize YouTube transcripts.",
+  "Return strict JSON with keys: summary (string), keyPoints (string[]).",
+  "summary: max 5 concise sentences.",
+  "keyPoints: 5-7 short bullets.",
+  "Use only transcript content. No fabricated facts."
+].join(" ");
 const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 const LEGACY_WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
@@ -941,6 +949,7 @@ type SummaryCacheEntry = {
   keyPoints: string[];
   model: string;
   transcriptHash: string;
+  promptHash: string;
   cachedAt: number;
 };
 
@@ -1003,11 +1012,36 @@ function writeCachedTranscript(videoId: string, text: string): void {
   }
 }
 
-function readCachedSummary(videoId: string, transcriptText: string): SummaryCacheEntry | null {
+function readStoredSummaryPrompt(): string {
+  if (typeof window === "undefined") {
+    return DEFAULT_SUMMARY_PROMPT;
+  }
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.getItem !== "function") {
+      return DEFAULT_SUMMARY_PROMPT;
+    }
+    const raw = storage.getItem(SUMMARY_PROMPT_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_SUMMARY_PROMPT;
+    }
+    const parsed = String(raw).trim();
+    return parsed.length > 0 ? parsed : DEFAULT_SUMMARY_PROMPT;
+  } catch {
+    return DEFAULT_SUMMARY_PROMPT;
+  }
+}
+
+function readCachedSummary(
+  videoId: string,
+  transcriptText: string,
+  promptText: string
+): SummaryCacheEntry | null {
   if (typeof window === "undefined" || videoId.trim().length === 0) {
     return null;
   }
   const transcriptHash = hashText(transcriptText.trim());
+  const promptHash = hashText(promptText.trim());
   try {
     const storage = window.localStorage;
     if (!storage || typeof storage.getItem !== "function") {
@@ -1023,6 +1057,7 @@ function readCachedSummary(videoId: string, transcriptText: string): SummaryCach
       !Array.isArray(parsed.keyPoints) ||
       typeof parsed.model !== "string" ||
       typeof parsed.transcriptHash !== "string" ||
+      typeof parsed.promptHash !== "string" ||
       typeof parsed.cachedAt !== "number"
     ) {
       storage.removeItem(`${SUMMARY_CACHE_KEY_PREFIX}${videoId}`);
@@ -1033,6 +1068,9 @@ function readCachedSummary(videoId: string, transcriptText: string): SummaryCach
       return null;
     }
     if (parsed.transcriptHash !== transcriptHash) {
+      return null;
+    }
+    if (parsed.promptHash !== promptHash) {
       return null;
     }
     const keyPoints = parsed.keyPoints
@@ -1048,6 +1086,7 @@ function readCachedSummary(videoId: string, transcriptText: string): SummaryCach
       keyPoints,
       model: parsed.model.trim(),
       transcriptHash: parsed.transcriptHash,
+      promptHash: parsed.promptHash,
       cachedAt: parsed.cachedAt
     };
   } catch {
@@ -1058,6 +1097,7 @@ function readCachedSummary(videoId: string, transcriptText: string): SummaryCach
 function writeCachedSummary(
   videoId: string,
   transcriptText: string,
+  promptText: string,
   payload: { summary: string; keyPoints: string[]; model: string }
 ): void {
   if (typeof window === "undefined" || videoId.trim().length === 0) {
@@ -1073,6 +1113,7 @@ function writeCachedSummary(
       keyPoints: payload.keyPoints,
       model: payload.model,
       transcriptHash: hashText(transcriptText.trim()),
+      promptHash: hashText(promptText.trim()),
       cachedAt: Date.now()
     };
     storage.setItem(`${SUMMARY_CACHE_KEY_PREFIX}${videoId}`, JSON.stringify(cacheEntry));
@@ -2137,6 +2178,9 @@ function App() {
   const [summaryKeyPoints, setSummaryKeyPoints] = useState<string[]>([]);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [summaryModel, setSummaryModel] = useState("");
+  const [isSummaryPromptEditMode, setIsSummaryPromptEditMode] = useState(false);
+  const [summaryPrompt, setSummaryPrompt] = useState<string>(readStoredSummaryPrompt);
+  const [summaryPromptDraft, setSummaryPromptDraft] = useState<string>(readStoredSummaryPrompt);
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
   const [playlistIndex, setPlaylistIndex] = useState<number>(-1);
   const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
@@ -2331,6 +2375,8 @@ function App() {
   const activeBoardDurationBackfillEstimatedQueries = Math.ceil(
     activeBoardDurationBackfillIds.length / 50
   );
+  const hasSummaryPromptChanges =
+    (summaryPromptDraft.trim() || DEFAULT_SUMMARY_PROMPT) !== summaryPrompt;
 
   const focusBulkModalInput = (): void => {
     const focusNow = () => {
@@ -2431,6 +2477,24 @@ function App() {
       // Ignore local storage write errors.
     }
   }, [fixtureMode, videoProgressById]);
+
+  useEffect(() => {
+    if (fixtureMode) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const storage = window.localStorage;
+      if (!storage || typeof storage.setItem !== "function") {
+        return;
+      }
+      storage.setItem(SUMMARY_PROMPT_STORAGE_KEY, summaryPrompt);
+    } catch {
+      // Ignore local storage write errors.
+    }
+  }, [fixtureMode, summaryPrompt]);
 
   useEffect(() => {
     if (fixtureMode) {
@@ -3529,6 +3593,8 @@ function App() {
   const openTranscript = async (video: VideoItem): Promise<void> => {
     setTranscriptVideo(video);
     setTranscriptViewMode("transcript");
+    setIsSummaryPromptEditMode(false);
+    setSummaryPromptDraft(summaryPrompt);
     setTranscriptLoading(true);
     setTranscriptError(null);
     setTranscriptText("");
@@ -3576,7 +3642,10 @@ function App() {
     }
   };
 
-  const loadSummary = async (): Promise<void> => {
+  const loadSummary = async (options?: {
+    force?: boolean;
+    promptOverride?: string;
+  }): Promise<void> => {
     if (!transcriptVideo || transcriptLoading || transcriptError || !transcriptText.trim()) {
       return;
     }
@@ -3584,13 +3653,20 @@ function App() {
       return;
     }
 
-    const cached = readCachedSummary(transcriptVideo.videoId, transcriptText);
-    if (cached) {
-      setSummaryText(cached.summary);
-      setSummaryKeyPoints(cached.keyPoints);
-      setSummaryError(null);
-      setSummaryModel(cached.model);
-      return;
+    const promptToUse =
+      typeof options?.promptOverride === "string" && options.promptOverride.trim().length > 0
+        ? options.promptOverride.trim()
+        : summaryPrompt;
+
+    if (!options?.force) {
+      const cached = readCachedSummary(transcriptVideo.videoId, transcriptText, promptToUse);
+      if (cached) {
+        setSummaryText(cached.summary);
+        setSummaryKeyPoints(cached.keyPoints);
+        setSummaryError(null);
+        setSummaryModel(cached.model);
+        return;
+      }
     }
 
     setSummaryLoading(true);
@@ -3600,7 +3676,8 @@ function App() {
         videoId: transcriptVideo.videoId,
         videoUrl: transcriptVideo.videoUrl,
         transcriptText,
-        mode: "short"
+        mode: "short",
+        prompt: promptToUse
       });
       const nextSummary = payload.summary.trim();
       const nextKeyPoints = payload.keyPoints
@@ -3613,7 +3690,7 @@ function App() {
       setSummaryText(nextSummary);
       setSummaryKeyPoints(nextKeyPoints);
       setSummaryModel(payload.model);
-      writeCachedSummary(transcriptVideo.videoId, transcriptText, {
+      writeCachedSummary(transcriptVideo.videoId, transcriptText, promptToUse, {
         summary: nextSummary,
         keyPoints: nextKeyPoints,
         model: payload.model
@@ -3629,6 +3706,7 @@ function App() {
   const handleTranscriptViewModeChange = async (
     mode: "transcript" | "summary"
   ): Promise<void> => {
+    setIsSummaryPromptEditMode(false);
     if (mode === transcriptViewMode) {
       return;
     }
@@ -3636,6 +3714,33 @@ function App() {
     if (mode === "summary" && !summaryText && summaryKeyPoints.length === 0 && !summaryError) {
       await loadSummary();
     }
+  };
+
+  const handleSummaryPromptEditToggle = (): void => {
+    const nextOpen = !isSummaryPromptEditMode;
+    setIsSummaryPromptEditMode(nextOpen);
+    if (nextOpen) {
+      setSummaryPromptDraft(summaryPrompt);
+    }
+  };
+
+  const regenerateSummary = async (): Promise<void> => {
+    setIsSummaryPromptEditMode(false);
+    setTranscriptViewMode("summary");
+    await loadSummary({ force: true });
+  };
+
+  const saveSummaryPromptAndRegenerate = async (): Promise<void> => {
+    const normalizedPrompt = summaryPromptDraft.trim();
+    const nextPrompt = normalizedPrompt.length > 0 ? normalizedPrompt : DEFAULT_SUMMARY_PROMPT;
+    if (nextPrompt === summaryPrompt) {
+      return;
+    }
+    setSummaryPrompt(nextPrompt);
+    setSummaryPromptDraft(nextPrompt);
+    setIsSummaryPromptEditMode(false);
+    setTranscriptViewMode("summary");
+    await loadSummary({ force: true, promptOverride: nextPrompt });
   };
 
   const getVisibleTranscriptPanelText = (): string => {
@@ -5744,14 +5849,36 @@ function App() {
                 }
                 onClick={() => void copyTranscriptText()}
                 disabled={
-                  transcriptViewMode === "summary"
-                    ? summaryLoading ||
-                      !!summaryError ||
-                      (summaryText.trim().length === 0 && summaryKeyPoints.length === 0)
-                    : transcriptLoading || !!transcriptError || transcriptText.trim().length === 0
+                  isSummaryPromptEditMode
+                    ? true
+                    : transcriptViewMode === "summary"
+                  ? summaryLoading ||
+                    !!summaryError ||
+                    (summaryText.trim().length === 0 && summaryKeyPoints.length === 0)
+                  : transcriptLoading || !!transcriptError || transcriptText.trim().length === 0
                 }
               >
                 {isTranscriptCopied ? <span className="btn-icon btn-icon-check" aria-hidden /> : "C"}
+              </Button>
+              <Button
+                htmlType="button"
+                className={`column-move-btn transcript-prompt-btn ${
+                  isSummaryPromptEditMode ? "is-active" : ""
+                }`}
+                aria-label="Edit summary prompt"
+                onClick={handleSummaryPromptEditToggle}
+                disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
+              >
+                P
+              </Button>
+              <Button
+                htmlType="button"
+                className="column-move-btn transcript-regenerate-btn"
+                aria-label="Regenerate summary"
+                onClick={() => void regenerateSummary()}
+                disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
+              >
+                R
               </Button>
             </div>
           </div>
@@ -5770,6 +5897,8 @@ function App() {
           setSummaryKeyPoints([]);
           setSummaryError(null);
           setSummaryModel("");
+          setIsSummaryPromptEditMode(false);
+          setSummaryPromptDraft(summaryPrompt);
         }}
         footer={null}
         width={900}
@@ -5777,7 +5906,37 @@ function App() {
         className="transcript-modal"
       >
         <div className="transcript-modal-body">
-          {transcriptViewMode === "transcript" ? (
+          {isSummaryPromptEditMode ? (
+            <div className="summary-prompt-editor">
+              <Input.TextArea
+                value={summaryPromptDraft}
+                onChange={(event) => setSummaryPromptDraft(event.target.value)}
+                autoSize={{ minRows: 8, maxRows: 18 }}
+                placeholder="Enter summary prompt"
+              />
+              <div className="summary-prompt-actions">
+                <Button
+                  htmlType="button"
+                  className="summary-prompt-action-btn"
+                  onClick={() => {
+                    setIsSummaryPromptEditMode(false);
+                    setSummaryPromptDraft(summaryPrompt);
+                  }}
+                >
+                  CANCEL
+                </Button>
+                <Button
+                  htmlType="button"
+                  type="primary"
+                  className="summary-prompt-action-btn"
+                  onClick={() => void saveSummaryPromptAndRegenerate()}
+                  disabled={!hasSummaryPromptChanges}
+                >
+                  SAVE
+                </Button>
+              </div>
+            </div>
+          ) : transcriptViewMode === "transcript" ? (
             <>
               {transcriptLoading ? <Text>FETCHING TRANSCRIPT...</Text> : null}
               {!transcriptLoading && transcriptError ? (
