@@ -3730,10 +3730,12 @@ function App() {
     await loadSummary({ force: true });
   };
 
-  const saveSummaryPromptAndRegenerate = async (): Promise<void> => {
+  const saveSummaryPromptAndClose = async (): Promise<void> => {
     const normalizedPrompt = summaryPromptDraft.trim();
     const nextPrompt = normalizedPrompt.length > 0 ? normalizedPrompt : DEFAULT_SUMMARY_PROMPT;
     if (nextPrompt === summaryPrompt) {
+      setSummaryPromptDraft(nextPrompt);
+      setIsSummaryPromptEditMode(false);
       return;
     }
     setSummaryPrompt(nextPrompt);
@@ -5929,8 +5931,7 @@ function App() {
                   htmlType="button"
                   type="primary"
                   className="summary-prompt-action-btn"
-                  onClick={() => void saveSummaryPromptAndRegenerate()}
-                  disabled={!hasSummaryPromptChanges}
+                  onClick={() => void saveSummaryPromptAndClose()}
                 >
                   SAVE
                 </Button>
