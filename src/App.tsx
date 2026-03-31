@@ -2554,7 +2554,8 @@ function App() {
       const isSeekShortcut =
         key === "arrowleft" || key === "arrowright" || key === "j" || key === "l";
       const isSpaceShortcut = event.code === "Space" || key === " ";
-      if (!isSeekShortcut && !isSpaceShortcut) {
+      const isFullscreenShortcut = key === "f";
+      if (!isSeekShortcut && !isSpaceShortcut && !isFullscreenShortcut) {
         return;
       }
 
@@ -2583,6 +2584,25 @@ function App() {
           // Ignore unsupported play/pause controls.
         }
         return;
+      }
+
+      if (isFullscreenShortcut) {
+        const iframeTarget =
+          fallbackIframeRef.current ??
+          playerHostRef.current?.querySelector("iframe") ??
+          null;
+        if (!iframeTarget) {
+          return;
+        }
+        try {
+          if (document.fullscreenElement) {
+            void document.exitFullscreen();
+          } else {
+            void iframeTarget.requestFullscreen();
+          }
+        } catch {
+          // Ignore unsupported fullscreen requests.
+        }
       }
 
     };
