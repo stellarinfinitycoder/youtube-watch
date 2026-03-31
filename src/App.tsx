@@ -17,6 +17,7 @@ import {
 } from "antd";
 import type { FetchState } from "./types/youtube";
 import {
+  fetchSummaryByVideoInput,
   fetchTranscriptByVideoInput,
   fetchPlaylistDiscoveryPage,
   fetchVideoStatsByVideoIds,
@@ -41,6 +42,8 @@ const ERROR_LOGS_STORAGE_KEY = "youtube-watch:error-logs:v1";
 const QUOTA_ESTIMATE_STORAGE_KEY = "youtube-watch:quota-estimate:v1";
 const TRANSCRIPT_CACHE_KEY_PREFIX = "youtube-watch:transcript:v1:";
 const TRANSCRIPT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const SUMMARY_CACHE_KEY_PREFIX = "youtube-watch:summary:v1:";
+const SUMMARY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 const LEGACY_WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
@@ -931,6 +934,24 @@ type TranscriptCacheEntry = {
   cachedAt: number;
 };
 
+type SummaryCacheEntry = {
+  summary: string;
+  keyPoints: string[];
+  model: string;
+  transcriptHash: string;
+  cachedAt: number;
+};
+
+function hashText(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash +=
+      (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return (hash >>> 0).toString(16);
+}
+
 function readCachedTranscript(videoId: string): string | null {
   if (typeof window === "undefined" || videoId.trim().length === 0) {
     return null;
@@ -975,6 +996,84 @@ function writeCachedTranscript(videoId: string, text: string): void {
       cachedAt: Date.now()
     };
     storage.setItem(`${TRANSCRIPT_CACHE_KEY_PREFIX}${videoId}`, JSON.stringify(payload));
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+function readCachedSummary(videoId: string, transcriptText: string): SummaryCacheEntry | null {
+  if (typeof window === "undefined" || videoId.trim().length === 0) {
+    return null;
+  }
+  const transcriptHash = hashText(transcriptText.trim());
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.getItem !== "function") {
+      return null;
+    }
+    const raw = storage.getItem(`${SUMMARY_CACHE_KEY_PREFIX}${videoId}`);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<SummaryCacheEntry>;
+    if (
+      typeof parsed.summary !== "string" ||
+      !Array.isArray(parsed.keyPoints) ||
+      typeof parsed.model !== "string" ||
+      typeof parsed.transcriptHash !== "string" ||
+      typeof parsed.cachedAt !== "number"
+    ) {
+      storage.removeItem(`${SUMMARY_CACHE_KEY_PREFIX}${videoId}`);
+      return null;
+    }
+    if (Date.now() - parsed.cachedAt > SUMMARY_CACHE_TTL_MS) {
+      storage.removeItem(`${SUMMARY_CACHE_KEY_PREFIX}${videoId}`);
+      return null;
+    }
+    if (parsed.transcriptHash !== transcriptHash) {
+      return null;
+    }
+    const keyPoints = parsed.keyPoints
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+    const summary = parsed.summary.trim();
+    if (!summary && keyPoints.length === 0) {
+      return null;
+    }
+    return {
+      summary,
+      keyPoints,
+      model: parsed.model.trim(),
+      transcriptHash: parsed.transcriptHash,
+      cachedAt: parsed.cachedAt
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedSummary(
+  videoId: string,
+  transcriptText: string,
+  payload: { summary: string; keyPoints: string[]; model: string }
+): void {
+  if (typeof window === "undefined" || videoId.trim().length === 0) {
+    return;
+  }
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.setItem !== "function") {
+      return;
+    }
+    const cacheEntry: SummaryCacheEntry = {
+      summary: payload.summary,
+      keyPoints: payload.keyPoints,
+      model: payload.model,
+      transcriptHash: hashText(transcriptText.trim()),
+      cachedAt: Date.now()
+    };
+    storage.setItem(`${SUMMARY_CACHE_KEY_PREFIX}${videoId}`, JSON.stringify(cacheEntry));
   } catch {
     // Ignore storage write failures.
   }
@@ -1958,7 +2057,15 @@ function App() {
   const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [transcriptText, setTranscriptText] = useState("");
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
+  const [transcriptViewMode, setTranscriptViewMode] = useState<"transcript" | "summary">(
+    "transcript"
+  );
   const [isTranscriptCopied, setIsTranscriptCopied] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryText, setSummaryText] = useState("");
+  const [summaryKeyPoints, setSummaryKeyPoints] = useState<string[]>([]);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryModel, setSummaryModel] = useState("");
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
   const [playlistIndex, setPlaylistIndex] = useState<number>(-1);
   const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
@@ -2447,8 +2554,7 @@ function App() {
       const isSeekShortcut =
         key === "arrowleft" || key === "arrowright" || key === "j" || key === "l";
       const isSpaceShortcut = event.code === "Space" || key === " ";
-      const isFullscreenShortcut = key === "f";
-      if (!isSeekShortcut && !isSpaceShortcut && !isFullscreenShortcut) {
+      if (!isSeekShortcut && !isSpaceShortcut) {
         return;
       }
 
@@ -2479,22 +2585,6 @@ function App() {
         return;
       }
 
-      if (isFullscreenShortcut) {
-        const fullscreenTarget =
-          videoModalWrapRef.current ?? playerHostRef.current ?? fallbackIframeRef.current;
-        if (!fullscreenTarget) {
-          return;
-        }
-        try {
-          if (document.fullscreenElement) {
-            void document.exitFullscreen();
-          } else {
-            void fullscreenTarget.requestFullscreen();
-          }
-        } catch {
-          // Ignore unsupported fullscreen requests.
-        }
-      }
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -3207,10 +3297,16 @@ function App() {
 
   const openTranscript = async (video: VideoItem): Promise<void> => {
     setTranscriptVideo(video);
+    setTranscriptViewMode("transcript");
     setTranscriptLoading(true);
     setTranscriptError(null);
     setTranscriptText("");
     setIsTranscriptCopied(false);
+    setSummaryLoading(false);
+    setSummaryText("");
+    setSummaryKeyPoints([]);
+    setSummaryError(null);
+    setSummaryModel("");
     transcriptRequestIdRef.current += 1;
     const requestId = transcriptRequestIdRef.current;
     try {
@@ -3246,6 +3342,67 @@ function App() {
       if (requestId === transcriptRequestIdRef.current) {
         setTranscriptLoading(false);
       }
+    }
+  };
+
+  const loadSummary = async (): Promise<void> => {
+    if (!transcriptVideo || transcriptLoading || transcriptError || !transcriptText.trim()) {
+      return;
+    }
+    if (summaryLoading) {
+      return;
+    }
+
+    const cached = readCachedSummary(transcriptVideo.videoId, transcriptText);
+    if (cached) {
+      setSummaryText(cached.summary);
+      setSummaryKeyPoints(cached.keyPoints);
+      setSummaryError(null);
+      setSummaryModel(cached.model);
+      return;
+    }
+
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      const payload = await fetchSummaryByVideoInput({
+        videoId: transcriptVideo.videoId,
+        videoUrl: transcriptVideo.videoUrl,
+        transcriptText,
+        mode: "short"
+      });
+      const nextSummary = payload.summary.trim();
+      const nextKeyPoints = payload.keyPoints
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+      if (!nextSummary && nextKeyPoints.length === 0) {
+        setSummaryError("No summary.");
+        return;
+      }
+      setSummaryText(nextSummary);
+      setSummaryKeyPoints(nextKeyPoints);
+      setSummaryModel(payload.model);
+      writeCachedSummary(transcriptVideo.videoId, transcriptText, {
+        summary: nextSummary,
+        keyPoints: nextKeyPoints,
+        model: payload.model
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Summary failed.";
+      setSummaryError(message);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  const toggleTranscriptViewMode = async (): Promise<void> => {
+    if (transcriptViewMode === "summary") {
+      setTranscriptViewMode("transcript");
+      return;
+    }
+    setTranscriptViewMode("summary");
+    if (!summaryText && summaryKeyPoints.length === 0 && !summaryError) {
+      await loadSummary();
     }
   };
 
@@ -5301,6 +5458,17 @@ function App() {
           <div className="transcript-modal-title-row">
             <Button
               htmlType="button"
+              className={`column-move-btn transcript-sum-btn ${
+                transcriptViewMode === "summary" ? "is-active" : ""
+              }`}
+              aria-label="Toggle summary view"
+              onClick={() => void toggleTranscriptViewMode()}
+              disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
+            >
+              SUM
+            </Button>
+            <Button
+              htmlType="button"
               className={`column-move-btn transcript-copy-btn ${
                 isTranscriptCopied ? "is-copied" : ""
               }`}
@@ -5322,7 +5490,13 @@ function App() {
           setTranscriptLoading(false);
           setTranscriptText("");
           setTranscriptError(null);
+          setTranscriptViewMode("transcript");
           setIsTranscriptCopied(false);
+          setSummaryLoading(false);
+          setSummaryText("");
+          setSummaryKeyPoints([]);
+          setSummaryError(null);
+          setSummaryModel("");
         }}
         footer={null}
         width={900}
@@ -5330,13 +5504,35 @@ function App() {
         className="transcript-modal"
       >
         <div className="transcript-modal-body">
-          {transcriptLoading ? <Text>FETCHING TRANSCRIPT...</Text> : null}
-          {!transcriptLoading && transcriptError ? (
-            <Text type="danger">{transcriptError}</Text>
-          ) : null}
-          {!transcriptLoading && !transcriptError ? (
-            <pre className="transcript-text">{transcriptText}</pre>
-          ) : null}
+          {transcriptViewMode === "transcript" ? (
+            <>
+              {transcriptLoading ? <Text>FETCHING TRANSCRIPT...</Text> : null}
+              {!transcriptLoading && transcriptError ? (
+                <Text type="danger">{transcriptError}</Text>
+              ) : null}
+              {!transcriptLoading && !transcriptError ? (
+                <pre className="transcript-text">{transcriptText}</pre>
+              ) : null}
+            </>
+          ) : (
+            <>
+              {summaryLoading ? <Text>SUMMARIZING...</Text> : null}
+              {!summaryLoading && summaryError ? <Text type="danger">{summaryError}</Text> : null}
+              {!summaryLoading && !summaryError && (summaryText || summaryKeyPoints.length > 0) ? (
+                <div className="summary-content">
+                  {summaryText ? <p className="summary-paragraph">{summaryText}</p> : null}
+                  {summaryKeyPoints.length > 0 ? (
+                    <ul className="summary-points">
+                      {summaryKeyPoints.map((point, index) => (
+                        <li key={`${index}-${point.slice(0, 24)}`}>{point}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {summaryModel ? <Text className="summary-model">MODEL: {summaryModel}</Text> : null}
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
       </Modal>
 

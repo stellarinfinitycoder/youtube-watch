@@ -1421,6 +1421,16 @@ body {
   min-width: 42px;
 }
 
+.transcript-sum-btn {
+  min-width: 62px;
+}
+
+.transcript-sum-btn.is-active {
+  background: var(--amber) !important;
+  color: #18110a !important;
+  border-color: var(--amber) !important;
+}
+
 .transcript-copy-btn.is-copied {
   background: var(--amber) !important;
   color: #18110a !important;
@@ -1450,6 +1460,37 @@ body {
   font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
   font-size: 13px;
   line-height: 1.55;
+}
+
+.summary-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summary-paragraph {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.summary-points {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.summary-model {
+  color: var(--text-dim) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.04em;
 }
 
 .board-edit-footer {

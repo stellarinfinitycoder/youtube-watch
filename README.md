@@ -29,6 +29,8 @@ cp .env.example .env
 
 ```env
 YOUTUBE_API_KEY=your_youtube_data_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_DEFAULT_MODEL=openai/gpt-4o-mini
 ```
 
 ## Run
@@ -44,6 +46,8 @@ npm run dev
 Set environment variable in Vercel project:
 
 - `YOUTUBE_API_KEY`
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_DEFAULT_MODEL` (optional)
 
 The key is used server-side only and is not exposed to browser clients.
 

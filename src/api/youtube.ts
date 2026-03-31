@@ -199,3 +199,42 @@ export async function fetchTranscriptByVideoInput(
     cache: "no-store"
   });
 }
+
+export async function fetchSummaryByVideoInput(input: {
+  videoId?: string;
+  videoUrl?: string;
+  transcriptText?: string;
+  mode?: "short" | "detailed" | "bullets";
+}): Promise<{
+  videoId: string;
+  model: string;
+  summary: string;
+  keyPoints: string[];
+}> {
+  const trimmedUrl = (input.videoUrl ?? "").trim();
+  const trimmedVideoId = (input.videoId ?? "").trim();
+  if (!trimmedUrl && !trimmedVideoId) {
+    throw new Error("Invalid video input.");
+  }
+  return fetchJson<{
+    videoId: string;
+    model: string;
+    summary: string;
+    keyPoints: string[];
+  }>("/api/summarize", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      videoId: trimmedVideoId || undefined,
+      url: trimmedUrl || undefined,
+      transcriptText:
+        typeof input.transcriptText === "string" && input.transcriptText.trim().length > 0
+          ? input.transcriptText
+          : undefined,
+      mode: input.mode ?? "short"
+    }),
+    cache: "no-store"
+  });
+}
