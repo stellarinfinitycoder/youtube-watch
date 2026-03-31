@@ -1855,6 +1855,32 @@ function shouldIgnoreShortcutTarget(target: EventTarget | null): boolean {
   );
 }
 
+function exitAnyFullscreen(): void {
+  const doc = document as Document & {
+    webkitExitFullscreen?: () => Promise<void> | void;
+  };
+  if (typeof doc.exitFullscreen === "function") {
+    void doc.exitFullscreen();
+    return;
+  }
+  if (typeof doc.webkitExitFullscreen === "function") {
+    void doc.webkitExitFullscreen();
+  }
+}
+
+function requestElementFullscreen(element: HTMLElement): void {
+  const target = element as HTMLElement & {
+    webkitRequestFullscreen?: () => Promise<void> | void;
+  };
+  if (typeof target.requestFullscreen === "function") {
+    void target.requestFullscreen();
+    return;
+  }
+  if (typeof target.webkitRequestFullscreen === "function") {
+    void target.webkitRequestFullscreen();
+  }
+}
+
 function parseBulkHandles(raw: string): string[] {
   const tokens = raw
     .split(/[\s,]+/)
@@ -2559,8 +2585,8 @@ function App() {
         return;
       }
 
-      event.preventDefault();
       if (isSeekShortcut && playerRef.current) {
+        event.preventDefault();
         const delta = key === "arrowleft" || key === "j" ? -10 : 10;
         try {
           const currentTime = playerRef.current.getCurrentTime();
@@ -2573,6 +2599,7 @@ function App() {
       }
 
       if (isSpaceShortcut && playerRef.current) {
+        event.preventDefault();
         try {
           const currentState = playerRef.current.getPlayerState();
           if (currentState === 1) {
@@ -2587,22 +2614,8 @@ function App() {
       }
 
       if (isFullscreenShortcut) {
-        const iframeTarget =
-          fallbackIframeRef.current ??
-          playerHostRef.current?.querySelector("iframe") ??
-          null;
-        if (!iframeTarget) {
-          return;
-        }
-        try {
-          if (document.fullscreenElement) {
-            void document.exitFullscreen();
-          } else {
-            void iframeTarget.requestFullscreen();
-          }
-        } catch {
-          // Ignore unsupported fullscreen requests.
-        }
+        event.preventDefault();
+        toggleVideoFullscreen();
       }
 
     };
@@ -2619,27 +2632,26 @@ function App() {
   };
 
   const focusVideoPlayerSurface = (): void => {
-    const focusTarget =
-      fallbackIframeRef.current ??
-      playerHostRef.current?.querySelector("iframe") ??
-      playerHostRef.current;
-    if (!focusTarget) {
-      return;
-    }
-    window.setTimeout(() => {
+    const focusAttempt = (): void => {
+      const iframeTarget =
+        fallbackIframeRef.current ?? playerHostRef.current?.querySelector("iframe");
+      const target = iframeTarget ?? playerHostRef.current;
+      if (!target) {
+        return;
+      }
       try {
-        focusTarget.focus();
+        if (iframeTarget) {
+          iframeTarget.setAttribute("tabindex", "0");
+        }
+        target.focus();
       } catch {
         // Ignore focus failures.
       }
-    }, 0);
-    window.setTimeout(() => {
-      try {
-        focusTarget.focus();
-      } catch {
-        // Ignore focus failures.
-      }
-    }, 120);
+    };
+
+    [0, 80, 180, 320, 520].forEach((delay) => {
+      window.setTimeout(focusAttempt, delay);
+    });
   };
 
   const setBoard = (
@@ -3313,6 +3325,25 @@ function App() {
   const openVideo = (video: VideoItem): void => {
     stopPlaylist();
     setActiveVideo(video);
+  };
+
+  const toggleVideoFullscreen = (): void => {
+    const fullscreenTarget =
+      videoModalWrapRef.current ??
+      fallbackIframeRef.current ??
+      playerHostRef.current?.querySelector("iframe");
+    if (!fullscreenTarget) {
+      return;
+    }
+    try {
+      if (document.fullscreenElement) {
+        exitAnyFullscreen();
+      } else {
+        requestElementFullscreen(fullscreenTarget);
+      }
+    } catch {
+      // Ignore unsupported fullscreen requests.
+    }
   };
 
   const openTranscript = async (video: VideoItem): Promise<void> => {
@@ -5380,6 +5411,11 @@ function App() {
       <Modal
         title={activeVideo?.title ?? "Video"}
         open={activeVideo !== null}
+        afterOpenChange={(open) => {
+          if (open) {
+            focusVideoPlayerSurface();
+          }
+        }}
         onCancel={() => {
           stopPlaylist();
           closeVideoModal();
@@ -5441,6 +5477,14 @@ function App() {
                   onClick={markWatchedAndAdvanceOrClose}
                 >
                   <span className="btn-icon btn-icon-check" aria-hidden />
+                </Button>
+                <Button
+                  htmlType="button"
+                  className="video-watch-btn modal-fullscreen-btn"
+                  aria-label="Toggle fullscreen"
+                  onClick={toggleVideoFullscreen}
+                >
+                  F
                 </Button>
                 {isPlaylistActive ? (
                   <Text className="playlist-progress-text">
