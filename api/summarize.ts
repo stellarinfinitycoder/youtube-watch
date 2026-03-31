@@ -4,8 +4,6 @@ const DEFAULT_MODEL = process.env.OPENROUTER_DEFAULT_MODEL || "openai/gpt-4o-min
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MAX_TRANSCRIPT_CHARS = 15000;
 
-type SummaryMode = "short" | "detailed" | "bullets";
-
 function parseBody(req: any): Record<string, unknown> {
   if (req.body && typeof req.body === "object") {
     return req.body as Record<string, unknown>;
@@ -40,42 +38,6 @@ function parseVideoInput(req: any): string {
     return body.url.trim();
   }
   return "";
-}
-
-function parseMode(body: Record<string, unknown>): SummaryMode {
-  const value = typeof body.mode === "string" ? body.mode.trim().toLowerCase() : "";
-  if (value === "detailed" || value === "bullets") {
-    return value;
-  }
-  return "short";
-}
-
-function getPrompt(mode: SummaryMode): string {
-  if (mode === "detailed") {
-    return [
-      "You summarize YouTube transcripts.",
-      "Return strict JSON with keys: summary (string), keyPoints (string[]).",
-      "summary: 8-12 concise sentences.",
-      "keyPoints: 8-12 short bullets.",
-      "Use only transcript content. No fabricated facts."
-    ].join(" ");
-  }
-  if (mode === "bullets") {
-    return [
-      "You summarize YouTube transcripts.",
-      "Return strict JSON with keys: summary (string), keyPoints (string[]).",
-      "summary: 3-4 concise sentences.",
-      "keyPoints: 8-12 short bullets.",
-      "Use only transcript content. No fabricated facts."
-    ].join(" ");
-  }
-  return [
-    "You summarize YouTube transcripts.",
-    "Return strict JSON with keys: summary (string), keyPoints (string[]).",
-    "summary: max 5 concise sentences.",
-    "keyPoints: 5-7 short bullets.",
-    "Use only transcript content. No fabricated facts."
-  ].join(" ");
 }
 
 function normalizeContent(content: unknown): string {
@@ -152,11 +114,15 @@ async function fetchOpenRouterSummary(params: {
   apiKey: string;
   model: string;
   transcriptText: string;
-  mode: SummaryMode;
-  prompt?: string;
+  userPrompt?: string;
   referer?: string;
   title?: string;
 }): Promise<{ summary: string; keyPoints: string[] }> {
+  const promptText =
+    typeof params.userPrompt === "string" && params.userPrompt.trim().length > 0
+      ? params.userPrompt.trim()
+      : "Summarize this transcript.";
+  const userMessage = `${promptText}\n\nUse only transcript content. No fabricated facts.\n\nTranscript:\n${params.transcriptText.slice(0, MAX_TRANSCRIPT_CHARS)}`;
   const response = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers: {
@@ -170,15 +136,8 @@ async function fetchOpenRouterSummary(params: {
       temperature: 0.2,
       messages: [
         {
-          role: "system",
-          content:
-            typeof params.prompt === "string" && params.prompt.trim().length > 0
-              ? params.prompt.trim()
-              : getPrompt(params.mode)
-        },
-        {
           role: "user",
-          content: `Transcript:\n${params.transcriptText.slice(0, MAX_TRANSCRIPT_CHARS)}`
+          content: userMessage
         }
       ]
     })
@@ -216,8 +175,7 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  const mode = parseMode(body);
-  const prompt =
+  const userPrompt =
     typeof body.prompt === "string" && body.prompt.trim().length > 0
       ? body.prompt.trim()
       : undefined;
@@ -249,8 +207,7 @@ export default async function handler(req: any, res: any) {
       apiKey,
       model: requestedModel,
       transcriptText,
-      mode,
-      prompt,
+      userPrompt,
       referer: process.env.OPENROUTER_HTTP_REFERER,
       title: process.env.OPENROUTER_APP_TITLE || "Youtube Watch"
     });
