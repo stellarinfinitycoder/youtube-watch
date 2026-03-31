@@ -48,6 +48,7 @@ const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 const LEGACY_WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
 const LEGACY_PLAYBACK_RATE_STORAGE_KEY = "youtube-watch:playback-rate:v1";
+const VIDEO_PROGRESS_STORAGE_KEY = "youtube-watch:video-progress:v1";
 const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 
 type VideoFilter = "all" | "new" | "watched";
@@ -181,6 +182,7 @@ type YouTubePlayer = {
   getAvailablePlaybackRates: () => number[];
   seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
   getCurrentTime: () => number;
+  getDuration?: () => number;
   getPlayerState: () => number;
   playVideo: () => void;
   pauseVideo: () => void;
@@ -2004,6 +2006,46 @@ function readStoredQuotaEstimate(): QuotaEstimateState {
   }
 }
 
+type VideoProgressEntry = {
+  seconds: number;
+  updatedAt: number;
+};
+
+function readStoredVideoProgress(): Record<string, VideoProgressEntry> {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.getItem !== "function") {
+      return {};
+    }
+    const raw = storage.getItem(VIDEO_PROGRESS_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, VideoProgressEntry] =>
+          typeof entry[0] === "string" &&
+          !!entry[1] &&
+          typeof entry[1] === "object" &&
+          typeof (entry[1] as { seconds?: unknown }).seconds === "number" &&
+          Number.isFinite((entry[1] as { seconds?: number }).seconds) &&
+          (entry[1] as { seconds: number }).seconds >= 0 &&
+          typeof (entry[1] as { updatedAt?: unknown }).updatedAt === "number" &&
+          Number.isFinite((entry[1] as { updatedAt?: number }).updatedAt)
+      )
+    );
+  } catch {
+    return {};
+  }
+}
+
 function App() {
   const fixtureMode = isFixtureModeEnabled();
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -2067,6 +2109,9 @@ function App() {
   const [isLogoSpinning, setIsLogoSpinning] = useState(false);
   const [errorLogs, setErrorLogs] = useState<ErrorLogEntry[]>(readStoredErrorLogs);
   const [quotaEstimate, setQuotaEstimate] = useState<QuotaEstimateState>(readStoredQuotaEstimate);
+  const [videoProgressById, setVideoProgressById] = useState<Record<string, VideoProgressEntry>>(
+    readStoredVideoProgress
+  );
   const [videoStatsBackfillInFlight, setVideoStatsBackfillInFlight] = useState<string[]>(
     []
   );
@@ -2373,6 +2418,24 @@ function App() {
     if (fixtureMode) {
       return;
     }
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const storage = window.localStorage;
+      if (!storage || typeof storage.setItem !== "function") {
+        return;
+      }
+      storage.setItem(VIDEO_PROGRESS_STORAGE_KEY, JSON.stringify(videoProgressById));
+    } catch {
+      // Ignore local storage write errors.
+    }
+  }, [fixtureMode, videoProgressById]);
+
+  useEffect(() => {
+    if (fixtureMode) {
+      return;
+    }
     const cutoffTime = getWindowCutoffTime(STORAGE_VIDEO_WINDOW_DAYS);
     setBoards((previous) => {
       let changed = false;
@@ -2517,6 +2580,14 @@ function App() {
               setIsPlayerReady(true);
               playerReadyRef.current = true;
               setUseIframeFallback(false);
+              const resumeSeconds = getResumeSecondsForVideo(activeVideo);
+              if (typeof resumeSeconds === "number" && resumeSeconds > 0) {
+                try {
+                  event.target.seekTo(resumeSeconds, true);
+                } catch {
+                  // Ignore unsupported resume seek.
+                }
+              }
               focusVideoPlayerSurface();
               if (fallbackTimer) {
                 clearTimeout(fallbackTimer);
@@ -2625,6 +2696,55 @@ function App() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [activeVideo]);
+
+  useEffect(() => {
+    if (!activeVideo || !isPlayerReady || !playerRef.current) {
+      return;
+    }
+
+    const saveProgressTick = (): void => {
+      if (!playerRef.current) {
+        return;
+      }
+      try {
+        const currentTime = playerRef.current.getCurrentTime();
+        if (!Number.isFinite(currentTime) || currentTime <= 1) {
+          return;
+        }
+        const duration = activeVideo.durationSeconds;
+        if (
+          typeof duration === "number" &&
+          Number.isFinite(duration) &&
+          duration > 0 &&
+          currentTime >= duration * 0.95
+        ) {
+          setVideoProgressById((previous) => {
+            if (!previous[activeVideo.videoId]) {
+              return previous;
+            }
+            const next = { ...previous };
+            delete next[activeVideo.videoId];
+            return next;
+          });
+          return;
+        }
+        setVideoProgressById((previous) => ({
+          ...previous,
+          [activeVideo.videoId]: {
+            seconds: Math.max(0, Math.floor(currentTime)),
+            updatedAt: Date.now()
+          }
+        }));
+      } catch {
+        // Ignore unsupported progress reads.
+      }
+    };
+
+    const intervalId = window.setInterval(saveProgressTick, 5000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [activeVideo, isPlayerReady]);
 
   const setPlayerHost = (node: HTMLDivElement | null): void => {
     playerHostRef.current = node;
@@ -3274,6 +3394,14 @@ function App() {
     if (!activeBoard) {
       return;
     }
+    setVideoProgressById((previous) => {
+      if (!previous[videoId]) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[videoId];
+      return next;
+    });
     setBoard(activeBoard.id, (board) => ({
       ...board,
       watchedVideos: {
@@ -3292,6 +3420,39 @@ function App() {
   };
 
   const closeVideoModal = (): void => {
+    if (activeVideo && playerRef.current && playerReadyRef.current) {
+      try {
+        const currentTime = playerRef.current.getCurrentTime();
+        if (Number.isFinite(currentTime) && currentTime > 1) {
+          const duration = activeVideo.durationSeconds;
+          if (
+            typeof duration === "number" &&
+            Number.isFinite(duration) &&
+            duration > 0 &&
+            currentTime >= duration * 0.95
+          ) {
+            setVideoProgressById((previous) => {
+              if (!previous[activeVideo.videoId]) {
+                return previous;
+              }
+              const next = { ...previous };
+              delete next[activeVideo.videoId];
+              return next;
+            });
+          } else {
+            setVideoProgressById((previous) => ({
+              ...previous,
+              [activeVideo.videoId]: {
+                seconds: Math.max(0, Math.floor(currentTime)),
+                updatedAt: Date.now()
+              }
+            }));
+          }
+        }
+      } catch {
+        // Ignore unsupported progress reads.
+      }
+    }
     setActiveVideo(null);
     setIsPlayerReady(false);
     playerReadyRef.current = false;
@@ -3344,6 +3505,25 @@ function App() {
     } catch {
       // Ignore unsupported fullscreen requests.
     }
+  };
+
+  const getResumeSecondsForVideo = (video: VideoItem): number | null => {
+    if (activeBoard?.watchedVideos[video.videoId]) {
+      return null;
+    }
+    const stored = videoProgressById[video.videoId];
+    if (!stored || !Number.isFinite(stored.seconds) || stored.seconds <= 1) {
+      return null;
+    }
+    if (
+      typeof video.durationSeconds === "number" &&
+      Number.isFinite(video.durationSeconds) &&
+      video.durationSeconds > 0 &&
+      stored.seconds >= video.durationSeconds * 0.95
+    ) {
+      return null;
+    }
+    return Math.floor(stored.seconds);
   };
 
   const openTranscript = async (video: VideoItem): Promise<void> => {
@@ -5432,7 +5612,12 @@ function App() {
               {useIframeFallback && !isPlayerReady ? (
                 <iframe
                   ref={fallbackIframeRef}
-                  src={`https://www.youtube.com/embed/${activeVideo.videoId}?autoplay=1&rel=0`}
+                  src={`https://www.youtube.com/embed/${activeVideo.videoId}?autoplay=1&rel=0${
+                    (() => {
+                      const resume = getResumeSecondsForVideo(activeVideo);
+                      return typeof resume === "number" && resume > 0 ? `&start=${resume}` : "";
+                    })()
+                  }`}
                   title={activeVideo.title}
                   className="video-modal-frame"
                   tabIndex={-1}
