@@ -1403,6 +1403,45 @@ body {
   overflow: auto;
 }
 
+.transcript-modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.transcript-modal-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transcript-copy-btn {
+  min-width: 42px;
+}
+
+.transcript-copy-btn.is-copied {
+  background: var(--amber) !important;
+  color: #18110a !important;
+  border-color: var(--amber) !important;
+}
+
+.transcript-copy-btn .btn-icon-check {
+  animation: transcript-copy-check-pop 220ms ease-out;
+}
+
+@keyframes transcript-copy-check-pop {
+  0% {
+    transform: scale(0.72);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 .transcript-text {
   margin: 0;
   white-space: pre-wrap;

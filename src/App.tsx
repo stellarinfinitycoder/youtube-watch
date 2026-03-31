@@ -39,6 +39,8 @@ const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
 const ERROR_LOGS_STORAGE_KEY = "youtube-watch:error-logs:v1";
 const QUOTA_ESTIMATE_STORAGE_KEY = "youtube-watch:quota-estimate:v1";
+const TRANSCRIPT_CACHE_KEY_PREFIX = "youtube-watch:transcript:v1:";
+const TRANSCRIPT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 const LEGACY_WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
@@ -921,6 +923,60 @@ function readLegacyStoredColumns(): PersistedColumnState[] {
       .filter((item): item is PersistedColumnState => item !== null);
   } catch {
     return [];
+  }
+}
+
+type TranscriptCacheEntry = {
+  text: string;
+  cachedAt: number;
+};
+
+function readCachedTranscript(videoId: string): string | null {
+  if (typeof window === "undefined" || videoId.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.getItem !== "function") {
+      return null;
+    }
+    const raw = storage.getItem(`${TRANSCRIPT_CACHE_KEY_PREFIX}${videoId}`);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<TranscriptCacheEntry>;
+    if (typeof parsed.text !== "string" || typeof parsed.cachedAt !== "number") {
+      storage.removeItem(`${TRANSCRIPT_CACHE_KEY_PREFIX}${videoId}`);
+      return null;
+    }
+    if (Date.now() - parsed.cachedAt > TRANSCRIPT_CACHE_TTL_MS) {
+      storage.removeItem(`${TRANSCRIPT_CACHE_KEY_PREFIX}${videoId}`);
+      return null;
+    }
+    const text = parsed.text.trim();
+    return text.length > 0 ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedTranscript(videoId: string, text: string): void {
+  if (typeof window === "undefined" || videoId.trim().length === 0) {
+    return;
+  }
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.setItem !== "function") {
+      return;
+    }
+    const payload: TranscriptCacheEntry = {
+      text,
+      cachedAt: Date.now()
+    };
+    storage.setItem(`${TRANSCRIPT_CACHE_KEY_PREFIX}${videoId}`, JSON.stringify(payload));
+  } catch {
+    // Ignore storage write failures.
   }
 }
 
@@ -1835,6 +1891,7 @@ function App() {
   const transcriptRequestIdRef = useRef(0);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
   const linkCopyFeedbackTimeoutRef = useRef<number | null>(null);
+  const transcriptCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const logoSpinTimeoutRef = useRef<number | null>(null);
   const [playerHostNode, setPlayerHostNode] = useState<HTMLDivElement | null>(null);
   const initialBoardsState = fixtureMode ? createFixtureBoardsState() : getInitialBoardsState();
@@ -1901,6 +1958,7 @@ function App() {
   const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [transcriptText, setTranscriptText] = useState("");
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
+  const [isTranscriptCopied, setIsTranscriptCopied] = useState(false);
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
   const [playlistIndex, setPlaylistIndex] = useState<number>(-1);
   const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
@@ -2153,6 +2211,9 @@ function App() {
       videoMetaFeedbackTimeoutsRef.current = {};
       if (linkCopyFeedbackTimeoutRef.current) {
         window.clearTimeout(linkCopyFeedbackTimeoutRef.current);
+      }
+      if (transcriptCopyFeedbackTimeoutRef.current) {
+        window.clearTimeout(transcriptCopyFeedbackTimeoutRef.current);
       }
       if (logoSpinTimeoutRef.current) {
         window.clearTimeout(logoSpinTimeoutRef.current);
@@ -3149,9 +3210,18 @@ function App() {
     setTranscriptLoading(true);
     setTranscriptError(null);
     setTranscriptText("");
+    setIsTranscriptCopied(false);
     transcriptRequestIdRef.current += 1;
     const requestId = transcriptRequestIdRef.current;
     try {
+      const cached = readCachedTranscript(video.videoId);
+      if (cached) {
+        if (requestId !== transcriptRequestIdRef.current) {
+          return;
+        }
+        setTranscriptText(cached);
+        return;
+      }
       const payload = await fetchTranscriptByVideoInput({
         videoId: video.videoId,
         videoUrl: video.videoUrl
@@ -3165,6 +3235,7 @@ function App() {
         return;
       }
       setTranscriptText(text);
+      writeCachedTranscript(video.videoId, text);
     } catch (error) {
       if (requestId !== transcriptRequestIdRef.current) {
         return;
@@ -3176,6 +3247,38 @@ function App() {
         setTranscriptLoading(false);
       }
     }
+  };
+
+  const copyTranscriptText = async (): Promise<void> => {
+    const text = transcriptText.trim();
+    if (!text) {
+      return;
+    }
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard API unavailable.");
+      }
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "true");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+    setIsTranscriptCopied(true);
+    if (transcriptCopyFeedbackTimeoutRef.current) {
+      window.clearTimeout(transcriptCopyFeedbackTimeoutRef.current);
+    }
+    transcriptCopyFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setIsTranscriptCopied(false);
+      transcriptCopyFeedbackTimeoutRef.current = null;
+    }, 1000);
   };
 
   const getVideoThumbnailSrc = (video: VideoItem): string => {
@@ -5194,7 +5297,24 @@ function App() {
       </Modal>
 
       <Modal
-        title={transcriptVideo ? `Transcript: ${transcriptVideo.title}` : "Transcript"}
+        title={
+          <div className="transcript-modal-title-row">
+            <Button
+              htmlType="button"
+              className={`column-move-btn transcript-copy-btn ${
+                isTranscriptCopied ? "is-copied" : ""
+              }`}
+              aria-label="Copy transcript"
+              onClick={() => void copyTranscriptText()}
+              disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
+            >
+              {isTranscriptCopied ? <span className="btn-icon btn-icon-check" aria-hidden /> : "C"}
+            </Button>
+            <span className="transcript-modal-title-text">
+              {transcriptVideo ? `Transcript: ${transcriptVideo.title}` : "Transcript"}
+            </span>
+          </div>
+        }
         open={transcriptVideo !== null}
         onCancel={() => {
           transcriptRequestIdRef.current += 1;
@@ -5202,6 +5322,7 @@ function App() {
           setTranscriptLoading(false);
           setTranscriptText("");
           setTranscriptError(null);
+          setIsTranscriptCopied(false);
         }}
         footer={null}
         width={900}
