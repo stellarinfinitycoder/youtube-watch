@@ -3626,19 +3626,33 @@ function App() {
     }
   };
 
-  const toggleTranscriptViewMode = async (): Promise<void> => {
-    if (transcriptViewMode === "summary") {
-      setTranscriptViewMode("transcript");
+  const handleTranscriptViewModeChange = async (
+    mode: "transcript" | "summary"
+  ): Promise<void> => {
+    if (mode === transcriptViewMode) {
       return;
     }
-    setTranscriptViewMode("summary");
-    if (!summaryText && summaryKeyPoints.length === 0 && !summaryError) {
+    setTranscriptViewMode(mode);
+    if (mode === "summary" && !summaryText && summaryKeyPoints.length === 0 && !summaryError) {
       await loadSummary();
     }
   };
 
+  const getVisibleTranscriptPanelText = (): string => {
+    if (transcriptViewMode === "summary") {
+      const summary = summaryText.trim();
+      const points = summaryKeyPoints
+        .map((point) => point.trim())
+        .filter((point) => point.length > 0);
+      const pointsBlock =
+        points.length > 0 ? `\n\n${points.map((point) => `- ${point}`).join("\n")}` : "";
+      return `${summary}${pointsBlock}`.trim();
+    }
+    return transcriptText.trim();
+  };
+
   const copyTranscriptText = async (): Promise<void> => {
-    const text = transcriptText.trim();
+    const text = getVisibleTranscriptPanelText();
     if (!text) {
       return;
     }
@@ -5704,32 +5718,42 @@ function App() {
 
       <Modal
         title={
-          <div className="transcript-modal-title-row">
-            <Button
-              htmlType="button"
-              className={`column-move-btn transcript-sum-btn ${
-                transcriptViewMode === "summary" ? "is-active" : ""
-              }`}
-              aria-label="Toggle summary view"
-              onClick={() => void toggleTranscriptViewMode()}
-              disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
-            >
-              SUM
-            </Button>
-            <Button
-              htmlType="button"
-              className={`column-move-btn transcript-copy-btn ${
-                isTranscriptCopied ? "is-copied" : ""
-              }`}
-              aria-label="Copy transcript"
-              onClick={() => void copyTranscriptText()}
-              disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
-            >
-              {isTranscriptCopied ? <span className="btn-icon btn-icon-check" aria-hidden /> : "C"}
-            </Button>
-            <span className="transcript-modal-title-text">
-              {transcriptVideo ? `Transcript: ${transcriptVideo.title}` : "Transcript"}
+          <div className="transcript-modal-header-row">
+            <span className="transcript-modal-header-title">
+              {transcriptVideo?.title ?? "Transcript"}
             </span>
+            <div className="transcript-modal-header-controls">
+              <Select<"transcript" | "summary">
+                value={transcriptViewMode}
+                onChange={(value) => void handleTranscriptViewModeChange(value)}
+                aria-label="Transcript view mode"
+                className="video-filter-select transcript-mode-select"
+                options={[
+                  { value: "transcript", label: "TRANSCRIPT" },
+                  { value: "summary", label: "SUMMARY" }
+                ]}
+                disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
+              />
+              <Button
+                htmlType="button"
+                className={`column-move-btn transcript-copy-btn ${
+                  isTranscriptCopied ? "is-copied" : ""
+                }`}
+                aria-label={
+                  transcriptViewMode === "summary" ? "Copy summary" : "Copy transcript"
+                }
+                onClick={() => void copyTranscriptText()}
+                disabled={
+                  transcriptViewMode === "summary"
+                    ? summaryLoading ||
+                      !!summaryError ||
+                      (summaryText.trim().length === 0 && summaryKeyPoints.length === 0)
+                    : transcriptLoading || !!transcriptError || transcriptText.trim().length === 0
+                }
+              >
+                {isTranscriptCopied ? <span className="btn-icon btn-icon-check" aria-hidden /> : "C"}
+              </Button>
+            </div>
           </div>
         }
         open={transcriptVideo !== null}

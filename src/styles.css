@@ -1403,32 +1403,43 @@ body {
   overflow: auto;
 }
 
-.transcript-modal-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
+.transcript-copy-btn {
+  min-width: 42px;
 }
 
-.transcript-modal-title-text {
+.transcript-modal .ant-modal-header {
+  padding-top: 24px !important;
+}
+
+.transcript-modal .ant-modal-close {
+  top: 4px !important;
+  right: 8px !important;
+}
+
+.transcript-modal-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.transcript-modal-header-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.transcript-copy-btn {
-  min-width: 42px;
+.transcript-modal-header-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.transcript-sum-btn {
-  min-width: 62px;
-}
-
-.transcript-sum-btn.is-active {
-  background: var(--amber) !important;
-  color: #18110a !important;
-  border-color: var(--amber) !important;
+.transcript-mode-select {
+  width: 180px;
 }
 
 .transcript-copy-btn.is-copied {
