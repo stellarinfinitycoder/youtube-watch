@@ -46,12 +46,25 @@ export default async function handler(req: any, res: any) {
 
   try {
     const items = await listPublishedItems(200);
+    const dedupedItems = items.filter((item, index, all) => {
+      const key = item.videoId?.trim() || item.videoUrl?.trim() || item.id;
+      if (!key) {
+        return true;
+      }
+      return (
+        all.findIndex((candidate) => {
+          const candidateKey =
+            candidate.videoId?.trim() || candidate.videoUrl?.trim() || candidate.id;
+          return candidateKey === key;
+        }) === index
+      );
+    });
     const baseUrl = getBaseUrl(req);
     const feedTitle = "YouTube Watch News";
     const feedLink = `${baseUrl}/news`;
     const feedDescription = "Published video summaries.";
 
-    const rssItems = items
+    const rssItems = dedupedItems
       .map((item) => {
         const itemLink = item.videoUrl?.trim() || `${baseUrl}/news/${encodeURIComponent(item.id)}`;
         const thumbnailUrl = getRssThumbnailUrl(item);
