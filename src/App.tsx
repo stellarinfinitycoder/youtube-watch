@@ -3728,6 +3728,7 @@ function App() {
   const handleTranscriptViewModeChange = async (
     mode: "transcript" | "summary"
   ): Promise<void> => {
+    setPublishSummaryFeedback(null);
     setIsSummaryPromptEditMode(false);
     if (mode === transcriptViewMode) {
       return;
@@ -3739,6 +3740,7 @@ function App() {
   };
 
   const handleSummaryPromptEditToggle = (): void => {
+    setPublishSummaryFeedback(null);
     const nextOpen = !isSummaryPromptEditMode;
     setIsSummaryPromptEditMode(nextOpen);
     if (nextOpen) {
@@ -3747,12 +3749,14 @@ function App() {
   };
 
   const regenerateSummary = async (): Promise<void> => {
+    setPublishSummaryFeedback(null);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
     await loadSummary({ force: true });
   };
 
   const saveSummaryPromptAndClose = async (): Promise<void> => {
+    setPublishSummaryFeedback(null);
     const normalizedPrompt = summaryPromptDraft.trim();
     const nextPrompt = normalizedPrompt.length > 0 ? normalizedPrompt : DEFAULT_SUMMARY_PROMPT;
     if (nextPrompt === summaryPrompt) {
@@ -3775,6 +3779,17 @@ function App() {
     const pointsBlock =
       points.length > 0 ? `\n\n${points.map((point) => `- ${point}`).join("\n")}` : "";
     return `${summary}${pointsBlock}`.trim();
+  };
+
+  const normalizePublishStatusText = (value: string): string => {
+    const next = value.trim();
+    if (!next) {
+      return next;
+    }
+    if (next.endsWith("...")) {
+      return next;
+    }
+    return next.replace(/[.]+$/, "");
   };
 
   const publishCurrentVideoSummary = async (): Promise<void> => {
@@ -3805,13 +3820,13 @@ function App() {
       });
       setPublishSummaryFeedback({
         kind: "success",
-        text: "PUBLISHED."
+        text: "PUBLISHED"
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Publish failed.";
       setPublishSummaryFeedback({
         kind: "error",
-        text: message
+        text: normalizePublishStatusText(message)
       });
     } finally {
       setIsPublishingSummary(false);
@@ -3832,6 +3847,7 @@ function App() {
   };
 
   const copyTranscriptText = async (): Promise<void> => {
+    setPublishSummaryFeedback(null);
     const text = getVisibleTranscriptPanelText();
     if (!text) {
       return;
@@ -5898,78 +5914,104 @@ function App() {
 
       <Modal
         title={
-          <div className="transcript-modal-header-row">
-            <span className="transcript-modal-header-title">
-              {transcriptVideo?.title ?? "Transcript"}
-            </span>
-            <div className="transcript-modal-header-controls">
-              <Select<"transcript" | "summary">
-                value={transcriptViewMode}
-                onChange={(value) => void handleTranscriptViewModeChange(value)}
-                aria-label="Transcript view mode"
-                className="video-filter-select transcript-mode-select"
-                options={[
-                  { value: "transcript", label: "TRANSCRIPT" },
-                  { value: "summary", label: "SUMMARY" }
-                ]}
-                disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
-              />
-              <Button
-                htmlType="button"
-                className={`column-move-btn transcript-copy-btn ${
-                  isTranscriptCopied ? "is-copied" : ""
-                }`}
-                aria-label={
-                  transcriptViewMode === "summary" ? "Copy summary" : "Copy transcript"
-                }
-                onClick={() => void copyTranscriptText()}
-                disabled={
-                  isSummaryPromptEditMode
-                    ? true
-                    : transcriptViewMode === "summary"
-                  ? summaryLoading ||
-                    !!summaryError ||
-                    (summaryText.trim().length === 0 && summaryKeyPoints.length === 0)
-                  : transcriptLoading || !!transcriptError || transcriptText.trim().length === 0
-                }
-              >
-                {isTranscriptCopied ? <span className="btn-icon btn-icon-check" aria-hidden /> : "C"}
-              </Button>
-              <Button
-                htmlType="button"
-                className={`column-move-btn transcript-prompt-btn ${
-                  isSummaryPromptEditMode ? "is-active" : ""
-                }`}
-                aria-label="Edit summary prompt"
-                onClick={handleSummaryPromptEditToggle}
-                disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
-              >
-                P
-              </Button>
-              <Button
-                htmlType="button"
-                className="column-move-btn transcript-regenerate-btn"
-                aria-label="Regenerate summary"
-                onClick={() => void regenerateSummary()}
-                disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
-              >
-                R
-              </Button>
-              <Button
-                htmlType="button"
-                className="column-move-btn transcript-publish-btn"
-                aria-label="Publish summary"
-                onClick={() => void publishCurrentVideoSummary()}
-                disabled={
-                  isSummaryPromptEditMode ||
-                  isPublishingSummary ||
-                  transcriptLoading ||
-                  !!transcriptError ||
-                  !hasPublishableSummary
-                }
-              >
-                F
-              </Button>
+          <div>
+            <div className="transcript-modal-status-row">
+              {publishSummaryFeedback ? (
+                <Text className={`video-meta-feedback is-${publishSummaryFeedback.kind}`}>
+                  {publishSummaryFeedback.text}
+                </Text>
+              ) : null}
+              {isPublishingSummary ? (
+                <Text className="video-meta-feedback is-info">PUBLISHING...</Text>
+              ) : null}
+            </div>
+            <div className="transcript-modal-header-row">
+              <span className="transcript-modal-header-title">
+                {isSummaryPromptEditMode
+                  ? "EDIT SUMMARY PROMPT"
+                  : transcriptVideo?.title ?? "Transcript"}
+              </span>
+              <div className="transcript-modal-header-controls">
+                <Select<"transcript" | "summary">
+                  value={transcriptViewMode}
+                  onChange={(value) => void handleTranscriptViewModeChange(value)}
+                  aria-label="Transcript view mode"
+                  className="video-filter-select transcript-mode-select"
+                  options={[
+                    { value: "transcript", label: "TRANSCRIPT" },
+                    { value: "summary", label: "SUMMARY" }
+                  ]}
+                  disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
+                />
+                <Button
+                  htmlType="button"
+                  className={`column-move-btn transcript-copy-btn ${
+                    isTranscriptCopied ? "is-copied" : ""
+                  }`}
+                  aria-label={
+                    transcriptViewMode === "summary" ? "Copy summary" : "Copy transcript"
+                  }
+                  onClick={() => void copyTranscriptText()}
+                  disabled={
+                    isSummaryPromptEditMode
+                      ? true
+                      : transcriptViewMode === "summary"
+                    ? summaryLoading ||
+                      !!summaryError ||
+                      (summaryText.trim().length === 0 && summaryKeyPoints.length === 0)
+                    : transcriptLoading || !!transcriptError || transcriptText.trim().length === 0
+                  }
+                >
+                  {isTranscriptCopied ? (
+                    <span className="btn-icon btn-icon-check" aria-hidden />
+                  ) : (
+                    <span className="btn-icon btn-icon-copy" aria-hidden />
+                  )}
+                </Button>
+                <Button
+                  htmlType="button"
+                  className={`column-move-btn transcript-prompt-btn ${
+                    isSummaryPromptEditMode ? "is-active" : ""
+                  }`}
+                  aria-label="Edit summary prompt"
+                  onClick={handleSummaryPromptEditToggle}
+                  disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
+                >
+                  <span className="btn-icon btn-icon-edit-board" aria-hidden />
+                </Button>
+                <Button
+                  htmlType="button"
+                  className="column-move-btn transcript-regenerate-btn"
+                  aria-label="Regenerate summary"
+                  onClick={() => void regenerateSummary()}
+                  disabled={
+                    isSummaryPromptEditMode ||
+                    transcriptLoading ||
+                    !!transcriptError ||
+                    transcriptText.trim().length === 0
+                  }
+                >
+                  <span className="btn-icon btn-icon-fetch" aria-hidden />
+                </Button>
+                <Button
+                  htmlType="button"
+                  className="column-move-btn transcript-publish-btn"
+                  aria-label="Publish summary"
+                  onClick={() => void publishCurrentVideoSummary()}
+                  disabled={
+                    isSummaryPromptEditMode ||
+                    isPublishingSummary ||
+                    transcriptLoading ||
+                    !!transcriptError ||
+                    !hasPublishableSummary
+                  }
+                >
+                  <span
+                    className={`btn-icon btn-icon-feed ${isPublishingSummary ? "is-spinning" : ""}`}
+                    aria-hidden
+                  />
+                </Button>
+              </div>
             </div>
           </div>
         }
@@ -5998,12 +6040,6 @@ function App() {
         className="transcript-modal"
       >
         <div className="transcript-modal-body">
-          {publishSummaryFeedback ? (
-            <Text className={`video-meta-feedback is-${publishSummaryFeedback.kind}`}>
-              {publishSummaryFeedback.text}
-            </Text>
-          ) : null}
-          {isPublishingSummary ? <Text className="video-meta-feedback is-info">PUBLISHING...</Text> : null}
           {isSummaryPromptEditMode ? (
             <div className="summary-prompt-editor">
               <Input.TextArea
@@ -6453,7 +6489,7 @@ function App() {
                                       aria-label={`Open transcript for ${video.title}`}
                                       onClick={() => void openTranscript(video)}
                                     >
-                                      T
+                                      <span className="btn-icon btn-icon-transcript" aria-hidden />
                                     </Button>
                                     <Button
                                       htmlType="button"
@@ -6504,7 +6540,7 @@ function App() {
                                         )
                                       }
                                     >
-                                      T
+                                      <span className="btn-icon btn-icon-transcript" aria-hidden />
                                     </Button>
                                     <Button
                                       htmlType="button"

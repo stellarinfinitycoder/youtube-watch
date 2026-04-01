@@ -880,6 +880,21 @@ body {
   mask: url("/svg/btn-logout.svg") center / contain no-repeat;
 }
 
+.btn-icon-copy {
+  -webkit-mask: url("/svg/btn-copy.svg") center / contain no-repeat;
+  mask: url("/svg/btn-copy.svg") center / contain no-repeat;
+}
+
+.btn-icon-feed {
+  -webkit-mask: url("/svg/btn-feed.svg") center / contain no-repeat;
+  mask: url("/svg/btn-feed.svg") center / contain no-repeat;
+}
+
+.btn-icon-transcript {
+  -webkit-mask: url("/svg/btn-transcript.svg") center / contain no-repeat;
+  mask: url("/svg/btn-transcript.svg") center / contain no-repeat;
+}
+
 .board-option-edit-btn .btn-icon {
   width: 14px;
   height: 14px;
@@ -1447,12 +1462,26 @@ body {
 }
 
 .transcript-modal .ant-modal-header {
+  position: relative;
   padding-top: 24px !important;
 }
 
 .transcript-modal .ant-modal-close {
   top: 4px !important;
   right: 8px !important;
+}
+
+.transcript-modal-status-row {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0;
+  pointer-events: none;
 }
 
 .transcript-modal-header-row {
