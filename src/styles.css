@@ -1198,6 +1198,17 @@ body {
   background: rgba(255, 143, 31, 0.12);
 }
 
+.publisher-post-card {
+  width: 100%;
+  padding: 10px;
+  margin: 2px 0;
+  transition: background-color 140ms ease;
+}
+
+.column-card.publisher-post-card:hover {
+  background: rgba(255, 143, 31, 0.12);
+}
+
 .ant-list .ant-list-items > .video-tile-item.ant-list-item:last-child {
   border-block-end: 0 !important;
 }
