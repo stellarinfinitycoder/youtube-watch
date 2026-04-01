@@ -2,7 +2,7 @@ import { fetchYouTubeTranscript } from "./_lib/transcript.js";
 
 const DEFAULT_MODEL = process.env.OPENROUTER_DEFAULT_MODEL || "openai/gpt-4o-mini";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MAX_TRANSCRIPT_CHARS = 15000;
+const MAX_TRANSCRIPT_CHARS = 100000;
 
 function parseBody(req: any): Record<string, unknown> {
   if (req.body && typeof req.body === "object") {
