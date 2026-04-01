@@ -3612,7 +3612,7 @@ function App() {
     }
     setTranscriptSourceHandle(normalizedSourceHandle);
     setTranscriptVideo(video);
-    setTranscriptViewMode("transcript");
+    setTranscriptViewMode("summary");
     setIsSummaryPromptEditMode(false);
     setSummaryPromptDraft(summaryPrompt);
     setTranscriptLoading(true);
@@ -3724,6 +3724,42 @@ function App() {
       setSummaryLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!transcriptVideo) {
+      return;
+    }
+    if (transcriptViewMode !== "summary") {
+      return;
+    }
+    if (isSummaryPromptEditMode) {
+      return;
+    }
+    if (transcriptLoading || transcriptError) {
+      return;
+    }
+    if (!transcriptText.trim()) {
+      return;
+    }
+    if (summaryLoading || summaryError) {
+      return;
+    }
+    if (summaryText.trim().length > 0 || summaryKeyPoints.length > 0) {
+      return;
+    }
+    void loadSummary();
+  }, [
+    transcriptVideo,
+    transcriptViewMode,
+    isSummaryPromptEditMode,
+    transcriptLoading,
+    transcriptError,
+    transcriptText,
+    summaryLoading,
+    summaryError,
+    summaryText,
+    summaryKeyPoints
+  ]);
 
   const handleTranscriptViewModeChange = async (
     mode: "transcript" | "summary"
