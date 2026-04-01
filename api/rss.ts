@@ -38,6 +38,18 @@ function getRssThumbnailUrl(item: { videoId?: string; thumbnailUrl?: string }): 
   return String(item.thumbnailUrl ?? "").trim();
 }
 
+function getCanonicalYoutubeUrl(item: { videoId?: string; videoUrl?: string }): string {
+  const videoId = String(item.videoId ?? "").trim();
+  if (videoId) {
+    return `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+  }
+  const raw = String(item.videoUrl ?? "").trim();
+  if (/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(raw)) {
+    return raw;
+  }
+  return "";
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== "GET") {
     res.status(405).send("Method not allowed");
@@ -46,19 +58,23 @@ export default async function handler(req: any, res: any) {
 
   try {
     const items = await listPublishedItems(200);
-    const dedupedItems = items.filter((item, index, all) => {
-      const key = item.videoId?.trim() || item.videoUrl?.trim() || item.id;
-      if (!key) {
-        return true;
-      }
-      return (
-        all.findIndex((candidate) => {
-          const candidateKey =
-            candidate.videoId?.trim() || candidate.videoUrl?.trim() || candidate.id;
-          return candidateKey === key;
-        }) === index
-      );
-    });
+    const dedupedItems = items
+      .filter((item) => getCanonicalYoutubeUrl(item).length > 0)
+      .filter((item, index, all) => {
+        const canonicalUrl = getCanonicalYoutubeUrl(item);
+        const fallbackKey = `${item.title.trim().toLowerCase()}|${item.summary.trim().toLowerCase()}`;
+        const key = canonicalUrl || fallbackKey;
+        return (
+          all.findIndex((candidate) => {
+            const candidateCanonicalUrl = getCanonicalYoutubeUrl(candidate);
+            const candidateFallbackKey = `${candidate.title
+              .trim()
+              .toLowerCase()}|${candidate.summary.trim().toLowerCase()}`;
+            const candidateKey = candidateCanonicalUrl || candidateFallbackKey;
+            return candidateKey === key;
+          }) === index
+        );
+      });
     const baseUrl = getBaseUrl(req);
     const feedTitle = "YouTube Watch News";
     const feedLink = `${baseUrl}/news`;
@@ -66,7 +82,7 @@ export default async function handler(req: any, res: any) {
 
     const rssItems = dedupedItems
       .map((item) => {
-        const itemLink = item.videoUrl?.trim() || `${baseUrl}/news/${encodeURIComponent(item.id)}`;
+        const itemLink = getCanonicalYoutubeUrl(item);
         const thumbnailUrl = getRssThumbnailUrl(item);
         const encodedDescription = `<p>${escapeXml(item.summary)}</p>`;
         const encodedHtml =
