@@ -24,6 +24,7 @@ import {
   resolveChannelByInputWithThumbnail,
   resolveChannelByHandleWithThumbnail
 } from "./api/youtube";
+import { publishVideoSummary } from "./api/publisher";
 import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
 import fixtureBoards from "./fixtures/fixture-boards.json";
@@ -46,11 +47,9 @@ const SUMMARY_CACHE_KEY_PREFIX = "youtube-watch:summary:v1:";
 const SUMMARY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const SUMMARY_PROMPT_STORAGE_KEY = "youtube-watch:summary-prompt:v1";
 const DEFAULT_SUMMARY_PROMPT = [
-  "You summarize YouTube transcripts.",
-  "Return strict JSON with keys: summary (string), keyPoints (string[]).",
-  "summary: max 5 concise sentences.",
-  "keyPoints: 5-7 short bullets.",
-  "Use only transcript content. No fabricated facts."
+  "Focus on practical takeaways.",
+  "Keep summary concise.",
+  "Highlight important risks and decisions."
 ].join(" ");
 const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
@@ -2178,6 +2177,10 @@ function App() {
   const [summaryKeyPoints, setSummaryKeyPoints] = useState<string[]>([]);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [summaryModel, setSummaryModel] = useState("");
+  const [isPublishingSummary, setIsPublishingSummary] = useState(false);
+  const [publishSummaryFeedback, setPublishSummaryFeedback] = useState<InlineMetaFeedback | null>(
+    null
+  );
   const [isSummaryPromptEditMode, setIsSummaryPromptEditMode] = useState(false);
   const [summaryPrompt, setSummaryPrompt] = useState<string>(readStoredSummaryPrompt);
   const [summaryPromptDraft, setSummaryPromptDraft] = useState<string>(readStoredSummaryPrompt);
@@ -2377,6 +2380,9 @@ function App() {
   );
   const hasSummaryPromptChanges =
     (summaryPromptDraft.trim() || DEFAULT_SUMMARY_PROMPT) !== summaryPrompt;
+  const hasPublishableSummary =
+    summaryText.trim().length > 0 ||
+    summaryKeyPoints.some((point) => point.trim().length > 0);
 
   const focusBulkModalInput = (): void => {
     const focusNow = () => {
@@ -3604,6 +3610,8 @@ function App() {
     setSummaryKeyPoints([]);
     setSummaryError(null);
     setSummaryModel("");
+    setIsPublishingSummary(false);
+    setPublishSummaryFeedback(null);
     transcriptRequestIdRef.current += 1;
     const requestId = transcriptRequestIdRef.current;
     try {
@@ -3743,6 +3751,57 @@ function App() {
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
     await loadSummary({ force: true, promptOverride: nextPrompt });
+  };
+
+  const buildSummaryTextForPublish = (): string => {
+    const summary = summaryText.trim();
+    const points = summaryKeyPoints
+      .map((point) => point.trim())
+      .filter((point) => point.length > 0);
+    const pointsBlock =
+      points.length > 0 ? `\n\n${points.map((point) => `- ${point}`).join("\n")}` : "";
+    return `${summary}${pointsBlock}`.trim();
+  };
+
+  const publishCurrentVideoSummary = async (): Promise<void> => {
+    if (!transcriptVideo) {
+      return;
+    }
+    const summaryForPublish = buildSummaryTextForPublish();
+    if (!summaryForPublish) {
+      return;
+    }
+    if (isPublishingSummary) {
+      return;
+    }
+
+    setPublishSummaryFeedback(null);
+    setIsPublishingSummary(true);
+    try {
+      await publishVideoSummary({
+        videoId: transcriptVideo.videoId,
+        videoUrl: transcriptVideo.videoUrl,
+        title: transcriptVideo.title,
+        summary: summaryForPublish,
+        thumbnailUrl: transcriptVideo.thumbnailUrl,
+        channelTitle: transcriptVideo.channelTitle,
+        publishedAt: transcriptVideo.publishedAt,
+        durationSeconds: transcriptVideo.durationSeconds ?? null,
+        viewCount: transcriptVideo.viewCount ?? null
+      });
+      setPublishSummaryFeedback({
+        kind: "success",
+        text: "PUBLISHED."
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Publish failed.";
+      setPublishSummaryFeedback({
+        kind: "error",
+        text: message
+      });
+    } finally {
+      setIsPublishingSummary(false);
+    }
   };
 
   const getVisibleTranscriptPanelText = (): string => {
@@ -5882,6 +5941,21 @@ function App() {
               >
                 R
               </Button>
+              <Button
+                htmlType="button"
+                className="column-move-btn transcript-publish-btn"
+                aria-label="Publish summary"
+                onClick={() => void publishCurrentVideoSummary()}
+                disabled={
+                  isSummaryPromptEditMode ||
+                  isPublishingSummary ||
+                  transcriptLoading ||
+                  !!transcriptError ||
+                  !hasPublishableSummary
+                }
+              >
+                F
+              </Button>
             </div>
           </div>
         }
@@ -5899,6 +5973,8 @@ function App() {
           setSummaryKeyPoints([]);
           setSummaryError(null);
           setSummaryModel("");
+          setIsPublishingSummary(false);
+          setPublishSummaryFeedback(null);
           setIsSummaryPromptEditMode(false);
           setSummaryPromptDraft(summaryPrompt);
         }}
@@ -5908,13 +5984,19 @@ function App() {
         className="transcript-modal"
       >
         <div className="transcript-modal-body">
+          {publishSummaryFeedback ? (
+            <Text className={`video-meta-feedback is-${publishSummaryFeedback.kind}`}>
+              {publishSummaryFeedback.text}
+            </Text>
+          ) : null}
+          {isPublishingSummary ? <Text className="video-meta-feedback is-info">PUBLISHING...</Text> : null}
           {isSummaryPromptEditMode ? (
             <div className="summary-prompt-editor">
               <Input.TextArea
                 value={summaryPromptDraft}
                 onChange={(event) => setSummaryPromptDraft(event.target.value)}
                 autoSize={{ minRows: 8, maxRows: 18 }}
-                placeholder="Enter summary prompt"
+                placeholder="Enter plain summary instructions (style/focus)."
               />
               <div className="summary-prompt-actions">
                 <Button

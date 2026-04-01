@@ -782,6 +782,19 @@ body {
   background: currentColor;
 }
 
+.btn-icon.is-spinning {
+  animation: btn-icon-spin 700ms linear infinite;
+}
+
+@keyframes btn-icon-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .btn-icon-play {
   -webkit-mask: url("/svg/btn-play.svg") center / contain no-repeat;
   mask: url("/svg/btn-play.svg") center / contain no-repeat;
@@ -855,6 +868,16 @@ body {
 .btn-icon-edit-board {
   -webkit-mask: url("/svg/btn-edit-board.svg") center / contain no-repeat;
   mask: url("/svg/btn-edit-board.svg") center / contain no-repeat;
+}
+
+.btn-icon-login {
+  -webkit-mask: url("/svg/btn-login.svg") center / contain no-repeat;
+  mask: url("/svg/btn-login.svg") center / contain no-repeat;
+}
+
+.btn-icon-logout {
+  -webkit-mask: url("/svg/btn-logout.svg") center / contain no-repeat;
+  mask: url("/svg/btn-logout.svg") center / contain no-repeat;
 }
 
 .board-option-edit-btn .btn-icon {
@@ -1068,6 +1091,21 @@ body {
   color: var(--text-strong) !important;
   background: #120b05 !important;
   border-color: var(--amber-soft) !important;
+}
+
+.ant-input-affix-wrapper {
+  color: var(--text-strong) !important;
+  background: #120b05 !important;
+  border-color: var(--amber-soft) !important;
+}
+
+.ant-input-affix-wrapper .ant-input {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.ant-input-affix-wrapper .ant-input-suffix {
+  color: var(--muted) !important;
 }
 
 .ant-input::placeholder {
@@ -1537,6 +1575,11 @@ body {
   color: var(--text-dim) !important;
   font-size: 10px !important;
   letter-spacing: 0.04em;
+}
+
+.publisher-edit-modal .ant-input,
+.publisher-edit-modal .ant-input::placeholder {
+  text-transform: none !important;
 }
 
 .board-edit-footer {
