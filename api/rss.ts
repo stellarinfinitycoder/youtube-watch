@@ -69,7 +69,7 @@ export default async function handler(req: any, res: any) {
             : [`<p><strong>${escapeXml(upperTitle)}</strong></p>`, encodedDescription].join("");
         return [
           "<item>",
-          `<title>${escapeXml(item.title)}</title>`,
+          `<title></title>`,
           `<link>${escapeXml(itemLink)}</link>`,
           `<guid isPermaLink="false">${escapeXml(item.id)}</guid>`,
           `<pubDate>${escapeXml(toRssDate(item.updatedAt || item.publishedAt))}</pubDate>`,
