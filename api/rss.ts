@@ -45,7 +45,15 @@ export default async function handler(req: any, res: any) {
 
     const rssItems = items
       .map((item) => {
-        const itemLink = `${baseUrl}/news/${encodeURIComponent(item.id)}`;
+        const itemLink = item.videoUrl?.trim() || `${baseUrl}/news/${encodeURIComponent(item.id)}`;
+        const thumbnailUrl = item.thumbnailUrl?.trim() || "";
+        const encodedDescription = `<p>${escapeXml(item.summary)}</p>`;
+        const encodedHtml =
+          thumbnailUrl.length > 0
+            ? `<p><a href="${escapeXml(itemLink)}" target="_blank" rel="noreferrer"><img src="${escapeXml(
+                thumbnailUrl
+              )}" alt="${escapeXml(item.title)}" /></a></p>${encodedDescription}`
+            : encodedDescription;
         return [
           "<item>",
           `<title>${escapeXml(item.title)}</title>`,
@@ -53,6 +61,16 @@ export default async function handler(req: any, res: any) {
           `<guid isPermaLink="false">${escapeXml(item.id)}</guid>`,
           `<pubDate>${escapeXml(toRssDate(item.updatedAt || item.publishedAt))}</pubDate>`,
           `<description>${escapeXml(item.summary)}</description>`,
+          thumbnailUrl.length > 0
+            ? `<enclosure url="${escapeXml(thumbnailUrl)}" type="image/jpeg" />`
+            : "",
+          thumbnailUrl.length > 0
+            ? `<media:thumbnail url="${escapeXml(thumbnailUrl)}" />`
+            : "",
+          thumbnailUrl.length > 0
+            ? `<media:content url="${escapeXml(thumbnailUrl)}" medium="image" type="image/jpeg" />`
+            : "",
+          `<content:encoded><![CDATA[${encodedHtml}]]></content:encoded>`,
           "</item>"
         ].join("");
       })
@@ -60,7 +78,7 @@ export default async function handler(req: any, res: any) {
 
     const rssXml = [
       '<?xml version="1.0" encoding="UTF-8"?>',
-      '<rss version="2.0">',
+      '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/">',
       "<channel>",
       `<title>${escapeXml(feedTitle)}</title>`,
       `<link>${escapeXml(feedLink)}</link>`,
