@@ -55,7 +55,6 @@ export default async function handler(req: any, res: any) {
       .map((item) => {
         const itemLink = item.videoUrl?.trim() || `${baseUrl}/news/${encodeURIComponent(item.id)}`;
         const thumbnailUrl = getRssThumbnailUrl(item);
-        const upperTitle = item.title.trim().toUpperCase();
         const encodedDescription = `<p>${escapeXml(item.summary)}</p>`;
         const encodedHtml =
           thumbnailUrl.length > 0
@@ -63,13 +62,12 @@ export default async function handler(req: any, res: any) {
                 `<p><a href="${escapeXml(itemLink)}" target="_blank" rel="noreferrer"><img src="${escapeXml(
                   thumbnailUrl
                 )}" alt="${escapeXml(item.title)}" width="100%" style="display:block;width:100%;height:auto;" /></a></p>`,
-                `<p><strong>${escapeXml(upperTitle)}</strong></p>`,
                 encodedDescription
               ].join("")
-            : [`<p><strong>${escapeXml(upperTitle)}</strong></p>`, encodedDescription].join("");
+            : encodedDescription;
         return [
           "<item>",
-          `<title></title>`,
+          `<title>${escapeXml(item.title)}</title>`,
           `<link>${escapeXml(itemLink)}</link>`,
           `<guid isPermaLink="false">${escapeXml(item.id)}</guid>`,
           `<pubDate>${escapeXml(toRssDate(item.updatedAt || item.publishedAt))}</pubDate>`,
@@ -83,7 +81,6 @@ export default async function handler(req: any, res: any) {
           thumbnailUrl.length > 0
             ? `<media:content url="${escapeXml(thumbnailUrl)}" medium="image" type="image/jpeg" />`
             : "",
-          `<content:encoded><![CDATA[${encodedHtml}]]></content:encoded>`,
           "</item>"
         ].join("");
       })
