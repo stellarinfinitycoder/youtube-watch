@@ -18,7 +18,7 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
 }
 
 export async function loginPublisherAdmin(password: string): Promise<void> {
-  await fetchJson<{ ok: boolean }>("/api/publisher/login", {
+  await fetchJson<{ ok: boolean }>("/api/publisher?action=login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password })
@@ -26,7 +26,7 @@ export async function loginPublisherAdmin(password: string): Promise<void> {
 }
 
 export async function logoutPublisherAdmin(): Promise<void> {
-  await fetchJson<{ ok: boolean }>("/api/publisher/logout", {
+  await fetchJson<{ ok: boolean }>("/api/publisher?action=logout", {
     method: "POST"
   });
 }
@@ -42,7 +42,7 @@ export async function publishVideoSummary(input: {
   durationSeconds?: number | null;
   viewCount?: number | null;
 }): Promise<PublishedItem> {
-  return fetchJson<PublishedItem>("/api/publisher/publish", {
+  return fetchJson<PublishedItem>("/api/publisher?action=publish", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input)
@@ -50,7 +50,7 @@ export async function publishVideoSummary(input: {
 }
 
 export async function fetchPublisherItems(): Promise<PublishedItem[]> {
-  const payload = await fetchJson<{ items: PublishedItem[] }>("/api/publisher/items");
+  const payload = await fetchJson<{ items: PublishedItem[] }>("/api/publisher?scope=admin");
   return payload.items ?? [];
 }
 
@@ -58,7 +58,7 @@ export async function updatePublisherItem(
   id: string,
   patch: { title?: string; summary?: string }
 ): Promise<PublishedItem> {
-  return fetchJson<PublishedItem>(`/api/publisher/items/${encodeURIComponent(id)}`, {
+  return fetchJson<PublishedItem>(`/api/publisher?id=${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch)
@@ -66,7 +66,7 @@ export async function updatePublisherItem(
 }
 
 export async function deletePublisherItem(id: string): Promise<void> {
-  await fetchJson<{ ok: boolean }>(`/api/publisher/items/${encodeURIComponent(id)}`, {
+  await fetchJson<{ ok: boolean }>(`/api/publisher?id=${encodeURIComponent(id)}`, {
     method: "DELETE"
   });
 }
@@ -74,9 +74,9 @@ export async function deletePublisherItem(id: string): Promise<void> {
 export async function fetchPublicPublishedItems(limit?: number): Promise<PublishedItem[]> {
   const suffix =
     typeof limit === "number" && Number.isFinite(limit) && limit > 0
-      ? `?limit=${Math.floor(limit)}`
+      ? `&limit=${Math.floor(limit)}`
       : "";
-  const response = await fetch(`/api/publisher/public${suffix}`, {
+  const response = await fetch(`/api/publisher?scope=public${suffix}`, {
     credentials: "omit"
   });
   const payload = (await response.json().catch(() => ({}))) as
@@ -89,9 +89,12 @@ export async function fetchPublicPublishedItems(limit?: number): Promise<Publish
 }
 
 export async function fetchPublicPublishedItem(id: string): Promise<PublishedItem> {
-  const response = await fetch(`/api/publisher/public/${encodeURIComponent(id)}`, {
-    credentials: "omit"
-  });
+  const response = await fetch(
+    `/api/publisher?scope=public&id=${encodeURIComponent(id)}`,
+    {
+      credentials: "omit"
+    }
+  );
   const payload = (await response.json().catch(() => ({}))) as PublishedItem & {
     error?: string;
   };
