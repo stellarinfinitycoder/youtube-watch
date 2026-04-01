@@ -2168,6 +2168,7 @@ function App() {
   const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [transcriptText, setTranscriptText] = useState("");
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
+  const [transcriptSourceHandle, setTranscriptSourceHandle] = useState<string>("");
   const [transcriptViewMode, setTranscriptViewMode] = useState<"transcript" | "summary">(
     "transcript"
   );
@@ -3596,7 +3597,20 @@ function App() {
     return Math.floor(stored.seconds);
   };
 
-  const openTranscript = async (video: VideoItem): Promise<void> => {
+  const openTranscript = async (
+    video: VideoItem,
+    sourceHandleRaw?: string
+  ): Promise<void> => {
+    let normalizedSourceHandle = "";
+    const candidate = (sourceHandleRaw ?? "").trim();
+    if (candidate) {
+      try {
+        normalizedSourceHandle = normalizeHandle(candidate);
+      } catch {
+        normalizedSourceHandle = candidate.startsWith("@") ? candidate : `@${candidate}`;
+      }
+    }
+    setTranscriptSourceHandle(normalizedSourceHandle);
     setTranscriptVideo(video);
     setTranscriptViewMode("transcript");
     setIsSummaryPromptEditMode(false);
@@ -3784,7 +3798,7 @@ function App() {
         title: transcriptVideo.title,
         summary: summaryForPublish,
         thumbnailUrl: transcriptVideo.thumbnailUrl,
-        channelTitle: transcriptVideo.channelTitle,
+        channelTitle: transcriptSourceHandle || transcriptVideo.channelTitle,
         publishedAt: transcriptVideo.publishedAt,
         durationSeconds: transcriptVideo.durationSeconds ?? null,
         viewCount: transcriptVideo.viewCount ?? null
@@ -6483,7 +6497,12 @@ function App() {
                                       htmlType="button"
                                       className="column-move-btn"
                                       aria-label={`Open transcript for ${video.title}`}
-                                      onClick={() => void openTranscript(video)}
+                                      onClick={() =>
+                                        void openTranscript(
+                                          video,
+                                          column.currentHandle || column.handleInput
+                                        )
+                                      }
                                     >
                                       T
                                     </Button>

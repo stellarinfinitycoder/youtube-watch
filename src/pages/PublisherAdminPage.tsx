@@ -363,8 +363,8 @@ export default function PublisherAdminPage() {
                 <Space direction="vertical" className="full-width" size={8}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                     <Text style={{ color: "var(--muted)" }}>
-                      {formatDateTime(item.updatedAt)} | {formatChannelHandle(item.channelTitle)} |{" "}
-                      {formatPublisherVideoMeta(item)}
+                      <span style={{ color: "var(--amber)" }}>{formatDateTime(item.updatedAt)}</span>{" "}
+                      {formatChannelHandle(item.channelTitle)} | {formatPublisherVideoMeta(item)}
                     </Text>
                     {authState === "ready" ? (
                       <Space size={8}>
