@@ -6264,6 +6264,12 @@ function App() {
         title={
           <div>
             <div className="transcript-modal-status-row">
+              {transcriptLoading ? (
+                <Text className="video-meta-feedback is-info">FETCHING TRANSCRIPT...</Text>
+              ) : null}
+              {!transcriptLoading && summaryLoading ? (
+                <Text className="video-meta-feedback is-info">SUMMARIZING...</Text>
+              ) : null}
               {publishSummaryFeedback ? (
                 <Text className={`video-meta-feedback is-${publishSummaryFeedback.kind}`}>
                   {publishSummaryFeedback.text}
@@ -6471,7 +6477,6 @@ function App() {
             </div>
           ) : transcriptViewMode === "transcript" ? (
             <>
-              {transcriptLoading ? <Text>FETCHING TRANSCRIPT...</Text> : null}
               {!transcriptLoading && transcriptError ? (
                 <Text type="danger">{transcriptError}</Text>
               ) : null}
@@ -6481,7 +6486,6 @@ function App() {
             </>
           ) : (
             <>
-              {summaryLoading ? <Text>SUMMARIZING...</Text> : null}
               {!summaryLoading && summaryError ? <Text type="danger">{summaryError}</Text> : null}
               {!summaryLoading && !summaryError && (summaryText || summaryKeyPoints.length > 0) ? (
                 <div className="summary-content">

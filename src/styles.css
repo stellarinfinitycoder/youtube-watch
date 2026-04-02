@@ -1303,6 +1303,10 @@ body {
   color: var(--green);
 }
 
+.transcript-modal-status-row .video-meta-feedback.is-success {
+  color: var(--amber);
+}
+
 .video-meta-feedback.is-error {
   color: rgba(255, 92, 92, 0.8);
 }
