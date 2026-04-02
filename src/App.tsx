@@ -2519,6 +2519,7 @@ function App() {
   const hasPublishableSummary =
     summaryText.trim().length > 0 ||
     summaryKeyPoints.some((point) => point.trim().length > 0);
+  const isSummaryBusy = transcriptViewMode === "summary" && summaryLoading;
 
   const focusBulkModalInput = (): void => {
     const focusNow = () => {
@@ -6296,7 +6297,12 @@ function App() {
                     })),
                     { value: NEW_SUMMARY_FORMAT_OPTION, label: "NEW FORMAT" }
                   ]}
-                  disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
+                  disabled={
+                    isSummaryBusy ||
+                    transcriptLoading ||
+                    !!transcriptError ||
+                    transcriptText.trim().length === 0
+                  }
                 />
                 <Button
                   htmlType="button"
@@ -6330,7 +6336,12 @@ function App() {
                   }`}
                   aria-label="Edit summary prompt"
                   onClick={handleSummaryPromptEditToggle}
-                  disabled={transcriptLoading || !!transcriptError || transcriptText.trim().length === 0}
+                  disabled={
+                    isSummaryBusy ||
+                    transcriptLoading ||
+                    !!transcriptError ||
+                    transcriptText.trim().length === 0
+                  }
                 >
                   <span className="btn-icon btn-icon-edit-board" aria-hidden />
                 </Button>
@@ -6340,6 +6351,7 @@ function App() {
                   aria-label="Regenerate summary"
                   onClick={() => void regenerateSummary()}
                   disabled={
+                    isSummaryBusy ||
                     isSummaryPromptEditMode ||
                     transcriptLoading ||
                     !!transcriptError ||
@@ -6354,6 +6366,7 @@ function App() {
                   aria-label="Publish summary"
                   onClick={() => void publishCurrentVideoSummary()}
                   disabled={
+                    isSummaryBusy ||
                     isSummaryPromptEditMode ||
                     isPublishingSummary ||
                     transcriptLoading ||
