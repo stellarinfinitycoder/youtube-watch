@@ -6337,6 +6337,7 @@ function App() {
                   aria-label="Edit summary prompt"
                   onClick={handleSummaryPromptEditToggle}
                   disabled={
+                    transcriptViewMode === "transcript" ||
                     isSummaryBusy ||
                     transcriptLoading ||
                     !!transcriptError ||
@@ -6351,6 +6352,7 @@ function App() {
                   aria-label="Regenerate summary"
                   onClick={() => void regenerateSummary()}
                   disabled={
+                    transcriptViewMode === "transcript" ||
                     isSummaryBusy ||
                     isSummaryPromptEditMode ||
                     transcriptLoading ||
@@ -6366,6 +6368,7 @@ function App() {
                   aria-label="Publish summary"
                   onClick={() => void publishCurrentVideoSummary()}
                   disabled={
+                    transcriptViewMode === "transcript" ||
                     isSummaryBusy ||
                     isSummaryPromptEditMode ||
                     isPublishingSummary ||
