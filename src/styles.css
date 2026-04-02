@@ -1540,12 +1540,46 @@ body {
   letter-spacing: 0.01em;
 }
 
+.summary-default-checkbox {
+  color: var(--text) !important;
+  text-transform: none;
+  font-weight: 600;
+}
+
+.summary-default-checkbox .ant-checkbox {
+  align-self: center;
+}
+
+.summary-default-checkbox .ant-checkbox-inner {
+  width: 16px;
+  height: 16px;
+  background: #0b0b0d !important;
+  border: 1px solid var(--amber-soft) !important;
+  border-radius: 0 !important;
+}
+
+.summary-default-checkbox .ant-checkbox-checked .ant-checkbox-inner {
+  background: var(--amber) !important;
+  border-color: var(--amber) !important;
+}
+
+.summary-default-checkbox .ant-checkbox-checked .ant-checkbox-inner::after {
+  border-color: #18110a !important;
+}
+
+.summary-default-checkbox .ant-checkbox + span {
+  color: var(--text) !important;
+  text-transform: none;
+  padding-inline-start: 8px;
+}
+
 .summary-prompt-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  width: 100%;
 }
 
 .summary-prompt-action-btn.ant-btn {
@@ -1553,6 +1587,28 @@ body {
   height: 34px;
   padding: 0 14px;
   font-size: 14px;
+}
+
+.summary-prompt-action-btn.ant-btn.red-outline-btn {
+  background: transparent !important;
+  border-color: rgba(204, 106, 106, 0.58) !important;
+  color: rgba(226, 128, 128, 0.86) !important;
+  transform: none !important;
+}
+
+.summary-prompt-action-btn.ant-btn.red-outline-btn:hover,
+.summary-prompt-action-btn.ant-btn.red-outline-btn:focus-visible,
+.summary-prompt-action-btn.ant-btn.red-outline-btn:active,
+.summary-prompt-action-btn.ant-btn.red-outline-btn.ant-btn-default:active {
+  background: rgba(204, 106, 106, 0.08) !important;
+  border-color: rgba(204, 106, 106, 0.72) !important;
+  color: rgba(235, 146, 146, 0.96) !important;
+  transform: none !important;
+}
+
+.summary-prompt-action-btn.ant-btn.red-outline-btn::before,
+.summary-prompt-action-btn.ant-btn.red-outline-btn::after {
+  display: none !important;
 }
 
 .transcript-copy-btn.is-copied {
