@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Alert,
   Button,
@@ -960,6 +962,22 @@ function hashText(value: string): string {
       (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
   }
   return (hash >>> 0).toString(16);
+}
+
+function looksLikeMarkdown(value: string): boolean {
+  const text = value.trim();
+  if (!text) {
+    return false;
+  }
+  return (
+    /^#{1,6}\s/m.test(text) ||
+    /(^|\n)\s*[-*+]\s+/.test(text) ||
+    /(^|\n)\s*\d+\.\s+/.test(text) ||
+    /\[.+?\]\(.+?\)/.test(text) ||
+    /\*\*[^*]+\*\*/.test(text) ||
+    /`[^`]+`/.test(text) ||
+    /^>\s/m.test(text)
+  );
 }
 
 function readCachedTranscript(videoId: string): string | null {
@@ -6121,14 +6139,33 @@ function App() {
               {!summaryLoading && summaryError ? <Text type="danger">{summaryError}</Text> : null}
               {!summaryLoading && !summaryError && (summaryText || summaryKeyPoints.length > 0) ? (
                 <div className="summary-content">
-                  {summaryText ? <p className="summary-paragraph">{summaryText}</p> : null}
-                  {summaryKeyPoints.length > 0 ? (
-                    <ul className="summary-points">
-                      {summaryKeyPoints.map((point, index) => (
-                        <li key={`${index}-${point.slice(0, 24)}`}>{point}</li>
-                      ))}
-                    </ul>
-                  ) : null}
+                  {(() => {
+                    const pointsBlock =
+                      summaryKeyPoints.length > 0
+                        ? summaryKeyPoints.map((point) => `- ${point}`).join("\n")
+                        : "";
+                    const combined = [summaryText, pointsBlock].filter(Boolean).join("\n\n").trim();
+                    const markdownMode = looksLikeMarkdown(combined);
+                    if (!markdownMode) {
+                      return (
+                        <>
+                          {summaryText ? <p className="summary-paragraph">{summaryText}</p> : null}
+                          {summaryKeyPoints.length > 0 ? (
+                            <ul className="summary-points">
+                              {summaryKeyPoints.map((point, index) => (
+                                <li key={`${index}-${point.slice(0, 24)}`}>{point}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </>
+                      );
+                    }
+                    return (
+                      <div className="summary-markdown">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{combined}</ReactMarkdown>
+                      </div>
+                    );
+                  })()}
                   {summaryModel ? <Text className="summary-model">MODEL: {summaryModel}</Text> : null}
                 </div>
               ) : null}

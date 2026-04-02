@@ -1611,6 +1611,34 @@ body {
   line-height: 1.5;
 }
 
+.summary-markdown {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.summary-markdown p {
+  margin: 0 0 10px;
+}
+
+.summary-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.summary-markdown ul,
+.summary-markdown ol {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summary-markdown li {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
 .summary-model {
   color: var(--text-dim) !important;
   font-size: 10px !important;
