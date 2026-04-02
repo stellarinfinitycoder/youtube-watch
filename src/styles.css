@@ -1596,7 +1596,7 @@ body {
   margin: 0;
   white-space: pre-wrap;
   color: var(--text);
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.55;
 }
 
@@ -1607,7 +1607,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.5;
 }
 
