@@ -6196,6 +6196,14 @@ function App() {
               <div className="speed-controls-left">
                 <Button
                   htmlType="button"
+                  className="video-watch-btn modal-save-btn modal-fullscreen-btn"
+                  aria-label="Toggle fullscreen"
+                  onClick={toggleVideoFullscreen}
+                >
+                  <span className="btn-icon btn-icon-fullscreen" aria-hidden />
+                </Button>
+                <Button
+                  htmlType="button"
                   className={`column-move-btn link-copy-btn ${
                     copiedLinkVideoId === activeVideo.videoId ? "is-copied" : ""
                   }`}
@@ -6220,14 +6228,6 @@ function App() {
                   onClick={markWatchedAndAdvanceOrClose}
                 >
                   <span className="btn-icon btn-icon-check" aria-hidden />
-                </Button>
-                <Button
-                  htmlType="button"
-                  className="video-watch-btn modal-fullscreen-btn"
-                  aria-label="Toggle fullscreen"
-                  onClick={toggleVideoFullscreen}
-                >
-                  F
                 </Button>
                 {isPlaylistActive ? (
                   <Text className="playlist-progress-text">

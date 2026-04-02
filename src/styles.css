@@ -895,6 +895,11 @@ body {
   mask: url("/svg/btn-transcript.svg") center / contain no-repeat;
 }
 
+.btn-icon-fullscreen {
+  -webkit-mask: url("/svg/btn-fullscreen.svg") center / contain no-repeat;
+  mask: url("/svg/btn-fullscreen.svg") center / contain no-repeat;
+}
+
 .board-option-edit-btn .btn-icon {
   width: 14px;
   height: 14px;
@@ -1453,6 +1458,10 @@ body {
   padding-top: 28px !important;
 }
 
+.video-player-modal .ant-modal-title {
+  color: var(--amber) !important;
+}
+
 .video-player-modal .ant-modal-close {
   top: 4px !important;
   right: 8px !important;
@@ -1508,6 +1517,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--amber);
 }
 
 .transcript-modal-header-controls {
