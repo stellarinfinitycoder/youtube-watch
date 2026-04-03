@@ -51,6 +51,7 @@ const SUMMARY_PROMPT_STORAGE_KEY = "youtube-watch:summary-prompt:v1";
 const SUMMARY_FORMATS_STORAGE_KEY = "youtube-watch:summary-formats:v1";
 const DEFAULT_SUMMARY_FORMAT_ID = "summary-default";
 const NEW_SUMMARY_FORMAT_OPTION = "__new_summary_format__";
+const ALL_SUMMARY_FORMATS_OPTION = "__all_summary_formats__";
 const SUMMARY_MODE_OPTION_PREFIX = "summary:";
 const DEFAULT_SUMMARY_PROMPT = [
   "Focus on practical takeaways.",
@@ -1028,6 +1029,36 @@ function normalizeStoredSummaryFormats(input: unknown): SummaryFormat[] {
 
 function getDefaultSummaryFormat(formats: SummaryFormat[]): SummaryFormat {
   return formats.find((item) => item.isDefault) ?? formats[0] ?? createDefaultSummaryFormat();
+}
+
+function buildAllFormatsCombinedPrompt(formats: SummaryFormat[]): string {
+  const normalizedFormats = formats
+    .map((format) => ({
+      id: format.id.trim(),
+      name: format.name.trim() || "FORMAT",
+      prompt: format.prompt.trim()
+    }))
+    .filter((format) => format.id && format.prompt);
+
+  const instructionBlock = normalizedFormats
+    .map(
+      (format, index) =>
+        `${index + 1}. ${format.name}\nInstruction: ${format.prompt}`
+    )
+    .join("\n\n");
+
+  return [
+    "Generate one combined response containing all requested formats.",
+    "Use only transcript content. No fabricated facts.",
+    "Return plain markdown text only.",
+    "For each format, output:",
+    "- A heading: ## <FORMAT NAME>",
+    "- Then the formatted content based on its instruction.",
+    "Do not add any preface or footer.",
+    "",
+    "Formats:",
+    instructionBlock
+  ].join("\n");
 }
 
 function hashText(value: string): string {
@@ -2299,6 +2330,7 @@ function App() {
   const [activeSummaryFormatId, setActiveSummaryFormatId] = useState<string>(() =>
     getDefaultSummaryFormat(readStoredSummaryFormats()).id
   );
+  const [isAllSummaryFormatsMode, setIsAllSummaryFormatsMode] = useState(false);
   const [isSummaryPromptEditMode, setIsSummaryPromptEditMode] = useState(false);
   const [editingSummaryFormatId, setEditingSummaryFormatId] = useState<string | null>(null);
   const [summaryFormatNameDraft, setSummaryFormatNameDraft] = useState<string>("");
@@ -2326,7 +2358,9 @@ function App() {
   const activeSummaryFormat =
     summaryFormats.find((item) => item.id === activeSummaryFormatId) ??
     getDefaultSummaryFormat(summaryFormats);
-  const activeSummaryPrompt = activeSummaryFormat.prompt;
+  const activeSummaryPrompt = isAllSummaryFormatsMode
+    ? buildAllFormatsCombinedPrompt(summaryFormats)
+    : activeSummaryFormat.prompt;
   const displayedBoards = [
     ...boards.filter((board) => board.kind !== "saved"),
     ...boards.filter((board) => board.kind === "saved")
@@ -3755,6 +3789,7 @@ function App() {
     }
     setTranscriptSourceHandle(normalizedSourceHandle);
     const defaultSummaryFormat = getDefaultSummaryFormat(summaryFormats);
+    setIsAllSummaryFormatsMode(false);
     setActiveSummaryFormatId(defaultSummaryFormat.id);
     setEditingSummaryFormatId(defaultSummaryFormat.id);
     setTranscriptVideo(video);
@@ -3933,6 +3968,7 @@ function App() {
     if (!format) {
       return;
     }
+    setIsAllSummaryFormatsMode(false);
     setActiveSummaryFormatId(format.id);
     setEditingSummaryFormatId(format.id);
     setSummaryFormatNameDraft(format.name);
@@ -3954,11 +3990,30 @@ function App() {
   ): Promise<void> => {
     setPublishSummaryFeedback(null);
     if (mode === NEW_SUMMARY_FORMAT_OPTION) {
+      setIsAllSummaryFormatsMode(false);
       setTranscriptViewMode("summary");
       openSummaryFormatEditor(null);
       return;
     }
+    if (mode === ALL_SUMMARY_FORMATS_OPTION) {
+      setIsAllSummaryFormatsMode(true);
+      setIsSummaryPromptEditMode(false);
+      setTranscriptViewMode("summary");
+      setSummaryText("");
+      setSummaryKeyPoints([]);
+      setSummaryError(null);
+      setSummaryModel("");
+      if (!transcriptLoading && !transcriptError && transcriptText.trim().length > 0) {
+        await loadSummary({
+          force: false,
+          allowFetch: true,
+          promptOverride: buildAllFormatsCombinedPrompt(summaryFormats)
+        });
+      }
+      return;
+    }
     if (mode === "transcript") {
+      setIsAllSummaryFormatsMode(false);
       setIsSummaryPromptEditMode(false);
       if (transcriptViewMode === "transcript") {
         return;
@@ -3980,6 +4035,9 @@ function App() {
 
   const handleSummaryPromptEditToggle = (): void => {
     setPublishSummaryFeedback(null);
+    if (isAllSummaryFormatsMode) {
+      return;
+    }
     const nextOpen = !isSummaryPromptEditMode;
     setIsSummaryPromptEditMode(nextOpen);
     if (nextOpen) {
@@ -4028,6 +4086,7 @@ function App() {
         isDefault: nextDefault ? format.id === newFormat.id : format.isDefault
       }));
       setSummaryFormats(normalizeStoredSummaryFormats(nextFormats));
+      setIsAllSummaryFormatsMode(false);
       setActiveSummaryFormatId(newFormat.id);
       setEditingSummaryFormatId(newFormat.id);
       setSummaryFormatNameDraft(newFormat.name);
@@ -4074,6 +4133,7 @@ function App() {
     });
     const normalizedFormats = normalizeStoredSummaryFormats(nextFormats);
     setSummaryFormats(normalizedFormats);
+    setIsAllSummaryFormatsMode(false);
     setActiveSummaryFormatId(baseFormat.id);
     setEditingSummaryFormatId(baseFormat.id);
     setSummaryFormatNameDraft(nextName);
@@ -4105,6 +4165,7 @@ function App() {
     }
     const normalizedFormats = normalizeStoredSummaryFormats(nextFormats);
     setSummaryFormats(normalizedFormats);
+    setIsAllSummaryFormatsMode(false);
     const defaultFormat = getDefaultSummaryFormat(normalizedFormats);
     setActiveSummaryFormatId(defaultFormat.id);
     setEditingSummaryFormatId(defaultFormat.id);
@@ -6290,6 +6351,8 @@ function App() {
                   value={
                     transcriptViewMode === "transcript"
                       ? "transcript"
+                      : isAllSummaryFormatsMode
+                      ? ALL_SUMMARY_FORMATS_OPTION
                       : `${SUMMARY_MODE_OPTION_PREFIX}${activeSummaryFormat.id}`
                   }
                   onChange={(value) => void handleTranscriptViewModeChange(value)}
@@ -6297,6 +6360,7 @@ function App() {
                   className="video-filter-select transcript-mode-select"
                   options={[
                     { value: "transcript", label: "TRANSCRIPT" },
+                    { value: ALL_SUMMARY_FORMATS_OPTION, label: "ALL FORMATS" },
                     ...summaryFormats.map((format) => ({
                       value: `${SUMMARY_MODE_OPTION_PREFIX}${format.id}`,
                       label: format.name.toUpperCase()
@@ -6343,6 +6407,7 @@ function App() {
                   aria-label="Edit summary prompt"
                   onClick={handleSummaryPromptEditToggle}
                   disabled={
+                    isAllSummaryFormatsMode ||
                     transcriptViewMode === "transcript" ||
                     isSummaryBusy ||
                     transcriptLoading ||
