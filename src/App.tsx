@@ -6349,7 +6349,9 @@ function App() {
               <div className="transcript-modal-header-controls">
                 <Select<string>
                   value={
-                    transcriptViewMode === "transcript"
+                    isSummaryPromptEditMode && editingSummaryFormatId === null
+                      ? NEW_SUMMARY_FORMAT_OPTION
+                      : transcriptViewMode === "transcript"
                       ? "transcript"
                       : isAllSummaryFormatsMode
                       ? ALL_SUMMARY_FORMATS_OPTION
