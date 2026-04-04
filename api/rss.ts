@@ -50,6 +50,19 @@ function getCanonicalYoutubeUrl(item: { videoId?: string; videoUrl?: string }): 
   return "";
 }
 
+function sanitizeSummaryForRss(summary: string): string {
+  const withoutUrlLines = summary
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .filter((line) => !/^https?:\/\/\S+$/i.test(line.trim()))
+    .join("\n");
+
+  return withoutUrlLines
+    .replace(/\s*https?:\/\/(?:www\.)?(youtube\.com|youtu\.be)\/\S+/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== "GET") {
     res.status(405).send("Method not allowed");
@@ -84,7 +97,8 @@ export default async function handler(req: any, res: any) {
       .map((item) => {
         const itemLink = getCanonicalYoutubeUrl(item);
         const thumbnailUrl = getRssThumbnailUrl(item);
-        const encodedDescription = `<p>${escapeXml(item.summary)}</p>`;
+        const summaryForRss = sanitizeSummaryForRss(item.summary);
+        const encodedDescription = `<p>${escapeXml(summaryForRss)}</p>`;
         const encodedHtml =
           thumbnailUrl.length > 0
             ? [
