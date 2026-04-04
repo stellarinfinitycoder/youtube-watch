@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -219,6 +219,48 @@ type YouTubePlayerStateChangeEvent = {
   target: YouTubePlayer;
   data: number;
 };
+
+type LazyRenderProps = {
+  children: ReactNode;
+  minHeight?: number;
+  className?: string;
+};
+
+function LazyRender({ children, minHeight = 320, className }: LazyRenderProps) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (isVisible) {
+      return;
+    }
+
+    const node = rootRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting || entry.intersectionRatio > 0)) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { root: null, rootMargin: "700px 0px", threshold: 0.01 }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isVisible]);
+
+  return (
+    <div ref={rootRef} className={className}>
+      {isVisible ? children : <div className="video-tile-placeholder" style={{ minHeight }} />}
+    </div>
+  );
+}
 
 type YouTubeNamespace = {
   Player: new (
@@ -1085,6 +1127,32 @@ function looksLikeMarkdown(value: string): boolean {
     /`[^`]+`/.test(text) ||
     /^>\s/m.test(text)
   );
+}
+
+function preserveTreeBlocksInMarkdown(value: string): string {
+  const lines = value.replace(/\r\n/g, "\n").split("\n");
+  const isTreeLine = (line: string): boolean => /[│├└─]/.test(line) || /^\s*\|/.test(line);
+  const chunks: string[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    if (!isTreeLine(lines[index])) {
+      chunks.push(lines[index]);
+      index += 1;
+      continue;
+    }
+
+    const treeLines: string[] = [];
+    while (index < lines.length && isTreeLine(lines[index])) {
+      treeLines.push(lines[index]);
+      index += 1;
+    }
+    chunks.push("```text");
+    chunks.push(...treeLines);
+    chunks.push("```");
+  }
+
+  return chunks.join("\n");
 }
 
 function readCachedTranscript(videoId: string): string | null {
@@ -2336,6 +2404,12 @@ function App() {
   const [summaryFormatNameDraft, setSummaryFormatNameDraft] = useState<string>("");
   const [summaryPromptDraft, setSummaryPromptDraft] = useState<string>("");
   const [summaryFormatDefaultDraft, setSummaryFormatDefaultDraft] = useState<boolean>(false);
+  const bulkInputDraftRef = useRef("");
+  const renameBoardInputDraftRef = useRef("");
+  const savedListNameDraftRef = useRef("");
+  const channelNameDraftRef = useRef("");
+  const summaryFormatNameDraftRef = useRef("");
+  const summaryPromptDraftRef = useRef("");
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
   const [playlistIndex, setPlaylistIndex] = useState<number>(-1);
   const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
@@ -2432,9 +2506,10 @@ function App() {
     ? normalizeVideoWindowFilterForKind(activeBoard.kind, activeBoard.videoWindowDays)
     : DEFAULT_VIDEO_WINDOW_DAYS;
   const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
-  const columnScopeFilter = normalizeColumnScopeFilter(
-    activeBoard?.columnScopeFilter ?? [COLUMN_SCOPE_ALL],
-    columns
+  const columnScopeFilter = useMemo(
+    () =>
+      normalizeColumnScopeFilter(activeBoard?.columnScopeFilter ?? [COLUMN_SCOPE_ALL], columns),
+    [activeBoard?.columnScopeFilter, columns]
   );
   const quotaEstimateText = `LAST Q: ${quotaEstimate.lastActionUnits} | TODAY: ${quotaEstimate.todayUnits}`;
   const topbarLastFetchLabel = activeBoard
@@ -2454,78 +2529,111 @@ function App() {
         }, null)
       )
     : "-";
-  const shownVideoCountByColumnId = new Map<string, number>();
-  const getShownVideosForColumn = (column: ColumnState, now: number): VideoItem[] => {
+  const filteredVideosByColumnId = useMemo(() => {
+    const nextMap = new Map<string, VideoItem[]>();
     if (!activeBoard) {
-      return [];
+      return nextMap;
     }
-    const sourceVideos =
-      activeBoard.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
-    return sourceVideos.filter((video) => {
-      if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
-        return false;
-      }
-      if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
-        return false;
-      }
-      const isWatched = watchedVideos[video.videoId] === true;
-      if (videoFilter === "all") {
-        return true;
-      }
-      if (videoFilter === "watched") {
-        return isWatched;
-      }
-      return !isWatched;
-    });
-  };
-  if (activeBoard) {
     const now = Date.now();
     columns.forEach((column) => {
-      const shownCount = getShownVideosForColumn(column, now).length;
-      shownVideoCountByColumnId.set(column.id, shownCount);
+      const sourceVideos = activeBoard.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
+      const filteredVideos = sourceVideos.filter((video) => {
+        if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
+          return false;
+        }
+        if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
+          return false;
+        }
+        const isWatched = watchedVideos[video.videoId] === true;
+        if (videoFilter === "all") {
+          return true;
+        }
+        if (videoFilter === "watched") {
+          return isWatched;
+        }
+        return !isWatched;
+      });
+      nextMap.set(column.id, filteredVideos);
     });
-  }
-  const scopedColumns =
-    columnScopeFilter.includes(COLUMN_SCOPE_ALL)
-      ? columns
-      : columnScopeFilter.includes(COLUMN_SCOPE_NOT_EMPTY)
-      ? columns.filter((column) => (shownVideoCountByColumnId.get(column.id) ?? 0) > 0)
-      : columns.filter((column) => columnScopeFilter.includes(column.id));
-  const visibleColumns = scopedColumns;
-  const shownVideosTotal = visibleColumns.reduce(
-    (total, column) => total + (shownVideoCountByColumnId.get(column.id) ?? 0),
-    0
+    return nextMap;
+  }, [activeBoard, columns, videoWindowDays, videoDurationFilter, watchedVideos, videoFilter]);
+
+  const shownVideoCountByColumnId = useMemo(() => {
+    const nextMap = new Map<string, number>();
+    columns.forEach((column) => {
+      nextMap.set(column.id, filteredVideosByColumnId.get(column.id)?.length ?? 0);
+    });
+    return nextMap;
+  }, [columns, filteredVideosByColumnId]);
+
+  const visibleColumns = useMemo(() => {
+    if (columnScopeFilter.includes(COLUMN_SCOPE_ALL)) {
+      return columns;
+    }
+    if (columnScopeFilter.includes(COLUMN_SCOPE_NOT_EMPTY)) {
+      return columns.filter((column) => (shownVideoCountByColumnId.get(column.id) ?? 0) > 0);
+    }
+    return columns.filter((column) => columnScopeFilter.includes(column.id));
+  }, [columnScopeFilter, columns, shownVideoCountByColumnId]);
+
+  const shownVideosTotal = useMemo(
+    () =>
+      visibleColumns.reduce(
+        (total, column) => total + (shownVideoCountByColumnId.get(column.id) ?? 0),
+        0
+      ),
+    [visibleColumns, shownVideoCountByColumnId]
   );
-  const visibleColumnIdSet = new Set(visibleColumns.map((column) => column.id));
-  const hiddenColumns = isSavedBoardActive
-    ? []
-    : columns.filter((column) => !visibleColumnIdSet.has(column.id));
-  const columnScopeOptions = [
-    {
-      value: COLUMN_SCOPE_ALL,
-      label: isSavedBoardActive ? "ALL LISTS" : "ALL CHANNELS"
-    },
-    {
-      value: COLUMN_SCOPE_NOT_EMPTY,
-      label: "ACTIVE CHANNELS"
-    },
-    ...columns.map((column, index) => {
-      const raw = column.currentHandle.trim() || column.handleInput.trim();
-      const normalized = raw
-        ? raw.startsWith("@")
-          ? raw
+
+  const visibleColumnIdSet = useMemo(
+    () => new Set(visibleColumns.map((column) => column.id)),
+    [visibleColumns]
+  );
+
+  const hiddenColumns = useMemo(
+    () =>
+      isSavedBoardActive
+        ? []
+        : columns.filter((column) => !visibleColumnIdSet.has(column.id)),
+    [isSavedBoardActive, columns, visibleColumnIdSet]
+  );
+
+  const hiddenColumnIdSet = useMemo(
+    () => new Set(hiddenColumns.map((column) => column.id)),
+    [hiddenColumns]
+  );
+  const getShownVideosForColumn = (column: ColumnState, _now?: number): VideoItem[] =>
+    filteredVideosByColumnId.get(column.id) ?? [];
+
+  const columnScopeOptions = useMemo(
+    () => [
+      {
+        value: COLUMN_SCOPE_ALL,
+        label: isSavedBoardActive ? "ALL LISTS" : "ALL CHANNELS"
+      },
+      {
+        value: COLUMN_SCOPE_NOT_EMPTY,
+        label: "ACTIVE CHANNELS"
+      },
+      ...columns.map((column, index) => {
+        const raw = column.currentHandle.trim() || column.handleInput.trim();
+        const normalized = raw
+          ? raw.startsWith("@")
+            ? raw
+            : isSavedBoardActive
+            ? raw
+            : `@${raw}`
           : isSavedBoardActive
-          ? raw
-          : `@${raw}`
-        : isSavedBoardActive
-        ? `LIST ${index + 1}`
-        : `CHANNEL ${index + 1}`;
-      return {
-        value: column.id,
-        label: normalized.toUpperCase()
-      };
-    })
-  ];
+          ? `LIST ${index + 1}`
+          : `CHANNEL ${index + 1}`;
+        return {
+          value: column.id,
+          label: normalized.toUpperCase()
+        };
+      })
+    ],
+    [columns, isSavedBoardActive]
+  );
   const channelScopeDropdownListHeight =
     Math.min(columnScopeOptions.length, CHANNEL_SCOPE_DROPDOWN_MAX_VISIBLE) *
       BOARD_DROPDOWN_ITEM_HEIGHT +
@@ -3305,6 +3413,7 @@ function App() {
       return;
     }
     setBulkInput("");
+    bulkInputDraftRef.current = "";
     setIsBulkModalOpen(true);
   };
 
@@ -3362,7 +3471,7 @@ function App() {
       return;
     }
     if (activeBoard.kind === "saved") {
-      const names = parseBulkListNames(bulkInput);
+      const names = parseBulkListNames(bulkInputDraftRef.current || bulkInput);
       const createdNames =
         names.length > 0
           ? names
@@ -3379,13 +3488,15 @@ function App() {
       scrollToColumnsEndSoon();
       setIsBulkModalOpen(false);
       setBulkInput("");
+      bulkInputDraftRef.current = "";
       return;
     }
 
-    const handles = parseBulkHandles(bulkInput);
+    const handles = parseBulkHandles(bulkInputDraftRef.current || bulkInput);
     if (handles.length === 0) {
       setIsBulkModalOpen(false);
       setBulkInput("");
+      bulkInputDraftRef.current = "";
       return;
     }
 
@@ -3410,6 +3521,7 @@ function App() {
     );
     setIsBulkModalOpen(false);
     setBulkInput("");
+    bulkInputDraftRef.current = "";
   };
 
   const fetchAllColumns = (): void => {
@@ -3797,6 +3909,8 @@ function App() {
     setIsSummaryPromptEditMode(false);
     setSummaryFormatNameDraft(defaultSummaryFormat.name);
     setSummaryPromptDraft(defaultSummaryFormat.prompt);
+    summaryFormatNameDraftRef.current = defaultSummaryFormat.name;
+    summaryPromptDraftRef.current = defaultSummaryFormat.prompt;
     setSummaryFormatDefaultDraft(defaultSummaryFormat.isDefault);
     setTranscriptLoading(true);
     setTranscriptError(null);
@@ -3959,6 +4073,8 @@ function App() {
     setEditingSummaryFormatId(format?.id ?? null);
     setSummaryFormatNameDraft(format?.name ?? "");
     setSummaryPromptDraft(format?.prompt ?? "");
+    summaryFormatNameDraftRef.current = format?.name ?? "";
+    summaryPromptDraftRef.current = format?.prompt ?? "";
     setSummaryFormatDefaultDraft(format?.isDefault ?? false);
     setIsSummaryPromptEditMode(true);
   };
@@ -3973,6 +4089,8 @@ function App() {
     setEditingSummaryFormatId(format.id);
     setSummaryFormatNameDraft(format.name);
     setSummaryPromptDraft(format.prompt);
+    summaryFormatNameDraftRef.current = format.name;
+    summaryPromptDraftRef.current = format.prompt;
     setSummaryFormatDefaultDraft(format.isDefault);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
@@ -4054,8 +4172,9 @@ function App() {
 
   const saveSummaryPromptAndClose = async (): Promise<void> => {
     setPublishSummaryFeedback(null);
-    const nextName = summaryFormatNameDraft.trim();
-    const nextPrompt = summaryPromptDraft.trim() || DEFAULT_SUMMARY_PROMPT;
+    const nextName = (summaryFormatNameDraftRef.current || summaryFormatNameDraft).trim();
+    const nextPrompt =
+      (summaryPromptDraftRef.current || summaryPromptDraft).trim() || DEFAULT_SUMMARY_PROMPT;
     const nextDefault = summaryFormatDefaultDraft;
     if (!nextName) {
       return;
@@ -4090,6 +4209,8 @@ function App() {
       setActiveSummaryFormatId(newFormat.id);
       setEditingSummaryFormatId(newFormat.id);
       setSummaryFormatNameDraft(newFormat.name);
+      summaryFormatNameDraftRef.current = newFormat.name;
+      summaryPromptDraftRef.current = newFormat.prompt;
       setIsSummaryPromptEditMode(false);
       setTranscriptViewMode("summary");
       setSummaryText("");
@@ -4109,6 +4230,8 @@ function App() {
     if (hasNoChanges) {
       setSummaryFormatNameDraft(baseFormat.name);
       setSummaryPromptDraft(baseFormat.prompt);
+      summaryFormatNameDraftRef.current = baseFormat.name;
+      summaryPromptDraftRef.current = baseFormat.prompt;
       setSummaryFormatDefaultDraft(baseFormat.isDefault);
       setEditingSummaryFormatId(baseFormat.id);
       setIsSummaryPromptEditMode(false);
@@ -4138,6 +4261,8 @@ function App() {
     setEditingSummaryFormatId(baseFormat.id);
     setSummaryFormatNameDraft(nextName);
     setSummaryPromptDraft(nextPrompt);
+    summaryFormatNameDraftRef.current = nextName;
+    summaryPromptDraftRef.current = nextPrompt;
     setSummaryFormatDefaultDraft(nextDefault);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
@@ -4171,6 +4296,8 @@ function App() {
     setEditingSummaryFormatId(defaultFormat.id);
     setSummaryFormatNameDraft(defaultFormat.name);
     setSummaryPromptDraft(defaultFormat.prompt);
+    summaryFormatNameDraftRef.current = defaultFormat.name;
+    summaryPromptDraftRef.current = defaultFormat.prompt;
     setSummaryFormatDefaultDraft(defaultFormat.isDefault);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
@@ -4728,6 +4855,7 @@ function App() {
     }
     setEditingBoardId(targetBoard.id);
     setRenameBoardInput(targetBoard.name);
+    renameBoardInputDraftRef.current = targetBoard.name;
     setIsRenameBoardModalOpen(true);
   };
 
@@ -4736,7 +4864,7 @@ function App() {
     if (!targetBoardId) {
       return;
     }
-    const nextName = renameBoardInput.trim().slice(0, 15);
+    const nextName = (renameBoardInputDraftRef.current || renameBoardInput).trim().slice(0, 15);
     if (nextName.length === 0) {
       return;
     }
@@ -4899,18 +5027,20 @@ function App() {
   const openEditSavedListModal = (column: ColumnState): void => {
     setEditingSavedListColumnId(column.id);
     setSavedListNameInput(column.handleInput);
+    savedListNameDraftRef.current = column.handleInput;
   };
 
   const openEditChannelModal = (column: ColumnState): void => {
     setEditingChannelColumnId(column.id);
     setChannelNameInput(column.handleInput);
+    channelNameDraftRef.current = column.handleInput;
   };
 
   const confirmEditSavedListName = (): void => {
     if (!activeBoard || activeBoard.kind !== "saved" || !editingSavedListColumnId) {
       return;
     }
-    const nextName = savedListNameInput.trim();
+    const nextName = (savedListNameDraftRef.current || savedListNameInput).trim();
     if (nextName.length === 0) {
       return;
     }
@@ -4920,6 +5050,7 @@ function App() {
     }));
     setEditingSavedListColumnId(null);
     setSavedListNameInput("");
+    savedListNameDraftRef.current = "";
   };
 
   const confirmEditChannelName = (): void => {
@@ -4929,7 +5060,7 @@ function App() {
     const currentColumn = activeBoard.columns.find(
       (column) => column.id === editingChannelColumnId
     );
-    const nextName = channelNameInput.trim();
+    const nextName = (channelNameDraftRef.current || channelNameInput).trim();
     if (nextName.length === 0) {
       return;
     }
@@ -4945,6 +5076,7 @@ function App() {
     }
     setEditingChannelColumnId(null);
     setChannelNameInput("");
+    channelNameDraftRef.current = "";
   };
 
   const openSaveVideoModal = (video: VideoItem): void => {
@@ -6185,7 +6317,10 @@ function App() {
       <Modal
         title={isSavedBoardActive ? "Add Lists" : "Add Channels"}
         open={isBulkModalOpen}
-        onCancel={() => setIsBulkModalOpen(false)}
+        onCancel={() => {
+          setIsBulkModalOpen(false);
+          bulkInputDraftRef.current = bulkInput;
+        }}
         onOk={handleBulkAddConfirm}
         afterOpenChange={(open) => {
           if (open) {
@@ -6196,8 +6331,11 @@ function App() {
         className="add-channels-modal"
       >
         <Input.TextArea
-          value={bulkInput}
-          onChange={(event) => setBulkInput(event.target.value)}
+          key={`bulk-input-${isBulkModalOpen ? "open" : "closed"}-${activeBoardId}`}
+          defaultValue={bulkInput}
+          onChange={(event) => {
+            bulkInputDraftRef.current = event.target.value;
+          }}
           autoSize={{ minRows: 6, maxRows: 12 }}
           placeholder={
             isSavedBoardActive
@@ -6479,6 +6617,8 @@ function App() {
           setEditingSummaryFormatId(activeSummaryFormat.id);
           setSummaryFormatNameDraft(activeSummaryFormat.name);
           setSummaryPromptDraft(activeSummaryFormat.prompt);
+          summaryFormatNameDraftRef.current = activeSummaryFormat.name;
+          summaryPromptDraftRef.current = activeSummaryFormat.prompt;
           setSummaryFormatDefaultDraft(activeSummaryFormat.isDefault);
         }}
         footer={null}
@@ -6490,14 +6630,20 @@ function App() {
           {isSummaryPromptEditMode ? (
             <div className="summary-prompt-editor">
               <Input
-                value={summaryFormatNameDraft}
-                onChange={(event) => setSummaryFormatNameDraft(event.target.value)}
+                key={`summary-name-${editingSummaryFormatId ?? "new"}-${isSummaryPromptEditMode ? "open" : "closed"}`}
+                defaultValue={summaryFormatNameDraft}
+                onChange={(event) => {
+                  summaryFormatNameDraftRef.current = event.target.value;
+                }}
                 placeholder="Name"
                 maxLength={20}
               />
               <Input.TextArea
-                value={summaryPromptDraft}
-                onChange={(event) => setSummaryPromptDraft(event.target.value)}
+                key={`summary-prompt-${editingSummaryFormatId ?? "new"}-${isSummaryPromptEditMode ? "open" : "closed"}`}
+                defaultValue={summaryPromptDraft}
+                onChange={(event) => {
+                  summaryPromptDraftRef.current = event.target.value;
+                }}
                 autoSize={{ minRows: 8, maxRows: 18 }}
                 placeholder="Enter plain summary instructions (style/focus)."
               />
@@ -6526,6 +6672,8 @@ function App() {
                       setEditingSummaryFormatId(activeSummaryFormat.id);
                       setSummaryFormatNameDraft(activeSummaryFormat.name);
                       setSummaryPromptDraft(activeSummaryFormat.prompt);
+                      summaryFormatNameDraftRef.current = activeSummaryFormat.name;
+                      summaryPromptDraftRef.current = activeSummaryFormat.prompt;
                       setSummaryFormatDefaultDraft(activeSummaryFormat.isDefault);
                     }}
                   >
@@ -6562,6 +6710,16 @@ function App() {
                         ? summaryKeyPoints.map((point) => `- ${point}`).join("\n")
                         : "";
                     const combined = [summaryText, pointsBlock].filter(Boolean).join("\n\n").trim();
+                    if (isAllSummaryFormatsMode) {
+                      const combinedWithTreeBlocks = preserveTreeBlocksInMarkdown(combined);
+                      return (
+                        <div className="summary-markdown summary-combined-markdown">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {combinedWithTreeBlocks}
+                          </ReactMarkdown>
+                        </div>
+                      );
+                    }
                     const markdownMode = looksLikeMarkdown(combined);
                     if (!markdownMode) {
                       return (
@@ -6598,7 +6756,6 @@ function App() {
         <div className="columns-layout">
           <section className="columns-grid">
             {visibleColumns.map((column, index) => {
-              const now = Date.now();
               const brokenThumbKey = `${activeBoardId}:${column.id}`;
               const channelThumbToShow =
                 isSavedBoardActive
@@ -6607,27 +6764,7 @@ function App() {
                   ? column.videos[0]?.thumbnailUrl ?? ""
                   : column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
               const hasHandleInput = column.handleInput.trim().length > 0;
-              const sortedColumnVideos =
-                isSavedBoardActive ? sortSavedVideosByMode(column) : column.videos;
-
-              const filteredVideos = sortedColumnVideos.filter((video) => {
-                if (
-                  !matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)
-                ) {
-                  return false;
-                }
-                if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
-                  return false;
-                }
-                const isWatched = watchedVideos[video.videoId] === true;
-                if (videoFilter === "all") {
-                  return true;
-                }
-                if (videoFilter === "watched") {
-                  return isWatched;
-                }
-                return !isWatched;
-              });
+              const filteredVideos = filteredVideosByColumnId.get(column.id) ?? [];
               const manualOrderIndexByVideoId =
                 isSavedBoardActive && column.savedSortMode === "manual"
                   ? new Map(filteredVideos.map((video, index) => [video.videoId, index]))
@@ -6643,7 +6780,7 @@ function App() {
                   data-board-id={activeBoardId}
                   data-column-id={column.id}
                   data-handle={(column.currentHandle || column.handleInput || "").trim()}
-                  data-hidden={hiddenColumns.some((item) => item.id === column.id) ? "true" : "false"}
+                  data-hidden={hiddenColumnIdSet.has(column.id) ? "true" : "false"}
                 >
                   <div className="column-actions">
                     <div className="column-actions-left">
@@ -6910,7 +7047,8 @@ function App() {
                             data-handle={(column.currentHandle || column.handleInput || "").trim()}
                             data-state={isWatched ? "watched" : "new"}
                           >
-                            <Space direction="vertical" size="small" className="full-width">
+                            <LazyRender minHeight={320} className="full-width">
+                              <Space direction="vertical" size="small" className="full-width">
                               <div className="video-meta-row">
                                 <button
                                   type="button"
@@ -7093,7 +7231,8 @@ function App() {
                                   {video.title}
                                 </Title>
                               </button>
-                            </Space>
+                              </Space>
+                            </LazyRender>
                           </List.Item>
                         );
                       }}
@@ -7291,6 +7430,7 @@ function App() {
         onCancel={() => {
           setEditingBoardId(null);
           setIsRenameBoardModalOpen(false);
+          renameBoardInputDraftRef.current = "";
         }}
         onOk={confirmRenameBoard}
         okText="Save"
@@ -7318,8 +7458,11 @@ function App() {
         )}
       >
         <Input
-          value={renameBoardInput}
-          onChange={(event) => setRenameBoardInput(event.target.value)}
+          key={`rename-board-${isRenameBoardModalOpen ? "open" : "closed"}-${editingBoard?.id ?? "none"}`}
+          defaultValue={renameBoardInput}
+          onChange={(event) => {
+            renameBoardInputDraftRef.current = event.target.value;
+          }}
           onPressEnter={(event) => {
             event.preventDefault();
             confirmRenameBoard();
@@ -7370,14 +7513,18 @@ function App() {
         onCancel={() => {
           setEditingSavedListColumnId(null);
           setSavedListNameInput("");
+          savedListNameDraftRef.current = "";
         }}
         onOk={confirmEditSavedListName}
         okText="Save"
         width={360}
       >
         <Input
-          value={savedListNameInput}
-          onChange={(event) => setSavedListNameInput(event.target.value)}
+          key={`saved-list-${editingSavedListColumnId ?? "none"}-${editingSavedListColumnId !== null ? "open" : "closed"}`}
+          defaultValue={savedListNameInput}
+          onChange={(event) => {
+            savedListNameDraftRef.current = event.target.value;
+          }}
           onPressEnter={(event) => {
             event.preventDefault();
             confirmEditSavedListName();
@@ -7394,14 +7541,18 @@ function App() {
         onCancel={() => {
           setEditingChannelColumnId(null);
           setChannelNameInput("");
+          channelNameDraftRef.current = "";
         }}
         onOk={confirmEditChannelName}
         okText="Save"
         width={360}
       >
         <Input
-          value={channelNameInput}
-          onChange={(event) => setChannelNameInput(event.target.value)}
+          key={`channel-name-${editingChannelColumnId ?? "none"}-${editingChannelColumnId !== null ? "open" : "closed"}`}
+          defaultValue={channelNameInput}
+          onChange={(event) => {
+            channelNameDraftRef.current = event.target.value;
+          }}
           onPressEnter={(event) => {
             event.preventDefault();
             confirmEditChannelName();
