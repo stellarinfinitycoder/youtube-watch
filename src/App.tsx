@@ -59,6 +59,15 @@ const DEFAULT_SUMMARY_PROMPT = [
   "Highlight important risks and decisions."
 ].join(" ");
 const DEFAULT_SUMMARY_FORMAT_NAME = "SUMMARY";
+const SUMMARY_MODEL_PRESETS: Array<{ value: string; label: string }> = [
+  { value: "", label: "DEFAULT (ENV)" },
+  { value: "openai/gpt-4o-mini", label: "OPENAI GPT-4O-MINI" },
+  { value: "google/gemini-2.5-flash-lite", label: "GEMINI 2.5 FLASH-LITE" },
+  { value: "google/gemini-2.5-flash", label: "GEMINI 2.5 FLASH" },
+  { value: "qwen/qwen3.6-plus:free", label: "QWEN 3.6 PLUS FREE" },
+  { value: "nvidia/nemotron-3-super-120b-a12b:free", label: "NEMOTRON FREE" },
+  { value: "minimax/minimax-m2.7", label: "MINIMAX M2.7" }
+];
 const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 const LEGACY_WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
@@ -92,6 +101,7 @@ type SummaryFormat = {
   id: string;
   name: string;
   prompt: string;
+  model: string;
   isDefault: boolean;
   createdAt: number;
   updatedAt: number;
@@ -1017,6 +1027,7 @@ function createDefaultSummaryFormat(promptOverride?: string): SummaryFormat {
     id: DEFAULT_SUMMARY_FORMAT_ID,
     name: DEFAULT_SUMMARY_FORMAT_NAME,
     prompt: nextPrompt,
+    model: "",
     isDefault: true,
     createdAt: now,
     updatedAt: now
@@ -1036,6 +1047,7 @@ function normalizeStoredSummaryFormats(input: unknown): SummaryFormat[] {
       const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
       const name = typeof candidate.name === "string" ? candidate.name.trim() : "";
       const prompt = typeof candidate.prompt === "string" ? candidate.prompt.trim() : "";
+      const model = typeof candidate.model === "string" ? candidate.model.trim() : "";
       if (!id || !name || !prompt) {
         return null;
       }
@@ -1043,6 +1055,7 @@ function normalizeStoredSummaryFormats(input: unknown): SummaryFormat[] {
         id,
         name,
         prompt,
+        model,
         isDefault: candidate.isDefault === true,
         createdAt:
           typeof candidate.createdAt === "number" && Number.isFinite(candidate.createdAt)
@@ -2357,6 +2370,7 @@ function App() {
   const [channelNameInput, setChannelNameInput] = useState("");
   const [renameBoardInput, setRenameBoardInput] = useState("");
   const [isDeleteBoardModalOpen, setIsDeleteBoardModalOpen] = useState(false);
+  const [isDeleteSummariesModalOpen, setIsDeleteSummariesModalOpen] = useState(false);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   const [isLogoSpinning, setIsLogoSpinning] = useState(false);
   const [errorLogs, setErrorLogs] = useState<ErrorLogEntry[]>(readStoredErrorLogs);
@@ -2403,6 +2417,7 @@ function App() {
   const [editingSummaryFormatId, setEditingSummaryFormatId] = useState<string | null>(null);
   const [summaryFormatNameDraft, setSummaryFormatNameDraft] = useState<string>("");
   const [summaryPromptDraft, setSummaryPromptDraft] = useState<string>("");
+  const [summaryFormatModelDraft, setSummaryFormatModelDraft] = useState<string>("");
   const [summaryFormatDefaultDraft, setSummaryFormatDefaultDraft] = useState<boolean>(false);
   const bulkInputDraftRef = useRef("");
   const renameBoardInputDraftRef = useRef("");
@@ -2410,6 +2425,7 @@ function App() {
   const channelNameDraftRef = useRef("");
   const summaryFormatNameDraftRef = useRef("");
   const summaryPromptDraftRef = useRef("");
+  const summaryFormatModelDraftRef = useRef("");
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
   const [playlistIndex, setPlaylistIndex] = useState<number>(-1);
   const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
@@ -2432,9 +2448,13 @@ function App() {
   const activeSummaryFormat =
     summaryFormats.find((item) => item.id === activeSummaryFormatId) ??
     getDefaultSummaryFormat(summaryFormats);
+  const defaultSummaryFormat = getDefaultSummaryFormat(summaryFormats);
   const activeSummaryPrompt = isAllSummaryFormatsMode
     ? buildAllFormatsCombinedPrompt(summaryFormats)
     : activeSummaryFormat.prompt;
+  const activeSummaryModel = isAllSummaryFormatsMode
+    ? (defaultSummaryFormat.model ?? "").trim()
+    : (activeSummaryFormat.model ?? "").trim();
   const displayedBoards = [
     ...boards.filter((board) => board.kind !== "saved"),
     ...boards.filter((board) => board.kind === "saved")
@@ -2650,13 +2670,16 @@ function App() {
       : null;
   const trimmedSummaryFormatNameDraft = summaryFormatNameDraft.trim();
   const normalizedSummaryPromptDraft = summaryPromptDraft.trim() || DEFAULT_SUMMARY_PROMPT;
+  const normalizedSummaryModelDraft = summaryFormatModelDraft.trim();
   const hasSummaryPromptChanges =
     editingSummaryFormat === null
       ? trimmedSummaryFormatNameDraft.length > 0 &&
         (normalizedSummaryPromptDraft !== DEFAULT_SUMMARY_PROMPT ||
+          normalizedSummaryModelDraft.length > 0 ||
           summaryFormatDefaultDraft !== false)
       : trimmedSummaryFormatNameDraft !== editingSummaryFormat.name ||
         normalizedSummaryPromptDraft !== editingSummaryFormat.prompt ||
+        normalizedSummaryModelDraft !== (editingSummaryFormat.model ?? "") ||
         summaryFormatDefaultDraft !== editingSummaryFormat.isDefault;
   const hasPublishableSummary =
     summaryText.trim().length > 0 ||
@@ -3909,8 +3932,10 @@ function App() {
     setIsSummaryPromptEditMode(false);
     setSummaryFormatNameDraft(defaultSummaryFormat.name);
     setSummaryPromptDraft(defaultSummaryFormat.prompt);
+    setSummaryFormatModelDraft(defaultSummaryFormat.model ?? "");
     summaryFormatNameDraftRef.current = defaultSummaryFormat.name;
     summaryPromptDraftRef.current = defaultSummaryFormat.prompt;
+    summaryFormatModelDraftRef.current = defaultSummaryFormat.model ?? "";
     setSummaryFormatDefaultDraft(defaultSummaryFormat.isDefault);
     setTranscriptLoading(true);
     setTranscriptError(null);
@@ -3964,6 +3989,7 @@ function App() {
   const loadSummary = async (options?: {
     force?: boolean;
     promptOverride?: string;
+    modelOverride?: string;
     allowFetch?: boolean;
   }): Promise<void> => {
     if (!transcriptVideo || transcriptLoading || transcriptError || !transcriptText.trim()) {
@@ -3977,9 +4003,18 @@ function App() {
       typeof options?.promptOverride === "string" && options.promptOverride.trim().length > 0
         ? options.promptOverride.trim()
         : activeSummaryPrompt;
+    const hasExplicitModelOverride =
+      options !== undefined && Object.prototype.hasOwnProperty.call(options, "modelOverride");
+    const modelToUse = hasExplicitModelOverride
+      ? String(options?.modelOverride ?? "").trim()
+      : activeSummaryModel;
 
     if (!options?.force) {
-      const cached = readCachedSummary(transcriptVideo.videoId, transcriptText, promptToUse);
+      const cached = readCachedSummary(
+        transcriptVideo.videoId,
+        transcriptText,
+        `${promptToUse}\n__MODEL__:${modelToUse || ""}`
+      );
       if (cached) {
         setSummaryText(cached.summary);
         setSummaryKeyPoints(cached.keyPoints);
@@ -4004,7 +4039,8 @@ function App() {
         videoUrl: transcriptVideo.videoUrl,
         transcriptText,
         mode: "short",
-        prompt: promptToUse
+        prompt: promptToUse,
+        model: modelToUse || undefined
       });
       const nextSummary = payload.summary.trim();
       const nextKeyPoints = payload.keyPoints
@@ -4017,11 +4053,16 @@ function App() {
       setSummaryText(nextSummary);
       setSummaryKeyPoints(nextKeyPoints);
       setSummaryModel(payload.model);
-      writeCachedSummary(transcriptVideo.videoId, transcriptText, promptToUse, {
-        summary: nextSummary,
-        keyPoints: nextKeyPoints,
-        model: payload.model
-      });
+      writeCachedSummary(
+        transcriptVideo.videoId,
+        transcriptText,
+        `${promptToUse}\n__MODEL__:${modelToUse || ""}`,
+        {
+          summary: nextSummary,
+          keyPoints: nextKeyPoints,
+          model: payload.model
+        }
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Summary failed.";
       setSummaryError(message);
@@ -4064,7 +4105,8 @@ function App() {
     summaryError,
     summaryText,
     summaryKeyPoints,
-    activeSummaryPrompt
+    activeSummaryPrompt,
+    activeSummaryModel
   ]);
 
   const openSummaryFormatEditor = (formatId: string | null): void => {
@@ -4073,8 +4115,10 @@ function App() {
     setEditingSummaryFormatId(format?.id ?? null);
     setSummaryFormatNameDraft(format?.name ?? "");
     setSummaryPromptDraft(format?.prompt ?? "");
+    setSummaryFormatModelDraft(format?.model ?? "");
     summaryFormatNameDraftRef.current = format?.name ?? "";
     summaryPromptDraftRef.current = format?.prompt ?? "";
+    summaryFormatModelDraftRef.current = format?.model ?? "";
     setSummaryFormatDefaultDraft(format?.isDefault ?? false);
     setIsSummaryPromptEditMode(true);
   };
@@ -4089,8 +4133,10 @@ function App() {
     setEditingSummaryFormatId(format.id);
     setSummaryFormatNameDraft(format.name);
     setSummaryPromptDraft(format.prompt);
+    setSummaryFormatModelDraft(format.model ?? "");
     summaryFormatNameDraftRef.current = format.name;
     summaryPromptDraftRef.current = format.prompt;
+    summaryFormatModelDraftRef.current = format.model ?? "";
     setSummaryFormatDefaultDraft(format.isDefault);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
@@ -4099,7 +4145,12 @@ function App() {
     setSummaryError(null);
     setSummaryModel("");
     if (!transcriptLoading && !transcriptError && transcriptText.trim().length > 0) {
-      await loadSummary({ force: false, allowFetch: true, promptOverride: format.prompt });
+      await loadSummary({
+        force: false,
+        allowFetch: true,
+        promptOverride: format.prompt,
+        modelOverride: format.model
+      });
     }
   };
 
@@ -4122,10 +4173,12 @@ function App() {
       setSummaryError(null);
       setSummaryModel("");
       if (!transcriptLoading && !transcriptError && transcriptText.trim().length > 0) {
+        const allFormatsDefault = getDefaultSummaryFormat(summaryFormats);
         await loadSummary({
           force: false,
           allowFetch: true,
-          promptOverride: buildAllFormatsCombinedPrompt(summaryFormats)
+          promptOverride: buildAllFormatsCombinedPrompt(summaryFormats),
+          modelOverride: allFormatsDefault.model ?? ""
         });
       }
       return;
@@ -4175,6 +4228,7 @@ function App() {
     const nextName = (summaryFormatNameDraftRef.current || summaryFormatNameDraft).trim();
     const nextPrompt =
       (summaryPromptDraftRef.current || summaryPromptDraft).trim() || DEFAULT_SUMMARY_PROMPT;
+    const nextModel = (summaryFormatModelDraftRef.current || summaryFormatModelDraft).trim();
     const nextDefault = summaryFormatDefaultDraft;
     if (!nextName) {
       return;
@@ -4196,6 +4250,7 @@ function App() {
         id: `summary-format-${now}`,
         name: nextName,
         prompt: nextPrompt,
+        model: nextModel,
         isDefault: nextDefault,
         createdAt: now,
         updatedAt: now
@@ -4209,15 +4264,21 @@ function App() {
       setActiveSummaryFormatId(newFormat.id);
       setEditingSummaryFormatId(newFormat.id);
       setSummaryFormatNameDraft(newFormat.name);
+      setSummaryFormatModelDraft(newFormat.model ?? "");
       summaryFormatNameDraftRef.current = newFormat.name;
       summaryPromptDraftRef.current = newFormat.prompt;
+      summaryFormatModelDraftRef.current = newFormat.model ?? "";
       setIsSummaryPromptEditMode(false);
       setTranscriptViewMode("summary");
       setSummaryText("");
       setSummaryKeyPoints([]);
       setSummaryError(null);
       setSummaryModel("");
-      await loadSummary({ force: true, promptOverride: nextPrompt });
+      await loadSummary({
+        force: true,
+        promptOverride: nextPrompt,
+        modelOverride: nextModel
+      });
       return;
     }
 
@@ -4226,12 +4287,15 @@ function App() {
     const hasNoChanges =
       baseFormat.name === nextName &&
       baseFormat.prompt === nextPrompt &&
+      (baseFormat.model ?? "") === nextModel &&
       baseFormat.isDefault === nextDefault;
     if (hasNoChanges) {
       setSummaryFormatNameDraft(baseFormat.name);
       setSummaryPromptDraft(baseFormat.prompt);
+      setSummaryFormatModelDraft(baseFormat.model ?? "");
       summaryFormatNameDraftRef.current = baseFormat.name;
       summaryPromptDraftRef.current = baseFormat.prompt;
+      summaryFormatModelDraftRef.current = baseFormat.model ?? "";
       setSummaryFormatDefaultDraft(baseFormat.isDefault);
       setEditingSummaryFormatId(baseFormat.id);
       setIsSummaryPromptEditMode(false);
@@ -4245,6 +4309,7 @@ function App() {
           ...format,
           name: nextName,
           prompt: nextPrompt,
+          model: nextModel,
           isDefault: nextDefault,
           updatedAt: now
         };
@@ -4261,8 +4326,10 @@ function App() {
     setEditingSummaryFormatId(baseFormat.id);
     setSummaryFormatNameDraft(nextName);
     setSummaryPromptDraft(nextPrompt);
+    setSummaryFormatModelDraft(nextModel);
     summaryFormatNameDraftRef.current = nextName;
     summaryPromptDraftRef.current = nextPrompt;
+    summaryFormatModelDraftRef.current = nextModel;
     setSummaryFormatDefaultDraft(nextDefault);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
@@ -4270,7 +4337,11 @@ function App() {
     setSummaryKeyPoints([]);
     setSummaryError(null);
     setSummaryModel("");
-    await loadSummary({ force: true, promptOverride: nextPrompt });
+    await loadSummary({
+      force: true,
+      promptOverride: nextPrompt,
+      modelOverride: nextModel
+    });
   };
 
   const deleteSummaryFormatAndClose = (): void => {
@@ -4296,8 +4367,10 @@ function App() {
     setEditingSummaryFormatId(defaultFormat.id);
     setSummaryFormatNameDraft(defaultFormat.name);
     setSummaryPromptDraft(defaultFormat.prompt);
+    setSummaryFormatModelDraft(defaultFormat.model ?? "");
     summaryFormatNameDraftRef.current = defaultFormat.name;
     summaryPromptDraftRef.current = defaultFormat.prompt;
+    summaryFormatModelDraftRef.current = defaultFormat.model ?? "";
     setSummaryFormatDefaultDraft(defaultFormat.isDefault);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
@@ -4970,6 +5043,29 @@ function App() {
       }
     };
     reader.readAsText(file);
+  };
+
+  const clearAllCachedSummaries = (): void => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const storage = window.localStorage;
+      if (!storage) {
+        return;
+      }
+      const keysToDelete: string[] = [];
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (key && key.startsWith(SUMMARY_CACHE_KEY_PREFIX)) {
+          keysToDelete.push(key);
+        }
+      }
+      keysToDelete.forEach((key) => storage.removeItem(key));
+      setIsDeleteSummariesModalOpen(false);
+    } catch {
+      setIsDeleteSummariesModalOpen(false);
+    }
   };
 
   const saveVideoToSavedColumn = (): void => {
@@ -6477,6 +6573,15 @@ function App() {
               {isPublishingSummary ? (
                 <Text className="video-meta-feedback is-info">PUBLISHING...</Text>
               ) : null}
+              {!transcriptLoading &&
+              !summaryLoading &&
+              !isPublishingSummary &&
+              !publishSummaryFeedback &&
+              transcriptViewMode === "summary" &&
+              !isSummaryPromptEditMode &&
+              summaryModel ? (
+                <Text className="video-meta-feedback is-info">MODEL: {summaryModel}</Text>
+              ) : null}
             </div>
             <div className="transcript-modal-header-row">
               <span className="transcript-modal-header-title">
@@ -6617,8 +6722,10 @@ function App() {
           setEditingSummaryFormatId(activeSummaryFormat.id);
           setSummaryFormatNameDraft(activeSummaryFormat.name);
           setSummaryPromptDraft(activeSummaryFormat.prompt);
+          setSummaryFormatModelDraft(activeSummaryFormat.model ?? "");
           summaryFormatNameDraftRef.current = activeSummaryFormat.name;
           summaryPromptDraftRef.current = activeSummaryFormat.prompt;
+          summaryFormatModelDraftRef.current = activeSummaryFormat.model ?? "";
           setSummaryFormatDefaultDraft(activeSummaryFormat.isDefault);
         }}
         footer={null}
@@ -6647,6 +6754,28 @@ function App() {
                 autoSize={{ minRows: 8, maxRows: 18 }}
                 placeholder="Enter plain summary instructions (style/focus)."
               />
+              <Select<string>
+                value={summaryFormatModelDraft || "__default_model__"}
+                onChange={(value) => {
+                  const nextValue = value === "__default_model__" ? "" : value;
+                  setSummaryFormatModelDraft(nextValue);
+                  summaryFormatModelDraftRef.current = nextValue;
+                }}
+                className="video-filter-select"
+                options={SUMMARY_MODEL_PRESETS.map((preset) => ({
+                  value: preset.value || "__default_model__",
+                  label: preset.label
+                }))}
+              />
+              <Input
+                value={summaryFormatModelDraft}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setSummaryFormatModelDraft(nextValue);
+                  summaryFormatModelDraftRef.current = nextValue;
+                }}
+                placeholder="Custom model ID (optional)"
+              />
               <Checkbox
                 className="summary-default-checkbox"
                 checked={summaryFormatDefaultDraft}
@@ -6672,8 +6801,10 @@ function App() {
                       setEditingSummaryFormatId(activeSummaryFormat.id);
                       setSummaryFormatNameDraft(activeSummaryFormat.name);
                       setSummaryPromptDraft(activeSummaryFormat.prompt);
+                      setSummaryFormatModelDraft(activeSummaryFormat.model ?? "");
                       summaryFormatNameDraftRef.current = activeSummaryFormat.name;
                       summaryPromptDraftRef.current = activeSummaryFormat.prompt;
+                      summaryFormatModelDraftRef.current = activeSummaryFormat.model ?? "";
                       setSummaryFormatDefaultDraft(activeSummaryFormat.isDefault);
                     }}
                   >
@@ -6741,7 +6872,6 @@ function App() {
                       </div>
                     );
                   })()}
-                  {summaryModel ? <Text className="summary-model">MODEL: {summaryModel}</Text> : null}
                 </div>
               ) : null}
             </>
@@ -7337,6 +7467,14 @@ function App() {
         >
           BD
         </Button>
+        <Button
+          htmlType="button"
+          onClick={() => setIsDeleteSummariesModalOpen(true)}
+          aria-label="Delete cached summaries"
+          className="backup-btn backup-btn-text red-outline-btn"
+        >
+          DS
+        </Button>
         <input
           ref={importInputRef}
           type="file"
@@ -7381,6 +7519,18 @@ function App() {
             )}
           />
         )}
+      </Modal>
+
+      <Modal
+        title="Delete Summaries"
+        open={isDeleteSummariesModalOpen}
+        onCancel={() => setIsDeleteSummariesModalOpen(false)}
+        onOk={clearAllCachedSummaries}
+        okText="Delete"
+        okButtonProps={{ danger: true, className: "delete-confirm-ok" }}
+        width={360}
+      >
+        <Text>Delete all cached summaries?</Text>
       </Modal>
 
       <Modal

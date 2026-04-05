@@ -322,6 +322,13 @@ body {
   flex: 0 0 16px;
 }
 
+.backup-btn-text.ant-btn {
+  width: auto;
+  min-width: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
 .backup-limits-text.ant-typography {
   margin-left: auto;
   margin-bottom: 0;
@@ -1749,12 +1756,6 @@ body {
 
 .summary-combined-markdown code {
   font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
-}
-
-.summary-model {
-  color: var(--text-dim) !important;
-  font-size: 10px !important;
-  letter-spacing: 0.04em;
 }
 
 .publisher-edit-modal .ant-input,
