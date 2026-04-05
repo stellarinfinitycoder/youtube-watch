@@ -1548,6 +1548,35 @@ body {
   width: 180px;
 }
 
+.summary-format-dropdown {
+  min-width: 260px !important;
+}
+
+.summary-format-dropdown .ant-select-item-option-content {
+  display: block;
+  width: 100%;
+  margin-inline-end: 0 !important;
+}
+
+.summary-format-dropdown .ant-select-item {
+  padding-inline: 10px !important;
+}
+
+.summary-format-dropdown .ant-select-item-option-has-icon {
+  padding-inline-end: 10px !important;
+}
+
+.summary-format-dropdown .ant-select-item-option-state {
+  display: none !important;
+}
+
+.summary-format-dropdown .board-option-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
 .transcript-prompt-btn.is-active {
   background: var(--amber) !important;
   color: #18110a !important;

@@ -4239,6 +4239,21 @@ function App() {
     }
   };
 
+  const moveSummaryFormat = (formatId: string, direction: "up" | "down"): void => {
+    const currentIndex = summaryFormats.findIndex((item) => item.id === formatId);
+    if (currentIndex < 0) {
+      return;
+    }
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= summaryFormats.length) {
+      return;
+    }
+    const nextFormats = [...summaryFormats];
+    const [moved] = nextFormats.splice(currentIndex, 1);
+    nextFormats.splice(targetIndex, 0, moved);
+    setSummaryFormats(normalizeStoredSummaryFormats(nextFormats));
+  };
+
   const handleTranscriptViewModeChange = async (
     mode: "transcript" | "summary" | string
   ): Promise<void> => {
@@ -4286,18 +4301,6 @@ function App() {
     setTranscriptViewMode("summary");
     if (!summaryText && summaryKeyPoints.length === 0 && !summaryError) {
       await loadSummary({ allowFetch: true });
-    }
-  };
-
-  const handleSummaryPromptEditToggle = (): void => {
-    setPublishSummaryFeedback(null);
-    if (isAllSummaryFormatsMode) {
-      return;
-    }
-    const nextOpen = !isSummaryPromptEditMode;
-    setIsSummaryPromptEditMode(nextOpen);
-    if (nextOpen) {
-      openSummaryFormatEditor(activeSummaryFormatId);
     }
   };
 
@@ -6723,22 +6726,90 @@ function App() {
                   onChange={(value) => void handleTranscriptViewModeChange(value)}
                   aria-label="Transcript view mode"
                   className="video-filter-select transcript-mode-select"
-                  options={[
-                    { value: "transcript", label: "TRANSCRIPT" },
-                    { value: ALL_SUMMARY_FORMATS_OPTION, label: "ALL FORMATS" },
-                    ...summaryFormats.map((format) => ({
-                      value: `${SUMMARY_MODE_OPTION_PREFIX}${format.id}`,
-                      label: format.name.toUpperCase()
-                    })),
-                    { value: NEW_SUMMARY_FORMAT_OPTION, label: "NEW FORMAT" }
-                  ]}
+                  popupClassName="summary-format-dropdown"
+                  optionLabelProp="title"
                   disabled={
                     isSummaryBusy ||
                     transcriptLoading ||
                     !!transcriptError ||
                     transcriptText.trim().length === 0
                   }
-                />
+                >
+                  <Select.Option value="transcript" title="TRANSCRIPT">
+                    TRANSCRIPT
+                  </Select.Option>
+                  <Select.Option value={ALL_SUMMARY_FORMATS_OPTION} title="ALL FORMATS">
+                    ALL FORMATS
+                  </Select.Option>
+                  {summaryFormats.map((format, formatIndex) => (
+                    <Select.Option
+                      key={format.id}
+                      value={`${SUMMARY_MODE_OPTION_PREFIX}${format.id}`}
+                      title={format.name.toUpperCase()}
+                    >
+                      <div className="board-option-row">
+                        <span className="board-option-name">{format.name.toUpperCase()}</span>
+                        <div className="board-option-actions">
+                          <button
+                            type="button"
+                            className="board-option-move-btn"
+                            aria-label={`Move ${format.name} up`}
+                            disabled={formatIndex === 0}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                            }}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              moveSummaryFormat(format.id, "up");
+                            }}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="board-option-move-btn"
+                            aria-label={`Move ${format.name} down`}
+                            disabled={formatIndex === summaryFormats.length - 1}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                            }}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              moveSummaryFormat(format.id, "down");
+                            }}
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            className="board-option-edit-btn"
+                            aria-label={`Edit ${format.name}`}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                            }}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setIsAllSummaryFormatsMode(false);
+                              setActiveSummaryFormatId(format.id);
+                              openSummaryFormatEditor(format.id);
+                            }}
+                          >
+                            <span className="btn-icon btn-icon-edit-board" aria-hidden />
+                          </button>
+                        </div>
+                      </div>
+                    </Select.Option>
+                  ))}
+                  <Select.Option value={NEW_SUMMARY_FORMAT_OPTION} title="NEW FORMAT">
+                    NEW FORMAT
+                  </Select.Option>
+                </Select>
                 <Button
                   htmlType="button"
                   className={`column-move-btn transcript-copy-btn ${
@@ -6763,24 +6834,6 @@ function App() {
                   ) : (
                     <span className="btn-icon btn-icon-copy" aria-hidden />
                   )}
-                </Button>
-                <Button
-                  htmlType="button"
-                  className={`column-move-btn transcript-prompt-btn ${
-                    isSummaryPromptEditMode ? "is-active" : ""
-                  }`}
-                  aria-label="Edit summary prompt"
-                  onClick={handleSummaryPromptEditToggle}
-                  disabled={
-                    isAllSummaryFormatsMode ||
-                    transcriptViewMode === "transcript" ||
-                    isSummaryBusy ||
-                    transcriptLoading ||
-                    !!transcriptError ||
-                    transcriptText.trim().length === 0
-                  }
-                >
-                  <span className="btn-icon btn-icon-edit-board" aria-hidden />
                 </Button>
                 <Button
                   htmlType="button"
