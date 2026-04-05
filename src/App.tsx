@@ -5199,6 +5199,17 @@ function App() {
         }
       }
       keysToDelete.forEach((key) => storage.removeItem(key));
+      setSummaryFormats((previous) =>
+        normalizeStoredSummaryFormats(
+          previous.map((format) => ({
+            ...format,
+            model: ""
+          }))
+        )
+      );
+      setSummaryFormatModelDraft("");
+      summaryFormatModelDraftRef.current = "";
+      setIsNewSummaryModelDraftMode(false);
       setIsDeleteSummariesModalOpen(false);
     } catch {
       setIsDeleteSummariesModalOpen(false);
