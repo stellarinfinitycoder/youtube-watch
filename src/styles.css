@@ -1609,6 +1609,43 @@ body {
   width: 100%;
 }
 
+.summary-model-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.summary-model-remove-btn {
+  border: 1px solid rgba(201, 108, 126, 0.55);
+  background: #0b0b0d;
+  color: #c96c7e;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.summary-model-remove-btn:hover,
+.summary-model-remove-btn:focus-visible {
+  border-color: #ff8f1f;
+  color: #ff8f1f;
+  outline: none;
+}
+
+.ant-select-item-option-selected .summary-model-remove-btn {
+  background: #0b0b0d;
+  border-color: rgba(201, 108, 126, 0.8);
+  color: #c96c7e;
+}
+
 .summary-prompt-action-btn.ant-btn {
   min-width: 96px;
   height: 34px;

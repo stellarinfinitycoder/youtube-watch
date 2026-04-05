@@ -49,9 +49,11 @@ const TRANSCRIPT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const SUMMARY_CACHE_KEY_PREFIX = "youtube-watch:summary:v2:";
 const SUMMARY_PROMPT_STORAGE_KEY = "youtube-watch:summary-prompt:v1";
 const SUMMARY_FORMATS_STORAGE_KEY = "youtube-watch:summary-formats:v1";
+const SUMMARY_MODEL_PRESETS_STORAGE_KEY = "youtube-watch:summary-model-presets:v1";
 const DEFAULT_SUMMARY_FORMAT_ID = "summary-default";
 const NEW_SUMMARY_FORMAT_OPTION = "__new_summary_format__";
 const ALL_SUMMARY_FORMATS_OPTION = "__all_summary_formats__";
+const NEW_SUMMARY_MODEL_OPTION = "__new_summary_model__";
 const SUMMARY_MODE_OPTION_PREFIX = "summary:";
 const DEFAULT_SUMMARY_PROMPT = [
   "Focus on practical takeaways.",
@@ -59,7 +61,7 @@ const DEFAULT_SUMMARY_PROMPT = [
   "Highlight important risks and decisions."
 ].join(" ");
 const DEFAULT_SUMMARY_FORMAT_NAME = "SUMMARY";
-const SUMMARY_MODEL_PRESETS: Array<{ value: string; label: string }> = [
+const DEFAULT_SUMMARY_MODEL_PRESETS: Array<{ value: string; label: string }> = [
   { value: "", label: "DEFAULT (ENV)" },
   { value: "openai/gpt-4o-mini", label: "OPENAI GPT-4O-MINI" },
   { value: "google/gemini-2.5-flash-lite", label: "GEMINI 2.5 FLASH-LITE" },
@@ -105,6 +107,10 @@ type SummaryFormat = {
   isDefault: boolean;
   createdAt: number;
   updatedAt: number;
+};
+type SummaryModelPreset = {
+  value: string;
+  label: string;
 };
 type SavedSortMode =
   | "time_asc"
@@ -1084,6 +1090,57 @@ function normalizeStoredSummaryFormats(input: unknown): SummaryFormat[] {
 
 function getDefaultSummaryFormat(formats: SummaryFormat[]): SummaryFormat {
   return formats.find((item) => item.isDefault) ?? formats[0] ?? createDefaultSummaryFormat();
+}
+
+function normalizeSummaryModelPresets(input: unknown): SummaryModelPreset[] {
+  const defaults = [...DEFAULT_SUMMARY_MODEL_PRESETS];
+  if (!Array.isArray(input)) {
+    return defaults;
+  }
+
+  const merged = [...defaults];
+  const existingValues = new Set(merged.map((item) => item.value.trim().toLowerCase()));
+
+  input.forEach((item) => {
+    if (!item || typeof item !== "object") {
+      return;
+    }
+    const candidate = item as Partial<SummaryModelPreset>;
+    const value = typeof candidate.value === "string" ? candidate.value.trim() : "";
+    if (!value) {
+      return;
+    }
+    const key = value.toLowerCase();
+    if (existingValues.has(key)) {
+      return;
+    }
+    const label = typeof candidate.label === "string" && candidate.label.trim().length > 0
+      ? candidate.label.trim()
+      : value.toUpperCase();
+    merged.push({ value, label });
+    existingValues.add(key);
+  });
+
+  return merged;
+}
+
+function readStoredSummaryModelPresets(): SummaryModelPreset[] {
+  if (typeof window === "undefined") {
+    return [...DEFAULT_SUMMARY_MODEL_PRESETS];
+  }
+  try {
+    const storage = window.localStorage;
+    if (!storage || typeof storage.getItem !== "function") {
+      return [...DEFAULT_SUMMARY_MODEL_PRESETS];
+    }
+    const raw = storage.getItem(SUMMARY_MODEL_PRESETS_STORAGE_KEY);
+    if (!raw) {
+      return [...DEFAULT_SUMMARY_MODEL_PRESETS];
+    }
+    return normalizeSummaryModelPresets(JSON.parse(raw));
+  } catch {
+    return [...DEFAULT_SUMMARY_MODEL_PRESETS];
+  }
 }
 
 function buildAllFormatsCombinedPrompt(formats: SummaryFormat[]): string {
@@ -2409,6 +2466,9 @@ function App() {
     null
   );
   const [summaryFormats, setSummaryFormats] = useState<SummaryFormat[]>(readStoredSummaryFormats);
+  const [summaryModelPresets, setSummaryModelPresets] = useState<SummaryModelPreset[]>(
+    readStoredSummaryModelPresets
+  );
   const [activeSummaryFormatId, setActiveSummaryFormatId] = useState<string>(() =>
     getDefaultSummaryFormat(readStoredSummaryFormats()).id
   );
@@ -2418,6 +2478,7 @@ function App() {
   const [summaryFormatNameDraft, setSummaryFormatNameDraft] = useState<string>("");
   const [summaryPromptDraft, setSummaryPromptDraft] = useState<string>("");
   const [summaryFormatModelDraft, setSummaryFormatModelDraft] = useState<string>("");
+  const [isNewSummaryModelDraftMode, setIsNewSummaryModelDraftMode] = useState<boolean>(false);
   const [summaryFormatDefaultDraft, setSummaryFormatDefaultDraft] = useState<boolean>(false);
   const bulkInputDraftRef = useRef("");
   const renameBoardInputDraftRef = useRef("");
@@ -2810,6 +2871,27 @@ function App() {
       // Ignore local storage write errors.
     }
   }, [fixtureMode, summaryFormats]);
+
+  useEffect(() => {
+    if (fixtureMode) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const storage = window.localStorage;
+      if (!storage || typeof storage.setItem !== "function") {
+        return;
+      }
+      storage.setItem(
+        SUMMARY_MODEL_PRESETS_STORAGE_KEY,
+        JSON.stringify(summaryModelPresets)
+      );
+    } catch {
+      // Ignore local storage write errors.
+    }
+  }, [fixtureMode, summaryModelPresets]);
 
   useEffect(() => {
     if (fixtureMode) {
@@ -3936,6 +4018,7 @@ function App() {
     summaryFormatNameDraftRef.current = defaultSummaryFormat.name;
     summaryPromptDraftRef.current = defaultSummaryFormat.prompt;
     summaryFormatModelDraftRef.current = defaultSummaryFormat.model ?? "";
+    setIsNewSummaryModelDraftMode(false);
     setSummaryFormatDefaultDraft(defaultSummaryFormat.isDefault);
     setTranscriptLoading(true);
     setTranscriptError(null);
@@ -4119,6 +4202,7 @@ function App() {
     summaryFormatNameDraftRef.current = format?.name ?? "";
     summaryPromptDraftRef.current = format?.prompt ?? "";
     summaryFormatModelDraftRef.current = format?.model ?? "";
+    setIsNewSummaryModelDraftMode(false);
     setSummaryFormatDefaultDraft(format?.isDefault ?? false);
     setIsSummaryPromptEditMode(true);
   };
@@ -4137,6 +4221,7 @@ function App() {
     summaryFormatNameDraftRef.current = format.name;
     summaryPromptDraftRef.current = format.prompt;
     summaryFormatModelDraftRef.current = format.model ?? "";
+    setIsNewSummaryModelDraftMode(false);
     setSummaryFormatDefaultDraft(format.isDefault);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
@@ -4223,12 +4308,43 @@ function App() {
     await loadSummary({ force: true });
   };
 
+  const addSummaryModelPresetIfMissing = (modelValue: string): void => {
+    const trimmed = modelValue.trim();
+    if (!trimmed) {
+      return;
+    }
+    setSummaryModelPresets((previous) => {
+      const exists = previous.some(
+        (item) => item.value.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      if (exists) {
+        return previous;
+      }
+      return [...previous, { value: trimmed, label: trimmed.toUpperCase() }];
+    });
+  };
+
+  const removeSummaryModelPreset = (modelValue: string): void => {
+    const trimmed = modelValue.trim();
+    if (!trimmed) {
+      return;
+    }
+    setSummaryModelPresets((previous) =>
+      previous.filter((item) => item.value.trim().toLowerCase() !== trimmed.toLowerCase())
+    );
+    if (summaryFormatModelDraft.trim().toLowerCase() === trimmed.toLowerCase()) {
+      setSummaryFormatModelDraft("");
+      summaryFormatModelDraftRef.current = "";
+    }
+  };
+
   const saveSummaryPromptAndClose = async (): Promise<void> => {
     setPublishSummaryFeedback(null);
     const nextName = (summaryFormatNameDraftRef.current || summaryFormatNameDraft).trim();
     const nextPrompt =
       (summaryPromptDraftRef.current || summaryPromptDraft).trim() || DEFAULT_SUMMARY_PROMPT;
     const nextModel = (summaryFormatModelDraftRef.current || summaryFormatModelDraft).trim();
+    addSummaryModelPresetIfMissing(nextModel);
     const nextDefault = summaryFormatDefaultDraft;
     if (!nextName) {
       return;
@@ -4268,6 +4384,7 @@ function App() {
       summaryFormatNameDraftRef.current = newFormat.name;
       summaryPromptDraftRef.current = newFormat.prompt;
       summaryFormatModelDraftRef.current = newFormat.model ?? "";
+      setIsNewSummaryModelDraftMode(false);
       setIsSummaryPromptEditMode(false);
       setTranscriptViewMode("summary");
       setSummaryText("");
@@ -4296,6 +4413,7 @@ function App() {
       summaryFormatNameDraftRef.current = baseFormat.name;
       summaryPromptDraftRef.current = baseFormat.prompt;
       summaryFormatModelDraftRef.current = baseFormat.model ?? "";
+      setIsNewSummaryModelDraftMode(false);
       setSummaryFormatDefaultDraft(baseFormat.isDefault);
       setEditingSummaryFormatId(baseFormat.id);
       setIsSummaryPromptEditMode(false);
@@ -4330,6 +4448,7 @@ function App() {
     summaryFormatNameDraftRef.current = nextName;
     summaryPromptDraftRef.current = nextPrompt;
     summaryFormatModelDraftRef.current = nextModel;
+    setIsNewSummaryModelDraftMode(false);
     setSummaryFormatDefaultDraft(nextDefault);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
@@ -4371,6 +4490,7 @@ function App() {
     summaryFormatNameDraftRef.current = defaultFormat.name;
     summaryPromptDraftRef.current = defaultFormat.prompt;
     summaryFormatModelDraftRef.current = defaultFormat.model ?? "";
+    setIsNewSummaryModelDraftMode(false);
     setSummaryFormatDefaultDraft(defaultFormat.isDefault);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
@@ -6726,6 +6846,7 @@ function App() {
           summaryFormatNameDraftRef.current = activeSummaryFormat.name;
           summaryPromptDraftRef.current = activeSummaryFormat.prompt;
           summaryFormatModelDraftRef.current = activeSummaryFormat.model ?? "";
+          setIsNewSummaryModelDraftMode(false);
           setSummaryFormatDefaultDraft(activeSummaryFormat.isDefault);
         }}
         footer={null}
@@ -6755,17 +6876,60 @@ function App() {
                 placeholder="Enter plain summary instructions (style/focus)."
               />
               <Select<string>
-                value={summaryFormatModelDraft || "__default_model__"}
+                value={
+                  isNewSummaryModelDraftMode
+                    ? NEW_SUMMARY_MODEL_OPTION
+                    : summaryFormatModelDraft || "__default_model__"
+                }
                 onChange={(value) => {
+                  if (value === NEW_SUMMARY_MODEL_OPTION) {
+                    setIsNewSummaryModelDraftMode(true);
+                    setSummaryFormatModelDraft("");
+                    summaryFormatModelDraftRef.current = "";
+                    return;
+                  }
+                  setIsNewSummaryModelDraftMode(false);
                   const nextValue = value === "__default_model__" ? "" : value;
                   setSummaryFormatModelDraft(nextValue);
                   summaryFormatModelDraftRef.current = nextValue;
                 }}
                 className="video-filter-select"
-                options={SUMMARY_MODEL_PRESETS.map((preset) => ({
-                  value: preset.value || "__default_model__",
-                  label: preset.label
-                }))}
+                options={[
+                  ...summaryModelPresets.map((preset) => ({
+                    value: preset.value.trim().length === 0 ? "__default_model__" : preset.value,
+                    label: preset.label
+                  })),
+                  { value: NEW_SUMMARY_MODEL_OPTION, label: "NEW MODEL" }
+                ]}
+                optionRender={(option) => {
+                  const optionValue = String(option.data.value ?? "");
+                  const optionLabel = String(option.data.label ?? optionValue);
+                  const isDefaultEnv = optionValue === "__default_model__";
+                  const isNewModel = optionValue === NEW_SUMMARY_MODEL_OPTION;
+                  return (
+                    <div className="summary-model-option-row">
+                      <span>{optionLabel}</span>
+                      {!isDefaultEnv && !isNewModel ? (
+                        <button
+                          type="button"
+                          className="summary-model-remove-btn"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            removeSummaryModelPreset(optionValue);
+                          }}
+                          aria-label={`Remove model preset ${optionLabel}`}
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                }}
               />
               <Input
                 value={summaryFormatModelDraft}
@@ -6774,7 +6938,7 @@ function App() {
                   setSummaryFormatModelDraft(nextValue);
                   summaryFormatModelDraftRef.current = nextValue;
                 }}
-                placeholder="Custom model ID (optional)"
+                placeholder="OPENROUTER MODEL ID"
               />
               <Checkbox
                 className="summary-default-checkbox"
@@ -6805,6 +6969,7 @@ function App() {
                       summaryFormatNameDraftRef.current = activeSummaryFormat.name;
                       summaryPromptDraftRef.current = activeSummaryFormat.prompt;
                       summaryFormatModelDraftRef.current = activeSummaryFormat.model ?? "";
+                      setIsNewSummaryModelDraftMode(false);
                       setSummaryFormatDefaultDraft(activeSummaryFormat.isDefault);
                     }}
                   >
