@@ -4343,10 +4343,24 @@ function App() {
 
   const saveSummaryPromptAndClose = async (): Promise<void> => {
     setPublishSummaryFeedback(null);
-    const nextName = (summaryFormatNameDraftRef.current || summaryFormatNameDraft).trim();
+    const nextName = (
+      typeof summaryFormatNameDraftRef.current === "string"
+        ? summaryFormatNameDraftRef.current
+        : summaryFormatNameDraft
+    )
+      .trim()
+      .slice(0, 20);
     const nextPrompt =
-      (summaryPromptDraftRef.current || summaryPromptDraft).trim() || DEFAULT_SUMMARY_PROMPT;
-    const nextModel = (summaryFormatModelDraftRef.current || summaryFormatModelDraft).trim();
+      (
+        typeof summaryPromptDraftRef.current === "string"
+          ? summaryPromptDraftRef.current
+          : summaryPromptDraft
+      ).trim() || DEFAULT_SUMMARY_PROMPT;
+    const nextModel = (
+      typeof summaryFormatModelDraftRef.current === "string"
+        ? summaryFormatModelDraftRef.current
+        : summaryFormatModelDraft
+    ).trim();
     addSummaryModelPresetIfMissing(nextModel);
     const nextDefault = summaryFormatDefaultDraft;
     if (!nextName) {
