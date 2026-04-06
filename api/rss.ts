@@ -108,9 +108,9 @@ export default async function handler(req: any, res: any) {
         const encodedHtml =
           thumbnailUrl.length > 0
             ? [
-                `<p><a href="${escapeXml(itemLink)}" target="_blank" rel="noreferrer"><img src="${escapeXml(
-                  thumbnailUrl
-                )}" alt="${escapeXml(item.title)}" width="100%" style="display:block;width:100%;height:auto;" /></a></p>`,
+                `<p><img src="${escapeXml(thumbnailUrl)}" alt="${escapeXml(
+                  item.title
+                )}" width="100%" style="display:block;width:100%;height:auto;" /></p>`,
                 encodedDescription
               ].join("")
             : encodedDescription;
