@@ -51,14 +51,20 @@ function getCanonicalYoutubeUrl(item: { videoId?: string; videoUrl?: string }): 
 }
 
 function sanitizeSummaryForRss(summary: string): string {
-  const withoutUrlLines = summary
-    .replace(/\r\n/g, "\n")
+  const normalized = summary.replace(/\r\n/g, "\n");
+  const withoutMarkdownLinks = normalized.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi,
+    "$1"
+  );
+  const withoutAngleLinks = withoutMarkdownLinks.replace(/<https?:\/\/[^>]+>/gi, "");
+  const withoutStandaloneUrlLines = withoutAngleLinks
     .split("\n")
     .filter((line) => !/^https?:\/\/\S+$/i.test(line.trim()))
     .join("\n");
 
-  return withoutUrlLines
-    .replace(/\s*https?:\/\/(?:www\.)?(youtube\.com|youtu\.be)\/\S+/gi, "")
+  return withoutStandaloneUrlLines
+    .replace(/https?:\/\/[^\s)]+/gi, "")
+    .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
