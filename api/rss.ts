@@ -104,23 +104,24 @@ export default async function handler(req: any, res: any) {
         const itemLink = getCanonicalYoutubeUrl(item);
         const thumbnailUrl = getRssThumbnailUrl(item);
         const summaryForRss = sanitizeSummaryForRss(item.summary);
-        const encodedDescription = `<p>${escapeXml(summaryForRss)}</p>`;
+        const encodedSummary = `<p>${escapeXml(summaryForRss)}</p>`;
         const encodedHtml =
           thumbnailUrl.length > 0
             ? [
                 `<p><img src="${escapeXml(thumbnailUrl)}" alt="${escapeXml(
                   item.title
                 )}" width="100%" style="display:block;width:100%;height:auto;" /></p>`,
-                encodedDescription
+                encodedSummary
               ].join("")
-            : encodedDescription;
+            : encodedSummary;
         return [
           "<item>",
-          `<title>${escapeXml(item.title)}</title>`,
+          "<title></title>",
           `<link>${escapeXml(itemLink)}</link>`,
           `<guid isPermaLink="false">${escapeXml(item.id)}</guid>`,
           `<pubDate>${escapeXml(toRssDate(item.updatedAt || item.publishedAt))}</pubDate>`,
           `<description><![CDATA[${encodedHtml}]]></description>`,
+          `<content:encoded><![CDATA[${encodedHtml}]]></content:encoded>`,
           thumbnailUrl.length > 0
             ? `<enclosure url="${escapeXml(thumbnailUrl)}" type="image/jpeg" />`
             : "",
