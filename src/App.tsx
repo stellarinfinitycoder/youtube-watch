@@ -5220,50 +5220,52 @@ function App() {
     if (!savingVideo || !saveTargetColumnId || !savedBoard) {
       return;
     }
-    setBoard(savedBoard.id, (board) => ({
-      ...board,
-      columns: board.columns.map((column) => {
-        if (column.id !== saveTargetColumnId) {
-          return column;
-        }
-        const exists = column.videos.some((video) => video.videoId === savingVideo.videoId);
-        if (exists) {
-          return column;
-        }
-        const now = Date.now();
-        const nextVideos = [savingVideo, ...column.videos];
-        const nextManualOrder = [
-          savingVideo.videoId,
-          ...column.savedManualOrder.filter((videoId) => videoId !== savingVideo.videoId)
-        ];
-        return {
-          ...column,
-          videos: nextVideos,
-          savedAddedAtByVideoId: {
-            ...column.savedAddedAtByVideoId,
-            [savingVideo.videoId]: now
-          },
-          savedManualOrder: nextManualOrder
-        };
-      }),
-      watchedVideos: {
-        ...board.watchedVideos,
-        [savingVideo.videoId]: true
-      },
-      viewCountRefreshedAtByVideoId: {
-        ...board.viewCountRefreshedAtByVideoId,
-        [savingVideo.videoId]: Date.now()
-      }
-    }));
-    if (activeBoard) {
-      setBoard(activeBoard.id, (board) => ({
-        ...board,
-        watchedVideos: {
+    const now = Date.now();
+    setBoards((previous) =>
+      previous.map((board) => {
+        const nextWatchedVideos = {
           ...board.watchedVideos,
           [savingVideo.videoId]: true
+        };
+        if (board.id !== savedBoard.id) {
+          return {
+            ...board,
+            watchedVideos: nextWatchedVideos
+          };
         }
-      }));
-    }
+        return {
+          ...board,
+          columns: board.columns.map((column) => {
+            if (column.id !== saveTargetColumnId) {
+              return column;
+            }
+            const exists = column.videos.some((video) => video.videoId === savingVideo.videoId);
+            if (exists) {
+              return column;
+            }
+            const nextVideos = [savingVideo, ...column.videos];
+            const nextManualOrder = [
+              savingVideo.videoId,
+              ...column.savedManualOrder.filter((videoId) => videoId !== savingVideo.videoId)
+            ];
+            return {
+              ...column,
+              videos: nextVideos,
+              savedAddedAtByVideoId: {
+                ...column.savedAddedAtByVideoId,
+                [savingVideo.videoId]: now
+              },
+              savedManualOrder: nextManualOrder
+            };
+          }),
+          watchedVideos: nextWatchedVideos,
+          viewCountRefreshedAtByVideoId: {
+            ...board.viewCountRefreshedAtByVideoId,
+            [savingVideo.videoId]: now
+          }
+        };
+      })
+    );
     setSavingVideo(null);
     setSaveTargetColumnId("");
   };
@@ -6180,35 +6182,49 @@ function App() {
               };
             }
             const now = Date.now();
-            setBoard(savedBoard.id, (board) => ({
-              ...board,
-              columns: board.columns.map((column) => {
-                if (column.id !== listId) {
-                  return column;
-                }
-                const exists = column.videos.some((video) => video.videoId === videoId);
-                if (exists) {
-                  return column;
+            setBoards((previous) =>
+              previous.map((board) => {
+                const nextWatchedVideos = {
+                  ...board.watchedVideos,
+                  [videoId]: true
+                };
+                if (board.id !== savedBoard.id) {
+                  return {
+                    ...board,
+                    watchedVideos: nextWatchedVideos
+                  };
                 }
                 return {
-                  ...column,
-                  videos: [resolved.video, ...column.videos],
-                  savedAddedAtByVideoId: {
-                    ...column.savedAddedAtByVideoId,
+                  ...board,
+                  columns: board.columns.map((column) => {
+                    if (column.id !== listId) {
+                      return column;
+                    }
+                    const exists = column.videos.some((video) => video.videoId === videoId);
+                    if (exists) {
+                      return column;
+                    }
+                    return {
+                      ...column,
+                      videos: [resolved.video, ...column.videos],
+                      savedAddedAtByVideoId: {
+                        ...column.savedAddedAtByVideoId,
+                        [videoId]: now
+                      },
+                      savedManualOrder: [
+                        videoId,
+                        ...column.savedManualOrder.filter((id) => id !== videoId)
+                      ]
+                    };
+                  }),
+                  watchedVideos: nextWatchedVideos,
+                  viewCountRefreshedAtByVideoId: {
+                    ...board.viewCountRefreshedAtByVideoId,
                     [videoId]: now
-                  },
-                  savedManualOrder: [videoId, ...column.savedManualOrder.filter((id) => id !== videoId)]
+                  }
                 };
-              }),
-              watchedVideos: {
-                ...board.watchedVideos,
-                [videoId]: true
-              },
-              viewCountRefreshedAtByVideoId: {
-                ...board.viewCountRefreshedAtByVideoId,
-                [videoId]: now
-              }
-            }));
+              })
+            );
             return {
               ok: true,
               action: "saveVideo",
