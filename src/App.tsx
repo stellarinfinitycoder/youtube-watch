@@ -5006,6 +5006,8 @@ function App() {
 
     const movingId = movingColumn.id;
     const columnToMove = movingColumn;
+    const movedVideoIds = columnToMove.videos.map((video) => video.videoId);
+    const watchedBySourceBoard = activeBoard.watchedVideos;
 
     setBoards((previous) =>
       previous.map((board) => {
@@ -5016,9 +5018,16 @@ function App() {
           };
         }
         if (board.id === moveTargetBoardId) {
+          const nextWatchedVideos = { ...board.watchedVideos };
+          movedVideoIds.forEach((videoId) => {
+            if (watchedBySourceBoard[videoId] === true) {
+              nextWatchedVideos[videoId] = true;
+            }
+          });
           return {
             ...board,
-            columns: [...board.columns, columnToMove]
+            columns: [...board.columns, columnToMove],
+            watchedVideos: nextWatchedVideos
           };
         }
         return board;
