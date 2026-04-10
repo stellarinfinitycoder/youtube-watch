@@ -1274,6 +1274,52 @@ function writeCachedTranscript(videoId: string, text: string): void {
   }
 }
 
+function pruneCachedTranscriptAndSummary(storage: Storage): boolean {
+  const transcriptKeys: string[] = [];
+  const summaryEntries: Array<{ key: string; cachedAt: number }> = [];
+
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (!key) {
+      continue;
+    }
+    if (key.startsWith(TRANSCRIPT_CACHE_KEY_PREFIX)) {
+      transcriptKeys.push(key);
+      continue;
+    }
+    if (!key.startsWith(SUMMARY_CACHE_KEY_PREFIX)) {
+      continue;
+    }
+    let cachedAt = 0;
+    try {
+      const raw = storage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { cachedAt?: unknown };
+        if (typeof parsed.cachedAt === "number" && Number.isFinite(parsed.cachedAt)) {
+          cachedAt = parsed.cachedAt;
+        }
+      }
+    } catch {
+      cachedAt = 0;
+    }
+    summaryEntries.push({ key, cachedAt });
+  }
+
+  if (transcriptKeys.length > 0) {
+    transcriptKeys.forEach((key) => storage.removeItem(key));
+    return true;
+  }
+
+  if (summaryEntries.length === 0) {
+    return false;
+  }
+
+  summaryEntries.sort((a, b) => a.cachedAt - b.cachedAt);
+  const removeCount = Math.max(1, Math.ceil(summaryEntries.length * 0.25));
+  summaryEntries.slice(0, removeCount).forEach((entry) => storage.removeItem(entry.key));
+  return true;
+}
+
 function readStoredSummaryPrompt(): string {
   if (typeof window === "undefined") {
     return DEFAULT_SUMMARY_PROMPT;
@@ -2096,11 +2142,27 @@ function formatDurationFilterSummary(filters: VideoDurationFilter): string {
   return "SELECT LENGTH";
 }
 
+function matchesVideoIdKey(storedVideoId: string, targetVideoId: string): boolean {
+  return storedVideoId.toLowerCase() === targetVideoId.toLowerCase();
+}
+
+function isVideoMarkedWatched(
+  watchedVideos: Record<string, boolean>,
+  videoId: string
+): boolean {
+  if (watchedVideos[videoId] === true) {
+    return true;
+  }
+  return Object.entries(watchedVideos).some(
+    ([storedVideoId, watched]) => watched === true && matchesVideoIdKey(storedVideoId, videoId)
+  );
+}
+
 function collectBoardMissingDurationNewVideoIds(board: BoardState): string[] {
   const unique = new Set<string>();
   board.columns.forEach((column) => {
     column.videos.forEach((video) => {
-      const isWatched = board.watchedVideos[video.videoId] === true;
+      const isWatched = isVideoMarkedWatched(board.watchedVideos, video.videoId);
       const hasDuration = typeof video.durationSeconds === "number";
       if (isWatched || hasDuration) {
         return;
@@ -2625,7 +2687,7 @@ function App() {
         if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
           return false;
         }
-        const isWatched = watchedVideos[video.videoId] === true;
+        const isWatched = isVideoMarkedWatched(watchedVideos, video.videoId);
         if (videoFilter === "all") {
           return true;
         }
@@ -2954,8 +3016,24 @@ function App() {
         videoWindowDays: board.videoWindowDays,
         defaultPlaybackRate: board.defaultPlaybackRate
       }));
-      storage.setItem(BOARDS_STORAGE_KEY, JSON.stringify(persistedBoards));
-      storage.setItem(ACTIVE_BOARD_ID_STORAGE_KEY, activeBoardId);
+      const boardsPayload = JSON.stringify(persistedBoards);
+      let didPersist = false;
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        try {
+          storage.setItem(BOARDS_STORAGE_KEY, boardsPayload);
+          storage.setItem(ACTIVE_BOARD_ID_STORAGE_KEY, activeBoardId);
+          didPersist = true;
+          break;
+        } catch {
+          if (!pruneCachedTranscriptAndSummary(storage)) {
+            break;
+          }
+        }
+      }
+      if (!didPersist) {
+        // eslint-disable-next-line no-console
+        console.warn("Failed to persist boards to localStorage.");
+      }
     } catch {
       // Ignore write failures (private mode / restricted environments).
     }
@@ -3669,7 +3747,7 @@ function App() {
         columns: board.columns.map((column) => ({
           ...column,
           videos: column.videos.map((video) => {
-            if (board.watchedVideos[video.videoId] === true) {
+            if (isVideoMarkedWatched(board.watchedVideos, video.videoId)) {
               return video;
             }
             if (typeof video.durationSeconds === "number") {
@@ -3878,7 +3956,11 @@ function App() {
           if (watched) {
             next[videoId] = true;
           } else {
-            delete next[videoId];
+            Object.keys(next).forEach((storedVideoId) => {
+              if (matchesVideoIdKey(storedVideoId, videoId)) {
+                delete next[storedVideoId];
+              }
+            });
           }
         });
         return {
@@ -4001,7 +4083,7 @@ function App() {
   };
 
   const getResumeSecondsForVideo = (video: VideoItem): number | null => {
-    if (activeBoard?.watchedVideos[video.videoId]) {
+    if (activeBoard && isVideoMarkedWatched(activeBoard.watchedVideos, video.videoId)) {
       return null;
     }
     const stored = videoProgressById[video.videoId];
@@ -4673,7 +4755,7 @@ function App() {
     if (!activeBoard) {
       return;
     }
-    const shouldMarkWatched = activeBoard.watchedVideos[videoId] !== true;
+    const shouldMarkWatched = !isVideoMarkedWatched(activeBoard.watchedVideos, videoId);
     setWatchedStatusAcrossBoards([videoId], shouldMarkWatched);
   };
 
@@ -4949,7 +5031,7 @@ function App() {
         if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
           return false;
         }
-        const isWatched = watchedVideos[video.videoId] === true;
+        const isWatched = isVideoMarkedWatched(watchedVideos, video.videoId);
         if (videoFilter === "all") {
           return true;
         }
@@ -7404,7 +7486,7 @@ function App() {
                       itemLayout="vertical"
                       dataSource={filteredVideos}
                       renderItem={(video) => {
-                        const isWatched = watchedVideos[video.videoId] === true;
+                        const isWatched = isVideoMarkedWatched(watchedVideos, video.videoId);
                         const isMetaRefreshInFlight = videoStatsBackfillInFlight.includes(
                           video.videoId
                         );
