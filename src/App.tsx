@@ -3855,6 +3855,31 @@ function App() {
     }
   };
 
+  const setWatchedStatusAcrossBoards = (
+    videoIds: string[],
+    watched: boolean
+  ): void => {
+    if (videoIds.length === 0) {
+      return;
+    }
+    setBoards((previous) =>
+      previous.map((board) => {
+        const next = { ...board.watchedVideos };
+        videoIds.forEach((videoId) => {
+          if (watched) {
+            next[videoId] = true;
+          } else {
+            delete next[videoId];
+          }
+        });
+        return {
+          ...board,
+          watchedVideos: next
+        };
+      })
+    );
+  };
+
   const markWatched = (videoId: string): void => {
     if (!activeBoard) {
       return;
@@ -3867,13 +3892,7 @@ function App() {
       delete next[videoId];
       return next;
     });
-    setBoard(activeBoard.id, (board) => ({
-      ...board,
-      watchedVideos: {
-        ...board.watchedVideos,
-        [videoId]: true
-      }
-    }));
+    setWatchedStatusAcrossBoards([videoId], true);
   };
 
   const stopPlaylist = (): void => {
@@ -4645,18 +4664,8 @@ function App() {
     if (!activeBoard) {
       return;
     }
-    setBoard(activeBoard.id, (board) => {
-      const next = { ...board.watchedVideos };
-      if (next[videoId]) {
-        delete next[videoId];
-      } else {
-        next[videoId] = true;
-      }
-      return {
-        ...board,
-        watchedVideos: next
-      };
-    });
+    const shouldMarkWatched = activeBoard.watchedVideos[videoId] !== true;
+    setWatchedStatusAcrossBoards([videoId], shouldMarkWatched);
   };
 
   const backfillVideoStats = async (videoId: string): Promise<void> => {
@@ -4878,20 +4887,10 @@ function App() {
     if (!activeBoard || !bulkWatchColumnAction) {
       return;
     }
-    setBoard(activeBoard.id, (board) => {
-      const nextWatchedVideos = { ...board.watchedVideos };
-      bulkWatchColumnAction.videoIds.forEach((videoId) => {
-        if (bulkWatchColumnAction.markWatched) {
-          nextWatchedVideos[videoId] = true;
-        } else {
-          delete nextWatchedVideos[videoId];
-        }
-      });
-      return {
-        ...board,
-        watchedVideos: nextWatchedVideos
-      };
-    });
+    setWatchedStatusAcrossBoards(
+      bulkWatchColumnAction.videoIds,
+      bulkWatchColumnAction.markWatched
+    );
     setBulkWatchColumnAction(null);
   };
 
@@ -5987,13 +5986,7 @@ function App() {
               getShownVideosForColumn(column, now).forEach((video) => ids.add(video.videoId));
             });
             const videoIds = [...ids];
-            setBoard(activeBoard.id, (board) => ({
-              ...board,
-              watchedVideos: {
-                ...board.watchedVideos,
-                ...Object.fromEntries(videoIds.map((videoId) => [videoId, true]))
-              }
-            }));
+            setWatchedStatusAcrossBoards(videoIds, true);
             return {
               ok: true,
               action: "markBoardShownVideosWatched",
@@ -6017,16 +6010,7 @@ function App() {
               getShownVideosForColumn(column, now).forEach((video) => ids.add(video.videoId));
             });
             const videoIds = [...ids];
-            setBoard(activeBoard.id, (board) => {
-              const next = { ...board.watchedVideos };
-              videoIds.forEach((videoId) => {
-                delete next[videoId];
-              });
-              return {
-                ...board,
-                watchedVideos: next
-              };
-            });
+            setWatchedStatusAcrossBoards(videoIds, false);
             return {
               ok: true,
               action: "markBoardShownVideosNew",
@@ -6057,13 +6041,7 @@ function App() {
               };
             }
             const videoIds = getShownVideosForColumn(column, Date.now()).map((video) => video.videoId);
-            setBoard(activeBoard.id, (board) => ({
-              ...board,
-              watchedVideos: {
-                ...board.watchedVideos,
-                ...Object.fromEntries(videoIds.map((videoId) => [videoId, true]))
-              }
-            }));
+            setWatchedStatusAcrossBoards(videoIds, true);
             return {
               ok: true,
               action: "markChannelShownVideosWatched",
@@ -6094,16 +6072,7 @@ function App() {
               };
             }
             const videoIds = getShownVideosForColumn(column, Date.now()).map((video) => video.videoId);
-            setBoard(activeBoard.id, (board) => {
-              const next = { ...board.watchedVideos };
-              videoIds.forEach((videoId) => {
-                delete next[videoId];
-              });
-              return {
-                ...board,
-                watchedVideos: next
-              };
-            });
+            setWatchedStatusAcrossBoards(videoIds, false);
             return {
               ok: true,
               action: "markChannelShownVideosNew",
@@ -6122,13 +6091,7 @@ function App() {
                 error: { code: "VIDEO_NOT_FOUND", message: "Video not found." }
               };
             }
-            setBoard(resolved.board.id, (board) => ({
-              ...board,
-              watchedVideos: {
-                ...board.watchedVideos,
-                [videoId]: true
-              }
-            }));
+            setWatchedStatusAcrossBoards([videoId], true);
             return {
               ok: true,
               action: "markVideoWatched",
@@ -6147,14 +6110,7 @@ function App() {
                 error: { code: "VIDEO_NOT_FOUND", message: "Video not found." }
               };
             }
-            setBoard(resolved.board.id, (board) => {
-              const next = { ...board.watchedVideos };
-              delete next[videoId];
-              return {
-                ...board,
-                watchedVideos: next
-              };
-            });
+            setWatchedStatusAcrossBoards([videoId], false);
             return {
               ok: true,
               action: "markVideoNew",
