@@ -3072,11 +3072,35 @@ function App() {
 
     let isCancelled = false;
     let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    const shouldForceIframeFallback =
+      typeof activeVideo.durationSeconds === "number" && activeVideo.durationSeconds <= 60;
     setAvailablePlaybackRates([...PLAYBACK_RATE_OPTIONS]);
     setPlaybackRate(preferredPlaybackRate);
     setIsPlayerReady(false);
     playerReadyRef.current = false;
     setUseIframeFallback(false);
+    if (shouldForceIframeFallback) {
+      setUseIframeFallback(true);
+      if (playerRef.current) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
+      playerHostNode.innerHTML = "";
+      return () => {
+        isCancelled = true;
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer);
+        }
+        if (playerRef.current) {
+          playerRef.current.destroy();
+          playerRef.current = null;
+        }
+        if (playerHostNode) {
+          playerHostNode.innerHTML = "";
+        }
+        playerReadyRef.current = false;
+      };
+    }
     fallbackTimer = setTimeout(() => {
       if (!isCancelled && !playerReadyRef.current) {
         setUseIframeFallback(true);
@@ -3093,6 +3117,8 @@ function App() {
           playerRef.current.destroy();
           playerRef.current = null;
         }
+        // Defensive cleanup: ensure no stale iframe remains attached in the host.
+        playerHostNode.innerHTML = "";
 
         playerRef.current = new window.YT.Player(playerHostNode, {
           videoId: activeVideo.videoId,
@@ -3157,6 +3183,9 @@ function App() {
       if (playerRef.current) {
         playerRef.current.destroy();
         playerRef.current = null;
+      }
+      if (playerHostNode) {
+        playerHostNode.innerHTML = "";
       }
       playerReadyRef.current = false;
     };
