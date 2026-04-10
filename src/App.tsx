@@ -3817,6 +3817,15 @@ function App() {
     }));
   };
 
+  const blurActiveTopbarControl = (): void => {
+    window.setTimeout(() => {
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement) {
+        activeElement.blur();
+      }
+    }, 0);
+  };
+
   const handlePlaybackRateClick = (rate: number): void => {
     if (!activeBoard) {
       return;
@@ -6284,7 +6293,10 @@ function App() {
         ) : null}
         <Select<string>
           value={activeBoard?.id}
-          onChange={handleBoardSelectChange}
+          onChange={(value) => {
+            handleBoardSelectChange(value);
+            blurActiveTopbarControl();
+          }}
           aria-label="Board selector"
           className="video-filter-select board-select"
           data-testid="topbar-board-select"
@@ -6379,6 +6391,7 @@ function App() {
               ...board,
               columnScopeFilter: next
             }));
+            blurActiveTopbarControl();
           }}
           aria-label="Channel scope filter"
           className="video-filter-select channel-scope-select"
@@ -6402,6 +6415,7 @@ function App() {
                 ...board,
                 videoFilter: value
               }));
+              blurActiveTopbarControl();
             }}
             aria-label="Video filter"
             className="video-filter-select video-status-select"
@@ -6423,6 +6437,7 @@ function App() {
               ...board,
               videoWindowDays: value
             }));
+            blurActiveTopbarControl();
           }}
           aria-label="Video age window"
           className="video-filter-select video-window-select"
@@ -6446,6 +6461,7 @@ function App() {
               ...board,
               videoDurationFilter: next
             }));
+            blurActiveTopbarControl();
           }}
           aria-label="Video duration filter"
           className="video-filter-select video-duration-select"
@@ -6457,7 +6473,10 @@ function App() {
         />
         <Select<number>
           value={preferredPlaybackRate}
-          onChange={handlePreferredPlaybackRateChange}
+          onChange={(value) => {
+            handlePreferredPlaybackRateChange(value);
+            blurActiveTopbarControl();
+          }}
           aria-label="Default playback speed"
           className="video-filter-select playback-speed-select"
           data-testid="topbar-speed-select"
