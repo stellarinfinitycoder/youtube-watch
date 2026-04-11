@@ -4030,6 +4030,10 @@ function App() {
       ...board,
       defaultPlaybackRate: rate
     }));
+    if (useIframeFallback) {
+      sendFallbackPlayerCommand("setPlaybackRate", [rate]);
+      return;
+    }
     if (!playerRef.current) {
       return;
     }
@@ -4049,6 +4053,10 @@ function App() {
       ...board,
       defaultPlaybackRate: rate
     }));
+    if (useIframeFallback) {
+      sendFallbackPlayerCommand("setPlaybackRate", [rate]);
+      return;
+    }
     if (!playerRef.current) {
       return;
     }
@@ -6894,7 +6902,7 @@ function App() {
                     className="speed-btn"
                     type={playbackRate === rate ? "primary" : "default"}
                     onClick={() => handlePlaybackRateClick(rate)}
-                    disabled={!isPlayerReady}
+                    disabled={!isPlayerReady && !useIframeFallback}
                   >
                     {rate}x
                   </Button>
