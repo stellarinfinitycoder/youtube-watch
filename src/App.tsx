@@ -2441,6 +2441,8 @@ function App() {
   const playerReadyRef = useRef(false);
   const playerSessionRef = useRef(0);
   const playerFallbackLockedRef = useRef(false);
+  const fallbackPlaybackSecondsRef = useRef(0);
+  const fallbackIsPlayingRef = useRef(false);
   const transcriptRequestIdRef = useRef(0);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
   const linkCopyFeedbackTimeoutRef = useRef<number | null>(null);
@@ -3238,6 +3240,10 @@ function App() {
     if (!activeVideo) {
       return;
     }
+    const resumeSeconds = getResumeSecondsForVideo(activeVideo);
+    fallbackPlaybackSecondsRef.current =
+      typeof resumeSeconds === "number" && resumeSeconds > 0 ? resumeSeconds : 0;
+    fallbackIsPlayingRef.current = true;
     focusVideoPlayerSurface();
   }, [activeVideo, isPlayerReady, useIframeFallback]);
 
@@ -3260,6 +3266,22 @@ function App() {
         return;
       }
 
+      if (isSeekShortcut && useIframeFallback) {
+        event.preventDefault();
+        const delta = key === "arrowleft" || key === "j" ? -10 : 10;
+        const duration =
+          typeof activeVideo.durationSeconds === "number" && Number.isFinite(activeVideo.durationSeconds)
+            ? activeVideo.durationSeconds
+            : Number.POSITIVE_INFINITY;
+        const nextTime = Math.max(
+          0,
+          Math.min(duration, fallbackPlaybackSecondsRef.current + delta)
+        );
+        fallbackPlaybackSecondsRef.current = nextTime;
+        sendFallbackPlayerCommand("seekTo", [nextTime, true]);
+        return;
+      }
+
       if (isSeekShortcut && playerRef.current) {
         event.preventDefault();
         const delta = key === "arrowleft" || key === "j" ? -10 : 10;
@@ -3270,6 +3292,17 @@ function App() {
         } catch {
           // Ignore unsupported seeks.
         }
+        return;
+      }
+
+      if (isSpaceShortcut && useIframeFallback) {
+        event.preventDefault();
+        if (fallbackIsPlayingRef.current) {
+          sendFallbackPlayerCommand("pauseVideo");
+        } else {
+          sendFallbackPlayerCommand("playVideo");
+        }
+        fallbackIsPlayingRef.current = !fallbackIsPlayingRef.current;
         return;
       }
 
@@ -3299,7 +3332,7 @@ function App() {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [activeVideo]);
+  }, [activeVideo, useIframeFallback]);
 
   useEffect(() => {
     if (!activeVideo || !isPlayerReady || !playerRef.current) {
@@ -3355,17 +3388,36 @@ function App() {
     setPlayerHostNode(node);
   };
 
+  const sendFallbackPlayerCommand = (func: string, args: unknown[] = []): void => {
+    const targetWindow = fallbackIframeRef.current?.contentWindow;
+    if (!targetWindow) {
+      return;
+    }
+    targetWindow.postMessage(
+      JSON.stringify({
+        event: "command",
+        func,
+        args
+      }),
+      "*"
+    );
+  };
+
   const focusVideoPlayerSurface = (): void => {
     const focusAttempt = (): void => {
-      const iframeTarget =
-        fallbackIframeRef.current ?? playerHostRef.current?.querySelector("iframe");
-      const target = iframeTarget ?? playerHostRef.current;
+      const iframeTarget = playerHostRef.current?.querySelector("iframe");
+      const target = useIframeFallback
+        ? videoModalWrapRef.current ?? playerHostRef.current
+        : iframeTarget ?? playerHostRef.current;
       if (!target) {
         return;
       }
       try {
-        if (iframeTarget) {
+        if (iframeTarget && !useIframeFallback) {
           iframeTarget.setAttribute("tabindex", "0");
+        }
+        if (useIframeFallback && videoModalWrapRef.current) {
+          videoModalWrapRef.current.setAttribute("tabindex", "0");
         }
         target.focus();
       } catch {
@@ -4129,10 +4181,9 @@ function App() {
   };
 
   const toggleVideoFullscreen = (): void => {
-    const fullscreenTarget =
-      videoModalWrapRef.current ??
-      fallbackIframeRef.current ??
-      playerHostRef.current?.querySelector("iframe");
+    const fullscreenTarget = useIframeFallback
+      ? fallbackIframeRef.current ?? videoModalWrapRef.current
+      : videoModalWrapRef.current ?? playerHostRef.current?.querySelector("iframe");
     if (!fullscreenTarget) {
       return;
     }
@@ -6765,6 +6816,10 @@ function App() {
                       const resume = getResumeSecondsForVideo(activeVideo);
                       return typeof resume === "number" && resume > 0 ? `&start=${resume}` : "";
                     })()
+                  }&enablejsapi=1&playsinline=1${
+                    typeof window !== "undefined"
+                      ? `&origin=${encodeURIComponent(window.location.origin)}`
+                      : ""
                   }`}
                   title={activeVideo.title}
                   className="video-modal-frame"
