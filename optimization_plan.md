@@ -3,48 +3,38 @@
 ## Phase 1
 Goal: faster UI without changing behavior.
 
-1. Extract UI from [src/App.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/App.tsx)
-   Create:
-   - [src/components/Topbar.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/Topbar.tsx)
-   - [src/components/BoardColumns.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/BoardColumns.tsx)
-   - [src/components/ChannelColumn.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/ChannelColumn.tsx)
-   - [src/components/SavedListColumn.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/SavedListColumn.tsx)
-   - [src/components/VideoTile.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/VideoTile.tsx)
+Status: partially completed.
 
-2. Memoize rendering boundaries
-   - `React.memo` on column and tile components
-   - pass only minimal props
-   - replace inline lambdas where they cause unnecessary rerenders
+Completed:
+1. Extracted top bar from [src/App.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/App.tsx) into [src/components/AppTopbar.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/AppTopbar.tsx).
+2. Extracted board/column rendering into [src/components/BoardColumns.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/BoardColumns.tsx).
+3. Extracted video playback modal into [src/components/VideoPlayerModal.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/VideoPlayerModal.tsx).
+4. Added [src/components/LazyRender.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/LazyRender.tsx) to keep heavy board views lighter.
+5. Added transcript/summary modal shell in [src/components/TranscriptSummaryModal.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/TranscriptSummaryModal.tsx).
+6. Rewired [src/App.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/App.tsx) to use the extracted top bar, board columns, and video modal components.
+7. Fixed the post-extraction horizontal scroll regression by moving `scrollRef` ownership to the real scroll container inside [src/components/BoardColumns.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/BoardColumns.tsx).
 
-3. Extract modals from board rendering path
-   Create:
-   - [src/components/VideoPlayerModal.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/VideoPlayerModal.tsx)
-   - [src/components/TranscriptSummaryModal.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/TranscriptSummaryModal.tsx)
-   - [src/components/modals/](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/modals/)
-   This isolates expensive modal state from the main board tree.
+Remaining:
+1. Finish extracting the transcript/summary modal logic out of [src/App.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/App.tsx) so the shell component owns the full flow.
+2. Add targeted memo boundaries only where rerender profiling still shows payoff.
+3. Revisit prop stability and inline callback churn after the modal extraction is complete.
 
 ## Phase 2
 Goal: reduce localStorage overhead and state churn.
 
-1. Split persistence into slices
-   Create:
+Status: completed.
+
+Completed:
+1. Split persistence into slices:
    - [src/storage/boardsStorage.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/storage/boardsStorage.ts)
    - [src/storage/progressStorage.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/storage/progressStorage.ts)
    - [src/storage/summariesStorage.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/storage/summariesStorage.ts)
    - [src/storage/transcriptsStorage.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/storage/transcriptsStorage.ts)
-
-2. Debounce writes
-   - boards: 300–500ms
-   - summaries/transcripts: write-through ok
-   - UI-only state: never persist unless needed
-
-3. Remove non-essential data from board payload
-   Keep board payload focused on:
-   - board structure
-   - channel/list membership
-   - watched state
-   - filters
-   Move caches elsewhere.
+2. Debounced board writes in [src/App.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/App.tsx) to 400ms.
+3. Moved transcript and summary caches outside the board payload path and into dedicated storage helpers.
+4. Moved quota estimate, error logs, and video progress persistence behind dedicated storage helpers.
+5. Moved per-board view refresh runtime data out of the board snapshot into separate progress storage.
+6. Shrunk the serialized board payload by omitting non-essential runtime cache data and only writing non-default optional fields where possible.
 
 ## Phase 3
 Goal: simplify logic.

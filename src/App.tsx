@@ -29,6 +29,37 @@ import fixtureBoards from "./fixtures/fixture-boards.json";
 import { AppTopbar } from "./components/AppTopbar";
 import { BoardColumns } from "./components/BoardColumns";
 import { VideoPlayerModal } from "./components/VideoPlayerModal";
+import {
+  persistBoardsPayload,
+  readStoredActiveBoardId,
+  readStoredBoardsPayload
+} from "./storage/boardsStorage";
+import {
+  SUMMARY_CACHE_KEY_PREFIX,
+  SUMMARY_FORMATS_STORAGE_KEY,
+  SUMMARY_MODEL_PRESETS_STORAGE_KEY,
+  SUMMARY_PROMPT_STORAGE_KEY,
+  readCachedSummary as readCachedSummaryEntry,
+  readStoredJson,
+  readStoredString,
+  writeCachedSummary as writeCachedSummaryEntry,
+  writeStoredJson,
+  pruneSummaryCaches,
+  type SummaryCacheEntry
+} from "./storage/summariesStorage";
+import {
+  readCachedTranscript,
+  writeCachedTranscript,
+  pruneTranscriptCaches
+} from "./storage/transcriptsStorage";
+import {
+  BOARD_RUNTIME_STORAGE_KEY,
+  ERROR_LOGS_STORAGE_KEY,
+  QUOTA_ESTIMATE_STORAGE_KEY,
+  VIDEO_PROGRESS_STORAGE_KEY,
+  readStoredJson as readProgressStoredJson,
+  writeStoredJson as writeProgressStoredJson
+} from "./storage/progressStorage";
 
 const { Text } = Typography;
 const DEFAULT_COLUMN_COUNT = 3;
@@ -38,16 +69,6 @@ const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const CHANNEL_PLACEHOLDER_ICON = "/svg/placeholder-channel.svg";
 const PLAYBACK_RATE_OPTIONS = [1, 1.5, 2] as const;
 const BUILD_INFO_LABEL = CHANGE_STAMP;
-const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
-const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
-const ERROR_LOGS_STORAGE_KEY = "youtube-watch:error-logs:v1";
-const QUOTA_ESTIMATE_STORAGE_KEY = "youtube-watch:quota-estimate:v1";
-const TRANSCRIPT_CACHE_KEY_PREFIX = "youtube-watch:transcript:v1:";
-const TRANSCRIPT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const SUMMARY_CACHE_KEY_PREFIX = "youtube-watch:summary:v2:";
-const SUMMARY_PROMPT_STORAGE_KEY = "youtube-watch:summary-prompt:v1";
-const SUMMARY_FORMATS_STORAGE_KEY = "youtube-watch:summary-formats:v1";
-const SUMMARY_MODEL_PRESETS_STORAGE_KEY = "youtube-watch:summary-model-presets:v1";
 const DEFAULT_SUMMARY_FORMAT_ID = "summary-default";
 const NEW_SUMMARY_FORMAT_OPTION = "__new_summary_format__";
 const ALL_SUMMARY_FORMATS_OPTION = "__all_summary_formats__";
@@ -72,8 +93,8 @@ const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 const LEGACY_WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
 const LEGACY_PLAYBACK_RATE_STORAGE_KEY = "youtube-watch:playback-rate:v1";
-const VIDEO_PROGRESS_STORAGE_KEY = "youtube-watch:video-progress:v1";
 const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
+const BOARDS_PERSIST_DEBOUNCE_MS = 400;
 
 type VideoFilter = "all" | "new" | "watched";
 type VideoWindowDays = 1 | 3 | 7 | 30 | 60 | 90 | 120 | 180 | 360;
@@ -385,6 +406,13 @@ type BackupPayload = {
   boards: PersistedBoardState[];
   activeBoardId: string;
 };
+
+type PersistedBoardRuntimeState = Record<
+  string,
+  {
+    viewCountRefreshedAtByVideoId?: Record<string, number>;
+  }
+>;
 
 type ErrorLogEntry = {
   id: string;
@@ -753,6 +781,47 @@ function sanitizeNumericMap(raw: unknown): Record<string, number> {
   );
 }
 
+function normalizePersistedVideo(video: VideoItem): VideoItem {
+  return {
+    videoId: video.videoId,
+    title: video.title,
+    publishedAt: video.publishedAt,
+    durationSeconds:
+      typeof video.durationSeconds === "number" && Number.isFinite(video.durationSeconds)
+        ? video.durationSeconds
+        : null,
+    thumbnailUrl: video.thumbnailUrl,
+    channelTitle: video.channelTitle,
+    videoUrl: video.videoUrl,
+    viewCount:
+      typeof video.viewCount === "number" && Number.isFinite(video.viewCount)
+        ? video.viewCount
+        : null
+  };
+}
+
+function sanitizePersistedBoardRuntime(raw: unknown): PersistedBoardRuntimeState {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(raw).flatMap(([boardId, value]) => {
+      if (typeof boardId !== "string" || !value || typeof value !== "object" || Array.isArray(value)) {
+        return [];
+      }
+      const entry = value as { viewCountRefreshedAtByVideoId?: unknown };
+      return [
+        [
+          boardId,
+          {
+            viewCountRefreshedAtByVideoId: sanitizeNumericMap(entry.viewCountRefreshedAtByVideoId)
+          }
+        ]
+      ];
+    })
+  );
+}
+
 function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
   if (!raw || typeof raw !== "object") {
     return null;
@@ -1000,20 +1069,6 @@ function readLegacyStoredColumns(): PersistedColumnState[] {
   }
 }
 
-type TranscriptCacheEntry = {
-  text: string;
-  cachedAt: number;
-};
-
-type SummaryCacheEntry = {
-  summary: string;
-  keyPoints: string[];
-  model: string;
-  transcriptHash: string;
-  promptHash: string;
-  cachedAt: number;
-};
-
 function createDefaultSummaryFormat(promptOverride?: string): SummaryFormat {
   const now = Date.now();
   const nextPrompt = (promptOverride ?? DEFAULT_SUMMARY_PROMPT).trim() || DEFAULT_SUMMARY_PROMPT;
@@ -1113,22 +1168,11 @@ function normalizeSummaryModelPresets(input: unknown): SummaryModelPreset[] {
 }
 
 function readStoredSummaryModelPresets(): SummaryModelPreset[] {
-  if (typeof window === "undefined") {
-    return [...DEFAULT_SUMMARY_MODEL_PRESETS];
-  }
-  try {
-    const storage = window.localStorage;
-    if (!storage || typeof storage.getItem !== "function") {
-      return [...DEFAULT_SUMMARY_MODEL_PRESETS];
-    }
-    const raw = storage.getItem(SUMMARY_MODEL_PRESETS_STORAGE_KEY);
-    if (!raw) {
-      return [...DEFAULT_SUMMARY_MODEL_PRESETS];
-    }
-    return normalizeSummaryModelPresets(JSON.parse(raw));
-  } catch {
-    return [...DEFAULT_SUMMARY_MODEL_PRESETS];
-  }
+  return readStoredJson(
+    SUMMARY_MODEL_PRESETS_STORAGE_KEY,
+    [...DEFAULT_SUMMARY_MODEL_PRESETS],
+    normalizeSummaryModelPresets
+  );
 }
 
 function buildAllFormatsCombinedPrompt(formats: SummaryFormat[]): string {
@@ -1213,139 +1257,24 @@ function preserveTreeBlocksInMarkdown(value: string): string {
   return chunks.join("\n");
 }
 
-function readCachedTranscript(videoId: string): string | null {
-  if (typeof window === "undefined" || videoId.trim().length === 0) {
-    return null;
-  }
-
-  try {
-    const storage = window.localStorage;
-    if (!storage || typeof storage.getItem !== "function") {
-      return null;
-    }
-    const raw = storage.getItem(`${TRANSCRIPT_CACHE_KEY_PREFIX}${videoId}`);
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw) as Partial<TranscriptCacheEntry>;
-    if (typeof parsed.text !== "string" || typeof parsed.cachedAt !== "number") {
-      storage.removeItem(`${TRANSCRIPT_CACHE_KEY_PREFIX}${videoId}`);
-      return null;
-    }
-    if (Date.now() - parsed.cachedAt > TRANSCRIPT_CACHE_TTL_MS) {
-      storage.removeItem(`${TRANSCRIPT_CACHE_KEY_PREFIX}${videoId}`);
-      return null;
-    }
-    const text = parsed.text.trim();
-    return text.length > 0 ? text : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeCachedTranscript(videoId: string, text: string): void {
-  if (typeof window === "undefined" || videoId.trim().length === 0) {
-    return;
-  }
-  try {
-    const storage = window.localStorage;
-    if (!storage || typeof storage.setItem !== "function") {
-      return;
-    }
-    const payload: TranscriptCacheEntry = {
-      text,
-      cachedAt: Date.now()
-    };
-    storage.setItem(`${TRANSCRIPT_CACHE_KEY_PREFIX}${videoId}`, JSON.stringify(payload));
-  } catch {
-    // Ignore storage write failures.
-  }
-}
-
 function pruneCachedTranscriptAndSummary(storage: Storage): boolean {
-  const transcriptKeys: string[] = [];
-  const summaryEntries: Array<{ key: string; cachedAt: number }> = [];
-
-  for (let index = 0; index < storage.length; index += 1) {
-    const key = storage.key(index);
-    if (!key) {
-      continue;
-    }
-    if (key.startsWith(TRANSCRIPT_CACHE_KEY_PREFIX)) {
-      transcriptKeys.push(key);
-      continue;
-    }
-    if (!key.startsWith(SUMMARY_CACHE_KEY_PREFIX)) {
-      continue;
-    }
-    let cachedAt = 0;
-    try {
-      const raw = storage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw) as { cachedAt?: unknown };
-        if (typeof parsed.cachedAt === "number" && Number.isFinite(parsed.cachedAt)) {
-          cachedAt = parsed.cachedAt;
-        }
-      }
-    } catch {
-      cachedAt = 0;
-    }
-    summaryEntries.push({ key, cachedAt });
-  }
-
-  if (transcriptKeys.length > 0) {
-    transcriptKeys.forEach((key) => storage.removeItem(key));
+  if (pruneTranscriptCaches(storage)) {
     return true;
   }
-
-  if (summaryEntries.length === 0) {
-    return false;
-  }
-
-  summaryEntries.sort((a, b) => a.cachedAt - b.cachedAt);
-  const removeCount = Math.max(1, Math.ceil(summaryEntries.length * 0.25));
-  summaryEntries.slice(0, removeCount).forEach((entry) => storage.removeItem(entry.key));
-  return true;
+  return pruneSummaryCaches(storage);
 }
 
 function readStoredSummaryPrompt(): string {
-  if (typeof window === "undefined") {
-    return DEFAULT_SUMMARY_PROMPT;
-  }
-  try {
-    const storage = window.localStorage;
-    if (!storage || typeof storage.getItem !== "function") {
-      return DEFAULT_SUMMARY_PROMPT;
-    }
-    const raw = storage.getItem(SUMMARY_PROMPT_STORAGE_KEY);
-    if (!raw) {
-      return DEFAULT_SUMMARY_PROMPT;
-    }
-    const parsed = String(raw).trim();
-    return parsed.length > 0 ? parsed : DEFAULT_SUMMARY_PROMPT;
-  } catch {
-    return DEFAULT_SUMMARY_PROMPT;
-  }
+  return readStoredString(SUMMARY_PROMPT_STORAGE_KEY, DEFAULT_SUMMARY_PROMPT);
 }
 
 function readStoredSummaryFormats(): SummaryFormat[] {
-  if (typeof window === "undefined") {
-    return [createDefaultSummaryFormat()];
-  }
-  try {
-    const storage = window.localStorage;
-    if (!storage || typeof storage.getItem !== "function") {
-      return [createDefaultSummaryFormat()];
-    }
-    const raw = storage.getItem(SUMMARY_FORMATS_STORAGE_KEY);
-    if (raw) {
-      return normalizeStoredSummaryFormats(JSON.parse(raw));
-    }
-    const legacyPrompt = readStoredSummaryPrompt();
-    return [createDefaultSummaryFormat(legacyPrompt)];
-  } catch {
-    return [createDefaultSummaryFormat()];
-  }
+  const legacyPrompt = readStoredSummaryPrompt();
+  return readStoredJson(
+    SUMMARY_FORMATS_STORAGE_KEY,
+    [createDefaultSummaryFormat(legacyPrompt)],
+    normalizeStoredSummaryFormats
+  );
 }
 
 function readCachedSummary(
@@ -1356,55 +1285,16 @@ function readCachedSummary(
   if (typeof window === "undefined" || videoId.trim().length === 0) {
     return null;
   }
-  const transcriptHash = hashText(transcriptText.trim());
   const promptHash = hashText(promptText.trim());
-  const cacheKey = `${SUMMARY_CACHE_KEY_PREFIX}${videoId}:${promptHash}`;
-  try {
-    const storage = window.localStorage;
-    if (!storage || typeof storage.getItem !== "function") {
-      return null;
-    }
-    const raw = storage.getItem(cacheKey);
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw) as Partial<SummaryCacheEntry>;
-    if (
-      typeof parsed.summary !== "string" ||
-      !Array.isArray(parsed.keyPoints) ||
-      typeof parsed.model !== "string" ||
-      typeof parsed.transcriptHash !== "string" ||
-      typeof parsed.promptHash !== "string" ||
-      typeof parsed.cachedAt !== "number"
-    ) {
-      storage.removeItem(cacheKey);
-      return null;
-    }
-    if (parsed.transcriptHash !== transcriptHash) {
-      return null;
-    }
-    if (parsed.promptHash !== promptHash) {
-      return null;
-    }
-    const keyPoints = parsed.keyPoints
-      .filter((item): item is string => typeof item === "string")
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0);
-    const summary = parsed.summary.trim();
-    if (!summary && keyPoints.length === 0) {
-      return null;
-    }
-    return {
-      summary,
-      keyPoints,
-      model: parsed.model.trim(),
-      transcriptHash: parsed.transcriptHash,
-      promptHash: parsed.promptHash,
-      cachedAt: parsed.cachedAt
-    };
-  } catch {
+  const transcriptHash = hashText(transcriptText.trim());
+  const parsed = readCachedSummaryEntry(videoId, promptHash);
+  if (!parsed) {
     return null;
   }
+  if (parsed.transcriptHash !== transcriptHash || parsed.promptHash !== promptHash) {
+    return null;
+  }
+  return parsed;
 }
 
 function writeCachedSummary(
@@ -1416,25 +1306,16 @@ function writeCachedSummary(
   if (typeof window === "undefined" || videoId.trim().length === 0) {
     return;
   }
-  try {
-    const storage = window.localStorage;
-    if (!storage || typeof storage.setItem !== "function") {
-      return;
-    }
-    const promptHash = hashText(promptText.trim());
-    const cacheKey = `${SUMMARY_CACHE_KEY_PREFIX}${videoId}:${promptHash}`;
-    const cacheEntry: SummaryCacheEntry = {
-      summary: payload.summary,
-      keyPoints: payload.keyPoints,
-      model: payload.model,
-      transcriptHash: hashText(transcriptText.trim()),
-      promptHash,
-      cachedAt: Date.now()
-    };
-    storage.setItem(cacheKey, JSON.stringify(cacheEntry));
-  } catch {
-    // Ignore storage write failures.
-  }
+  const promptHash = hashText(promptText.trim());
+  const cacheEntry: SummaryCacheEntry = {
+    summary: payload.summary,
+    keyPoints: payload.keyPoints,
+    model: payload.model,
+    transcriptHash: hashText(transcriptText.trim()),
+    promptHash,
+    cachedAt: Date.now()
+  };
+  writeCachedSummaryEntry(videoId, promptHash, cacheEntry);
 }
 
 function hasLegacyStoredColumnsState(): boolean {
@@ -1627,19 +1508,58 @@ function getNextBoardName(boards: BoardState[]): string {
 }
 
 function toPersistedColumns(columns: ColumnState[]): PersistedColumnState[] {
-  return columns.map((column) => ({
-    id: column.id,
-    handleInput: column.handleInput,
-    currentHandle: column.currentHandle,
-    channelId: column.channelId,
-    uploadsPlaylistId: column.uploadsPlaylistId,
-    channelThumbnailUrl: column.channelThumbnailUrl,
-    videos: column.videos,
-    lastFetchAt: column.lastFetchAt,
-    savedSortMode: column.savedSortMode,
-    savedAddedAtByVideoId: column.savedAddedAtByVideoId,
-    savedManualOrder: column.savedManualOrder
-  }));
+  return columns.map((column) => {
+    const persisted: PersistedColumnState = {
+      id: column.id,
+      handleInput: column.handleInput,
+      currentHandle: column.currentHandle,
+      channelThumbnailUrl: column.channelThumbnailUrl,
+      videos: column.videos.map(normalizePersistedVideo),
+      lastFetchAt: column.lastFetchAt
+    };
+
+    if (column.channelId) {
+      persisted.channelId = column.channelId;
+    }
+    if (column.uploadsPlaylistId) {
+      persisted.uploadsPlaylistId = column.uploadsPlaylistId;
+    }
+    if (column.savedSortMode !== DEFAULT_SAVED_SORT_MODE) {
+      persisted.savedSortMode = column.savedSortMode;
+    }
+    if (Object.keys(column.savedAddedAtByVideoId).length > 0) {
+      persisted.savedAddedAtByVideoId = column.savedAddedAtByVideoId;
+    }
+    if (column.savedManualOrder.length > 0) {
+      persisted.savedManualOrder = column.savedManualOrder;
+    }
+
+    return persisted;
+  });
+}
+
+function toPersistedBoards(boards: BoardState[]): PersistedBoardState[] {
+  return boards.map((board) => {
+    const persisted: PersistedBoardState = {
+      id: board.id,
+      name: board.name,
+      kind: board.kind,
+      columns: toPersistedColumns(board.columns),
+      watchedVideos: board.watchedVideos,
+      videoFilter: board.videoFilter,
+      videoWindowDays: board.videoWindowDays,
+      defaultPlaybackRate: board.defaultPlaybackRate
+    };
+
+    if (!(board.columnScopeFilter.length === 1 && board.columnScopeFilter[0] === COLUMN_SCOPE_ALL)) {
+      persisted.columnScopeFilter = board.columnScopeFilter;
+    }
+    if (!(board.videoDurationFilter.length === 1 && board.videoDurationFilter[0] === "all")) {
+      persisted.videoDurationFilter = board.videoDurationFilter;
+    }
+
+    return persisted;
+  });
 }
 
 function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
@@ -1738,51 +1658,17 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
 }
 
 function readStoredBoards(): BoardState[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
-  try {
-    const storage = window.localStorage;
-    if (!storage || typeof storage.getItem !== "function") {
-      return [];
-    }
-
-    const raw = storage.getItem(BOARDS_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    const boards = parsed
-      .map((item) => sanitizePersistedBoard(item))
-      .filter((item): item is PersistedBoardState => item !== null)
-      .map((board) => fromPersistedBoard(board));
-    return ensureSavedBoard(boards);
-  } catch {
-    return [];
-  }
+  const boards = readStoredBoardsPayload()
+    .map((item) => sanitizePersistedBoard(item))
+    .filter((item): item is PersistedBoardState => item !== null)
+    .map((board) => fromPersistedBoard(board));
+  return ensureSavedBoard(boards);
 }
 
-function readStoredActiveBoardId(): string | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const storage = window.localStorage;
-    if (!storage || typeof storage.getItem !== "function") {
-      return null;
-    }
-    const raw = storage.getItem(ACTIVE_BOARD_ID_STORAGE_KEY);
-    return typeof raw === "string" && raw.length > 0 ? raw : null;
-  } catch {
-    return null;
-  }
+function readStoredBoardRuntime(): PersistedBoardRuntimeState {
+  return sanitizePersistedBoardRuntime(
+    readProgressStoredJson<unknown>(BOARD_RUNTIME_STORAGE_KEY, {})
+  );
 }
 
 function isFixtureModeEnabled(): boolean {
@@ -1795,13 +1681,19 @@ function isFixtureModeEnabled(): boolean {
 function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string } {
   const storedBoards = readStoredBoards();
   if (storedBoards.length > 0) {
+    const boardRuntime = readStoredBoardRuntime();
+    const boardsWithRuntime = storedBoards.map((board) => ({
+      ...board,
+      viewCountRefreshedAtByVideoId:
+        boardRuntime[board.id]?.viewCountRefreshedAtByVideoId ?? board.viewCountRefreshedAtByVideoId
+    }));
     const storedActiveBoardId = readStoredActiveBoardId();
     const activeBoardId =
       storedActiveBoardId &&
-      storedBoards.some((board) => board.id === storedActiveBoardId)
+      boardsWithRuntime.some((board) => board.id === storedActiveBoardId)
         ? storedActiveBoardId
-        : storedBoards[0].id;
-    return { boards: storedBoards, activeBoardId };
+        : boardsWithRuntime[0].id;
+    return { boards: boardsWithRuntime, activeBoardId };
   }
 
   const legacyColumns = readLegacyStoredColumns();
@@ -2285,23 +2177,11 @@ function parseBulkListNames(raw: string): string[] {
 }
 
 function readStoredErrorLogs(): ErrorLogEntry[] {
-  if (typeof window === "undefined") {
+  const parsed = readProgressStoredJson<unknown>(ERROR_LOGS_STORAGE_KEY, []);
+  if (!Array.isArray(parsed)) {
     return [];
   }
-  try {
-    const storage = window.localStorage;
-    if (!storage || typeof storage.getItem !== "function") {
-      return [];
-    }
-    const raw = storage.getItem(ERROR_LOGS_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed
+  return parsed
       .filter(
         (item): item is ErrorLogEntry =>
           item !== null &&
@@ -2314,9 +2194,6 @@ function readStoredErrorLogs(): ErrorLogEntry[] {
           typeof (item as { message?: unknown }).message === "string"
       )
       .slice(0, 100);
-  } catch {
-    return [];
-  }
 }
 
 function getPacificDayKey(now = new Date()): string {
@@ -2334,48 +2211,32 @@ function readStoredQuotaEstimate(): QuotaEstimateState {
     todayUnits: 0,
     lastActionUnits: 0
   };
-  if (typeof window === "undefined") {
+  const parsed = readProgressStoredJson<unknown>(QUOTA_ESTIMATE_STORAGE_KEY, null);
+  if (!parsed || typeof parsed !== "object") {
     return initial;
   }
-  try {
-    const storage = window.localStorage;
-    if (!storage || typeof storage.getItem !== "function") {
-      return initial;
-    }
-    const raw = storage.getItem(QUOTA_ESTIMATE_STORAGE_KEY);
-    if (!raw) {
-      return initial;
-    }
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object") {
-      return initial;
-    }
-    const candidate = parsed as {
-      dayKey?: unknown;
-      todayUnits?: unknown;
-      lastActionUnits?: unknown;
-    };
-    const dayKey =
-      typeof candidate.dayKey === "string" ? candidate.dayKey : initial.dayKey;
-    const todayUnits =
-      typeof candidate.todayUnits === "number" && Number.isFinite(candidate.todayUnits)
-        ? Math.max(0, Math.floor(candidate.todayUnits))
-        : 0;
-    const lastActionUnits =
-      typeof candidate.lastActionUnits === "number" && Number.isFinite(candidate.lastActionUnits)
-        ? Math.max(0, Math.floor(candidate.lastActionUnits))
-        : 0;
-    if (dayKey !== initial.dayKey) {
-      return initial;
-    }
-    return {
-      dayKey,
-      todayUnits,
-      lastActionUnits
-    };
-  } catch {
+  const candidate = parsed as {
+    dayKey?: unknown;
+    todayUnits?: unknown;
+    lastActionUnits?: unknown;
+  };
+  const dayKey = typeof candidate.dayKey === "string" ? candidate.dayKey : initial.dayKey;
+  const todayUnits =
+    typeof candidate.todayUnits === "number" && Number.isFinite(candidate.todayUnits)
+      ? Math.max(0, Math.floor(candidate.todayUnits))
+      : 0;
+  const lastActionUnits =
+    typeof candidate.lastActionUnits === "number" && Number.isFinite(candidate.lastActionUnits)
+      ? Math.max(0, Math.floor(candidate.lastActionUnits))
+      : 0;
+  if (dayKey !== initial.dayKey) {
     return initial;
   }
+  return {
+    dayKey,
+    todayUnits,
+    lastActionUnits
+  };
 }
 
 type VideoProgressEntry = {
@@ -2384,38 +2245,23 @@ type VideoProgressEntry = {
 };
 
 function readStoredVideoProgress(): Record<string, VideoProgressEntry> {
-  if (typeof window === "undefined") {
+  const parsed = readProgressStoredJson<unknown>(VIDEO_PROGRESS_STORAGE_KEY, {});
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     return {};
   }
-  try {
-    const storage = window.localStorage;
-    if (!storage || typeof storage.getItem !== "function") {
-      return {};
-    }
-    const raw = storage.getItem(VIDEO_PROGRESS_STORAGE_KEY);
-    if (!raw) {
-      return {};
-    }
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-    return Object.fromEntries(
-      Object.entries(parsed).filter(
-        (entry): entry is [string, VideoProgressEntry] =>
-          typeof entry[0] === "string" &&
-          !!entry[1] &&
-          typeof entry[1] === "object" &&
-          typeof (entry[1] as { seconds?: unknown }).seconds === "number" &&
-          Number.isFinite((entry[1] as { seconds?: number }).seconds) &&
-          (entry[1] as { seconds: number }).seconds >= 0 &&
-          typeof (entry[1] as { updatedAt?: unknown }).updatedAt === "number" &&
-          Number.isFinite((entry[1] as { updatedAt?: number }).updatedAt)
-      )
-    );
-  } catch {
-    return {};
-  }
+  return Object.fromEntries(
+    Object.entries(parsed).filter(
+      (entry): entry is [string, VideoProgressEntry] =>
+        typeof entry[0] === "string" &&
+        !!entry[1] &&
+        typeof entry[1] === "object" &&
+        typeof (entry[1] as { seconds?: unknown }).seconds === "number" &&
+        Number.isFinite((entry[1] as { seconds?: number }).seconds) &&
+        (entry[1] as { seconds: number }).seconds >= 0 &&
+        typeof (entry[1] as { updatedAt?: unknown }).updatedAt === "number" &&
+        Number.isFinite((entry[1] as { updatedAt?: number }).updatedAt)
+    )
+  );
 }
 
 function App() {
@@ -2875,33 +2721,14 @@ function App() {
     if (fixtureMode) {
       return;
     }
-    if (typeof window === "undefined") {
-      return;
-    }
-    try {
-      const storage = window.localStorage;
-      storage.setItem(QUOTA_ESTIMATE_STORAGE_KEY, JSON.stringify(quotaEstimate));
-    } catch {
-      // Ignore local storage write errors.
-    }
+    writeProgressStoredJson(QUOTA_ESTIMATE_STORAGE_KEY, quotaEstimate);
   }, [fixtureMode, quotaEstimate]);
 
   useEffect(() => {
     if (fixtureMode) {
       return;
     }
-    if (typeof window === "undefined") {
-      return;
-    }
-    try {
-      const storage = window.localStorage;
-      if (!storage || typeof storage.setItem !== "function") {
-        return;
-      }
-      storage.setItem(VIDEO_PROGRESS_STORAGE_KEY, JSON.stringify(videoProgressById));
-    } catch {
-      // Ignore local storage write errors.
-    }
+    writeProgressStoredJson(VIDEO_PROGRESS_STORAGE_KEY, videoProgressById);
   }, [fixtureMode, videoProgressById]);
 
   useEffect(() => {
@@ -2915,39 +2742,14 @@ function App() {
     if (fixtureMode) {
       return;
     }
-    if (typeof window === "undefined") {
-      return;
-    }
-    try {
-      const storage = window.localStorage;
-      if (!storage || typeof storage.setItem !== "function") {
-        return;
-      }
-      storage.setItem(SUMMARY_FORMATS_STORAGE_KEY, JSON.stringify(summaryFormats));
-    } catch {
-      // Ignore local storage write errors.
-    }
+    writeStoredJson(SUMMARY_FORMATS_STORAGE_KEY, summaryFormats);
   }, [fixtureMode, summaryFormats]);
 
   useEffect(() => {
     if (fixtureMode) {
       return;
     }
-    if (typeof window === "undefined") {
-      return;
-    }
-    try {
-      const storage = window.localStorage;
-      if (!storage || typeof storage.setItem !== "function") {
-        return;
-      }
-      storage.setItem(
-        SUMMARY_MODEL_PRESETS_STORAGE_KEY,
-        JSON.stringify(summaryModelPresets)
-      );
-    } catch {
-      // Ignore local storage write errors.
-    }
+    writeStoredJson(SUMMARY_MODEL_PRESETS_STORAGE_KEY, summaryModelPresets);
   }, [fixtureMode, summaryModelPresets]);
 
   useEffect(() => {
@@ -2992,61 +2794,58 @@ function App() {
     if (fixtureMode) {
       return;
     }
-    try {
-      const storage = window.localStorage;
-      if (!storage || typeof storage.setItem !== "function") {
-        return;
-      }
-
-      const persistedBoards: PersistedBoardState[] = boards.map((board) => ({
-        id: board.id,
-        name: board.name,
-        kind: board.kind,
-        columns: toPersistedColumns(board.columns),
-        columnScopeFilter: board.columnScopeFilter,
-        watchedVideos: board.watchedVideos,
-        viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
-        videoFilter: board.videoFilter,
-        videoDurationFilter: board.videoDurationFilter,
-        videoWindowDays: board.videoWindowDays,
-        defaultPlaybackRate: board.defaultPlaybackRate
-      }));
-      const boardsPayload = JSON.stringify(persistedBoards);
-      let didPersist = false;
-      for (let attempt = 0; attempt < 6; attempt += 1) {
-        try {
-          storage.setItem(BOARDS_STORAGE_KEY, boardsPayload);
-          storage.setItem(ACTIVE_BOARD_ID_STORAGE_KEY, activeBoardId);
-          didPersist = true;
-          break;
-        } catch {
-          if (!pruneCachedTranscriptAndSummary(storage)) {
-            break;
-          }
+    const timeoutId = window.setTimeout(() => {
+      try {
+        const persistedBoards = toPersistedBoards(boards);
+        const boardsPayload = JSON.stringify(persistedBoards);
+        const didPersist = persistBoardsPayload(
+          boardsPayload,
+          activeBoardId,
+          pruneCachedTranscriptAndSummary
+        );
+        if (!didPersist) {
+          // eslint-disable-next-line no-console
+          console.warn("Failed to persist boards to localStorage.");
         }
+      } catch {
+        // Ignore write failures (private mode / restricted environments).
       }
-      if (!didPersist) {
-        // eslint-disable-next-line no-console
-        console.warn("Failed to persist boards to localStorage.");
-      }
-    } catch {
-      // Ignore write failures (private mode / restricted environments).
-    }
+    }, BOARDS_PERSIST_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [activeBoardId, boards, fixtureMode]);
 
   useEffect(() => {
     if (fixtureMode) {
       return;
     }
-    try {
-      const storage = window.localStorage;
-      if (!storage || typeof storage.setItem !== "function") {
-        return;
-      }
-      storage.setItem(ERROR_LOGS_STORAGE_KEY, JSON.stringify(errorLogs.slice(0, 100)));
-    } catch {
-      // Ignore write failures.
+
+    const timeoutId = window.setTimeout(() => {
+      const runtimePayload: PersistedBoardRuntimeState = Object.fromEntries(
+        boards
+          .filter((board) => Object.keys(board.viewCountRefreshedAtByVideoId).length > 0)
+          .map((board) => [
+            board.id,
+            {
+              viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId
+            }
+          ])
+      );
+      writeProgressStoredJson(BOARD_RUNTIME_STORAGE_KEY, runtimePayload);
+    }, BOARDS_PERSIST_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [boards, fixtureMode]);
+
+  useEffect(() => {
+    if (fixtureMode) {
+      return;
     }
+    writeProgressStoredJson(ERROR_LOGS_STORAGE_KEY, errorLogs.slice(0, 100));
   }, [errorLogs, fixtureMode]);
 
   useEffect(() => {
@@ -5367,18 +5166,7 @@ function App() {
     const payload: BackupPayload = {
       version: 2,
       exportedAt: new Date().toISOString(),
-      boards: boards.map((board) => ({
-        id: board.id,
-        name: board.name,
-        kind: board.kind,
-        columns: toPersistedColumns(board.columns),
-        columnScopeFilter: board.columnScopeFilter,
-        watchedVideos: board.watchedVideos,
-        viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
-        videoFilter: board.videoFilter,
-        videoWindowDays: board.videoWindowDays,
-        defaultPlaybackRate: board.defaultPlaybackRate
-      })),
+      boards: toPersistedBoards(boards),
       activeBoardId
     };
 
