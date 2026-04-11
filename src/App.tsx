@@ -1,21 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, ReactNode } from "react";
+import type { ChangeEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   Alert,
   Button,
   Checkbox,
-  Empty,
-  Form,
   Input,
   List,
   Modal,
   Select,
-  Skeleton,
   Space,
-  Spin,
-  Tooltip,
   Typography
 } from "antd";
 import type { FetchState } from "./types/youtube";
@@ -31,8 +26,11 @@ import { publishVideoSummary } from "./api/publisher";
 import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
 import fixtureBoards from "./fixtures/fixture-boards.json";
+import { AppTopbar } from "./components/AppTopbar";
+import { BoardColumns } from "./components/BoardColumns";
+import { VideoPlayerModal } from "./components/VideoPlayerModal";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const DEFAULT_COLUMN_COUNT = 3;
 const CHANGE_STAMP = "180326090731";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
@@ -248,48 +246,6 @@ type YouTubePlayerErrorEvent = {
   target: YouTubePlayer;
   data: number;
 };
-
-type LazyRenderProps = {
-  children: ReactNode;
-  minHeight?: number;
-  className?: string;
-};
-
-function LazyRender({ children, minHeight = 320, className }: LazyRenderProps) {
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    if (isVisible) {
-      return;
-    }
-
-    const node = rootRef.current;
-    if (!node || typeof IntersectionObserver === "undefined") {
-      setIsVisible(true);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting || entry.intersectionRatio > 0)) {
-          setIsVisible(true);
-          observer.disconnect();
-        }
-      },
-      { root: null, rootMargin: "700px 0px", threshold: 0.01 }
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [isVisible]);
-
-  return (
-    <div ref={rootRef} className={className}>
-      {isVisible ? children : <div className="video-tile-placeholder" style={{ minHeight }} />}
-    </div>
-  );
-}
 
 type YouTubeNamespace = {
   Player: new (
@@ -6529,309 +6485,112 @@ function App() {
     };
   });
 
+  const handleColumnScopeChange = (value: string[]): void => {
+    if (!activeBoard) {
+      return;
+    }
+    const next = resolveColumnScopeFilterSelection(value, columnScopeFilter, columns);
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      columnScopeFilter: next
+    }));
+    blurActiveTopbarControl();
+  };
+
+  const handleVideoFilterSelect = (value: VideoFilter): void => {
+    if (!activeBoard) {
+      return;
+    }
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      videoFilter: value
+    }));
+    blurActiveTopbarControl();
+  };
+
+  const handleVideoWindowSelect = (value: VideoWindowFilter): void => {
+    if (!activeBoard) {
+      return;
+    }
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      videoWindowDays: value
+    }));
+    blurActiveTopbarControl();
+  };
+
+  const handleVideoDurationSelect = (value: string[]): void => {
+    if (!activeBoard) {
+      return;
+    }
+    const next = resolveVideoDurationFilterSelection(value, videoDurationFilter);
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      videoDurationFilter: next
+    }));
+    blurActiveTopbarControl();
+  };
+
+  const handleBrokenChannelThumbnail = (boardId: string, columnId: string): void => {
+    const brokenKey = `${boardId}:${columnId}`;
+    setBrokenChannelThumbnailKeys((prev) => (prev.includes(brokenKey) ? prev : [...prev, brokenKey]));
+  };
+
+  const handleSetSavedSortMode = (columnId: string, value: string): void => {
+    setColumn(activeBoardId, columnId, (prev) => ({
+      ...prev,
+      savedSortMode: value as SavedSortMode
+    }));
+  };
+
   return (
     <main className="app-shell">
-      <div className="columns-nav">
-        <Tooltip
-          title={
-            <>
-              <div>{BUILD_INFO_LABEL}</div>
-              <div>{quotaEstimateText}</div>
-              <div>MAX FETCHED VIDEO AGE: 90 DAYS</div>
-              <div>MAX SAVED VIDEO AGE: UNLIMITED</div>
-            </>
-          }
-          placement="bottom"
-          overlayClassName="fetch-all-tooltip"
-        >
-          <img
-            src={TOP_BAR_LOGO_SRC}
-            alt="Logo"
-            className={`top-bar-logo ${isLogoSpinning ? "is-spinning" : ""}`}
-            onClick={triggerLogoSpin}
-            data-testid="topbar-logo"
-          />
-        </Tooltip>
-        {!isSavedBoardActive ? (
-          <Tooltip
-            title={
-              <>
-                <div>Fetch all new videos for all channels.</div>
-                <div>Last: {topbarLastFetchLabel}</div>
-              </>
-            }
-            placement="bottom"
-            overlayClassName="fetch-all-tooltip"
-          >
-            <Button
-              type="primary"
-              htmlType="button"
-              onClick={fetchAllColumns}
-              aria-label="Fetch all channels"
-              className="nav-btn"
-              data-testid="topbar-fetch-all"
-            >
-              <span className="btn-icon btn-icon-fetch" aria-hidden />
-            </Button>
-          </Tooltip>
-        ) : null}
-        <Select<string>
-          value={activeBoard?.id}
-          onChange={(value) => {
-            handleBoardSelectChange(value);
-            blurActiveTopbarControl();
-          }}
-          aria-label="Board selector"
-          className="video-filter-select board-select"
-          data-testid="topbar-board-select"
-          optionLabelProp="title"
-          listHeight={boardDropdownListHeight}
-        >
-          {displayedBoards.map((board, boardIndex) => (
-            <Select.Option
-              key={board.id}
-              value={board.id}
-              title={board.name.toUpperCase()}
-            >
-              <div className="board-option-row">
-                <span className="board-option-name">{board.name.toUpperCase()}</span>
-                {board.kind !== "saved" ? (
-                  <div className="board-option-actions">
-                    <button
-                      type="button"
-                      className="board-option-move-btn"
-                      aria-label={`Move ${board.name} up`}
-                      disabled={boardIndex === 0}
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        moveBoard(board.id, "up");
-                      }}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      className="board-option-move-btn"
-                      aria-label={`Move ${board.name} down`}
-                      disabled={boardIndex === displayedBoards.length - 2}
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        moveBoard(board.id, "down");
-                      }}
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      className="board-option-edit-btn"
-                      aria-label={`Edit ${board.name}`}
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        openRenameBoardModal(board.id);
-                      }}
-                    >
-                      <span className="btn-icon btn-icon-edit-board" aria-hidden />
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </Select.Option>
-          ))}
-          <Select.Option
-            value={NEW_BOARD_OPTION_VALUE}
-            title="NEW BOARD"
-          >
-            NEW BOARD
-          </Select.Option>
-        </Select>
-        <Select
-          mode="multiple"
-          value={columnScopeFilter}
-          onChange={(value: string[]) => {
-            if (!activeBoard) {
-              return;
-            }
-            const next = resolveColumnScopeFilterSelection(
-              value,
-              columnScopeFilter,
-              columns
-            );
-            setBoard(activeBoard.id, (board) => ({
-              ...board,
-              columnScopeFilter: next
-            }));
-            blurActiveTopbarControl();
-          }}
-          aria-label="Channel scope filter"
-          className="video-filter-select channel-scope-select"
-          data-testid="topbar-channel-scope-select"
-          listHeight={channelScopeDropdownListHeight}
-          maxTagCount={0}
-          maxTagPlaceholder={() =>
-            formatColumnScopeSummary(columnScopeFilter, isSavedBoardActive, columns)
-          }
-          showSearch={false}
-          options={columnScopeOptions}
-        />
-        {!isSavedBoardActive ? (
-          <Select<VideoFilter>
-            value={videoFilter}
-            onChange={(value) => {
-              if (!activeBoard) {
-                return;
-              }
-              setBoard(activeBoard.id, (board) => ({
-                ...board,
-                videoFilter: value
-              }));
-              blurActiveTopbarControl();
-            }}
-            aria-label="Video filter"
-            className="video-filter-select video-status-select"
-            data-testid="topbar-status-select"
-            options={[
-              { value: "all", label: "ALL" },
-              { value: "new", label: "NEW" },
-              { value: "watched", label: "WATCHED" }
-            ]}
-          />
-        ) : null}
-        <Select<VideoWindowFilter>
-          value={videoWindowDays}
-          onChange={(value) => {
-            if (!activeBoard) {
-              return;
-            }
-            setBoard(activeBoard.id, (board) => ({
-              ...board,
-              videoWindowDays: value
-            }));
-            blurActiveTopbarControl();
-          }}
-          aria-label="Video age window"
-          className="video-filter-select video-window-select"
-          data-testid="topbar-days-select"
-          listHeight={360}
-          options={
-            isSavedBoardActive
-              ? SAVED_VIDEO_WINDOW_SELECT_OPTIONS
-              : CHANNEL_VIDEO_WINDOW_SELECT_OPTIONS
-          }
-        />
-        <Select
-          mode="multiple"
-          value={videoDurationFilter}
-          onChange={(value) => {
-            if (!activeBoard) {
-              return;
-            }
-            const next = resolveVideoDurationFilterSelection(value, videoDurationFilter);
-            setBoard(activeBoard.id, (board) => ({
-              ...board,
-              videoDurationFilter: next
-            }));
-            blurActiveTopbarControl();
-          }}
-          aria-label="Video duration filter"
-          className="video-filter-select video-duration-select"
-          data-testid="topbar-duration-select"
-          maxTagCount={0}
-          maxTagPlaceholder={() => formatDurationFilterSummary(videoDurationFilter)}
-          showSearch={false}
-          options={VIDEO_DURATION_FILTER_OPTIONS}
-        />
-        <Select<number>
-          value={preferredPlaybackRate}
-          onChange={(value) => {
-            handlePreferredPlaybackRateChange(value);
-            blurActiveTopbarControl();
-          }}
-          aria-label="Default playback speed"
-          className="video-filter-select playback-speed-select"
-          data-testid="topbar-speed-select"
-          options={PLAYBACK_RATE_OPTIONS.map((value) => ({
-            value,
-            label: `${value}X`
-          }))}
-        />
-        <Button
-          htmlType="button"
-          onClick={playAllVideos}
-          aria-label="Play all videos"
-          className="nav-btn"
-          data-testid="topbar-play-all"
-        >
-          <span className="btn-icon btn-icon-play" aria-hidden />
-        </Button>
-        {!isSavedBoardActive ? (
-          <Button
-            htmlType="button"
-            onClick={openBulkWatchBoardAction}
-            aria-label={`Mark all shown videos ${
-              videoFilter === "watched" ? "new" : "watched"
-            }`}
-            className="nav-btn top-wa-btn"
-            disabled={videoFilter === "all" || shownVideosTotal === 0}
-            data-testid="topbar-mark-all"
-          >
-            {videoFilter === "watched" ? (
-              <span className="btn-icon btn-icon-undo" aria-hidden />
-            ) : (
-              <span className="btn-icon btn-icon-check" aria-hidden />
-            )}
-          </Button>
-        ) : null}
-        <Text className={`topbar-video-count ${shownVideosTotal === 0 ? "is-zero" : ""}`}>
-          {shownVideosTotal}
-        </Text>
-        <Button
-          htmlType="button"
-          onClick={() => scrollToEdge("start")}
-          aria-label="Scroll columns to first"
-          className="nav-btn scroll-btn"
-        >
-          {"«"}
-        </Button>
-        <Button
-          htmlType="button"
-          onClick={() => scrollColumns("left")}
-          aria-label="Scroll columns left"
-          className="nav-btn scroll-btn"
-        >
-          {"‹"}
-        </Button>
-        <Button
-          htmlType="button"
-          onClick={() => scrollColumns("right")}
-          aria-label="Scroll columns right"
-          className="nav-btn scroll-btn"
-        >
-          {"›"}
-        </Button>
-        <Button
-          htmlType="button"
-          onClick={() => scrollToEdge("end")}
-          aria-label="Scroll columns to last"
-          className="nav-btn scroll-btn"
-        >
-          {"»"}
-        </Button>
-      </div>
+      <AppTopbar
+        buildInfoLabel={BUILD_INFO_LABEL}
+        quotaEstimateText={quotaEstimateText}
+        topBarLogoSrc={TOP_BAR_LOGO_SRC}
+        isLogoSpinning={isLogoSpinning}
+        triggerLogoSpin={triggerLogoSpin}
+        isSavedBoardActive={isSavedBoardActive}
+        topbarLastFetchLabel={topbarLastFetchLabel}
+        fetchAllColumns={fetchAllColumns}
+        activeBoardId={activeBoard?.id}
+        displayedBoards={displayedBoards}
+        newBoardOptionValue={NEW_BOARD_OPTION_VALUE}
+        boardDropdownListHeight={boardDropdownListHeight}
+        handleBoardSelectChange={handleBoardSelectChange}
+        blurActiveTopbarControl={blurActiveTopbarControl}
+        moveBoard={moveBoard}
+        openRenameBoardModal={openRenameBoardModal}
+        columnScopeFilter={columnScopeFilter}
+        columnScopeDropdownListHeight={channelScopeDropdownListHeight}
+        formatColumnScopeSummary={() =>
+          formatColumnScopeSummary(columnScopeFilter, isSavedBoardActive, columns)
+        }
+        columnScopeOptions={columnScopeOptions}
+        onColumnScopeChange={handleColumnScopeChange}
+        videoFilter={videoFilter}
+        onVideoFilterChange={handleVideoFilterSelect}
+        videoWindowDays={videoWindowDays}
+        onVideoWindowChange={(value) => handleVideoWindowSelect(value as VideoWindowFilter)}
+        savedVideoWindowSelectOptions={SAVED_VIDEO_WINDOW_SELECT_OPTIONS}
+        channelVideoWindowSelectOptions={CHANNEL_VIDEO_WINDOW_SELECT_OPTIONS}
+        videoDurationFilter={videoDurationFilter}
+        onVideoDurationChange={handleVideoDurationSelect}
+        formatDurationFilterSummary={() => formatDurationFilterSummary(videoDurationFilter)}
+        videoDurationFilterOptions={VIDEO_DURATION_FILTER_OPTIONS}
+        preferredPlaybackRate={preferredPlaybackRate}
+        onPreferredPlaybackRateChange={(value) => {
+          handlePreferredPlaybackRateChange(value);
+          blurActiveTopbarControl();
+        }}
+        playbackRateOptions={PLAYBACK_RATE_OPTIONS}
+        playAllVideos={playAllVideos}
+        openBulkWatchBoardAction={openBulkWatchBoardAction}
+        shownVideosTotal={shownVideosTotal}
+        scrollToEdge={scrollToEdge}
+        scrollColumns={scrollColumns}
+      />
 
       <Modal
         title={isSavedBoardActive ? "Add Lists" : "Add Channels"}
@@ -6864,117 +6623,34 @@ function App() {
         />
       </Modal>
 
-      <Modal
-        title={activeVideo?.title ?? "Video"}
-        open={activeVideo !== null}
-        afterOpenChange={(open) => {
-          if (open) {
-            focusVideoPlayerSurface();
-          }
-        }}
-        onCancel={() => {
-          stopPlaylist();
-          closeVideoModal();
-        }}
-        footer={null}
-        width={1125}
-        zIndex={1000}
-        destroyOnHidden
-        className="video-player-modal"
-      >
-        {activeVideo ? (
-          <Space direction="vertical" size="middle" className="full-width">
-            <div className="video-player-status-row">
-              {getPlayerStatusLabel(playerStatus) ? (
-                <Text
-                  className={`video-meta-feedback ${
-                    playerStatus === "failed" ? "is-error" : "is-info"
-                  }`}
-                >
-                  {getPlayerStatusLabel(playerStatus)}
-                </Text>
-              ) : null}
-              {playerStatus === "failed" ? (
-                <Button
-                  htmlType="button"
-                  className="column-move-btn link-copy-btn"
-                  onClick={openActiveVideoOnYouTube}
-                >
-                  Open on YouTube
-                </Button>
-              ) : null}
-            </div>
-            <div ref={videoModalWrapRef} className="video-modal-wrap" tabIndex={0}>
-              <div ref={setPlayerHost} tabIndex={-1} className="video-modal-frame" />
-            </div>
-            <div className="speed-controls">
-              <div className="speed-controls-left">
-                <Button
-                  htmlType="button"
-                  className="video-watch-btn modal-save-btn modal-fullscreen-btn"
-                  aria-label="Toggle fullscreen"
-                  onClick={toggleVideoFullscreen}
-                  disabled={!isPlayerInteractive}
-                >
-                  <span className="btn-icon btn-icon-fullscreen" aria-hidden />
-                </Button>
-                <Button
-                  htmlType="button"
-                  className={`column-move-btn link-copy-btn ${
-                    copiedLinkVideoId === activeVideo.videoId ? "is-copied" : ""
-                  }`}
-                  aria-label={`Copy link for ${activeVideo.title}`}
-                  onClick={() => void copyVideoLink(activeVideo)}
-                >
-                  <span className="btn-icon btn-icon-link" aria-hidden />
-                </Button>
-                <Button
-                  htmlType="button"
-                  className="video-watch-btn modal-save-btn"
-                  aria-label={`Save ${activeVideo.title}`}
-                  onClick={() => openSaveVideoModal(activeVideo)}
-                  disabled={saveDestinationColumns.length === 0}
-                >
-                  <span className="btn-icon btn-icon-star" aria-hidden />
-                </Button>
-                <Button
-                  htmlType="button"
-                  className="video-watch-btn modal-watch-btn"
-                  aria-label={`Mark ${activeVideo.title} as watched`}
-                  onClick={markWatchedAndAdvanceOrClose}
-                >
-                  <span className="btn-icon btn-icon-check" aria-hidden />
-                </Button>
-                {isPlaylistActive ? (
-                  <Text className="playlist-progress-text">
-                    {playlistIndex + 1} of {playlistQueue.length} |{" "}
-                    {playlistScope === "channel"
-                      ? playlistChannelLabel || "CHANNEL"
-                      : isSavedBoardActive
-                      ? "ALL LISTS"
-                      : "ALL CHANNELS"}{" "}
-                    | {playlistOrderLabel}
-                  </Text>
-                ) : null}
-              </div>
-              <div className="speed-controls-right">
-                {availablePlaybackRates.map((rate) => (
-                  <Button
-                    key={rate}
-                    htmlType="button"
-                    className="speed-btn"
-                    type={playbackRate === rate ? "primary" : "default"}
-                    onClick={() => handlePlaybackRateClick(rate)}
-                    disabled={!isPlayerInteractive}
-                  >
-                    {rate}x
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </Space>
-        ) : null}
-      </Modal>
+      <VideoPlayerModal
+        activeVideo={activeVideo}
+        playerStatusLabel={getPlayerStatusLabel(playerStatus)}
+        playerFailed={playerStatus === "failed"}
+        focusVideoPlayerSurface={focusVideoPlayerSurface}
+        closeVideoModal={closeVideoModal}
+        stopPlaylist={stopPlaylist}
+        videoModalWrapRef={videoModalWrapRef}
+        setPlayerHost={setPlayerHost}
+        toggleVideoFullscreen={toggleVideoFullscreen}
+        isPlayerInteractive={isPlayerInteractive}
+        copiedLinkVideoId={copiedLinkVideoId}
+        copyVideoLink={copyVideoLink}
+        openSaveVideoModal={openSaveVideoModal}
+        saveDestinationColumnsLength={saveDestinationColumns.length}
+        markWatchedAndAdvanceOrClose={markWatchedAndAdvanceOrClose}
+        isPlaylistActive={isPlaylistActive}
+        playlistIndex={playlistIndex}
+        playlistQueueLength={playlistQueue.length}
+        playlistScope={playlistScope}
+        playlistChannelLabel={playlistChannelLabel}
+        isSavedBoardActive={isSavedBoardActive}
+        playlistOrderLabel={playlistOrderLabel}
+        availablePlaybackRates={availablePlaybackRates}
+        playbackRate={playbackRate}
+        handlePlaybackRateClick={handlePlaybackRateClick}
+        openActiveVideoOnYouTube={openActiveVideoOnYouTube}
+      />
 
       <Modal
         title={
@@ -7395,560 +7071,56 @@ function App() {
         </div>
       </Modal>
 
-      <div
-        ref={scrollRef}
-        className="columns-scroll"
-      >
-        <div className="columns-layout">
-          <section className="columns-grid">
-            {visibleColumns.map((column, index) => {
-              const brokenThumbKey = `${activeBoardId}:${column.id}`;
-              const channelThumbToShow =
-                isSavedBoardActive
-                  ? ""
-                  : brokenChannelThumbnailKeys.includes(brokenThumbKey)
-                  ? column.videos[0]?.thumbnailUrl ?? ""
-                  : column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
-              const hasHandleInput = column.handleInput.trim().length > 0;
-              const filteredVideos = filteredVideosByColumnId.get(column.id) ?? [];
-              const manualOrderIndexByVideoId =
-                isSavedBoardActive && column.savedSortMode === "manual"
-                  ? new Map(filteredVideos.map((video, index) => [video.videoId, index]))
-                  : new Map<string, number>();
-              const hasChannelPlaylistVideos = filteredVideos.length > 0;
-
-              return (
-                <article
-                  key={column.id}
-                  className={`channel-column ${
-                    isSavedBoardActive ? "is-saved-column" : "is-channel-column"
-                  }`}
-                  data-board-id={activeBoardId}
-                  data-column-id={column.id}
-                  data-handle={(column.currentHandle || column.handleInput || "").trim()}
-                  data-hidden={hiddenColumnIdSet.has(column.id) ? "true" : "false"}
-                >
-                  <div className="column-actions">
-                    <div className="column-actions-left">
-                      <Button
-                        htmlType="button"
-                        onClick={() => moveColumnById(column.id, "left")}
-                        disabled={index === 0 || column.loading}
-                        aria-label={`Move column ${index + 1} left`}
-                        className="column-move-btn"
-                      >
-                        {"‹"}
-                      </Button>
-                      <Button
-                        htmlType="button"
-                        onClick={() => moveColumnById(column.id, "right")}
-                        disabled={index === visibleColumns.length - 1 || column.loading}
-                        aria-label={`Move column ${index + 1} right`}
-                        className="column-move-btn"
-                      >
-                        {"›"}
-                      </Button>
-                      {!isSavedBoardActive ? (
-                        <Button
-                          htmlType="button"
-                          onClick={() => openMoveColumnModal(column.id)}
-                          disabled={
-                            column.loading ||
-                            moveDestinationBoards.length === 0 ||
-                            !hasChannelPlaylistVideos
-                          }
-                          aria-label={`Move column ${index + 1} to board`}
-                          className="column-move-btn"
-                        >
-                          <span className="btn-icon btn-icon-move" aria-hidden />
-                        </Button>
-                      ) : null}
-                    </div>
-                    <div className="column-actions-right">
-                      {isSavedBoardActive ? (
-                        <Select<SavedSortMode>
-                          value={column.savedSortMode}
-                          onChange={(value) => {
-                            setColumn(activeBoardId, column.id, (prev) => ({
-                              ...prev,
-                              savedSortMode: value
-                            }));
-                          }}
-                          aria-label={`Sort list ${index + 1}`}
-                          className="video-filter-select saved-sort-select"
-                          options={SAVED_SORT_MODE_OPTIONS}
-                        />
-                      ) : null}
-                      {!isSavedBoardActive ? (
-                        <Button
-                          htmlType="button"
-                          onClick={() =>
-                            runFetch(activeBoardId, column.id, column.handleInput)
-                          }
-                          disabled={
-                            column.loading ||
-                            !hasHandleInput
-                          }
-                          aria-label={`Fetch column ${index + 1}`}
-                          className="inline-fetch-btn"
-                          data-testid="column-fetch"
-                        >
-                          <span className="btn-icon btn-icon-fetch" aria-hidden />
-                        </Button>
-                      ) : null}
-                      <Button
-                        htmlType="button"
-                        onClick={() => playChannelVideos(column)}
-                        disabled={column.loading || !hasChannelPlaylistVideos}
-                        aria-label={`Play channel ${index + 1} playlist`}
-                        className="column-move-btn"
-                        data-testid="column-play"
-                      >
-                        <span className="btn-icon btn-icon-play" aria-hidden />
-                      </Button>
-                      {!isSavedBoardActive ? (
-                        <Button
-                          htmlType="button"
-                          onClick={() => void copyAllVideoLinks(column.id, filteredVideos)}
-                          disabled={column.loading || filteredVideos.length === 0}
-                          aria-label={`Copy all shown links in channel ${index + 1}`}
-                          className={`column-move-btn link-copy-btn ${
-                            copiedLinkVideoId === `column-links:${column.id}` ? "is-copied" : ""
-                          }`}
-                        >
-                          <span className="btn-icon btn-icon-link" aria-hidden />
-                        </Button>
-                      ) : null}
-                      {isSavedBoardActive ? (
-                        <Button
-                          htmlType="button"
-                          onClick={() => openRemoveAllSavedColumnModal(column)}
-                          disabled={column.loading || column.videos.length === 0}
-                          aria-label={`Remove videos from list ${index + 1}`}
-                          className="remove-column-btn"
-                        >
-                          <span className="btn-icon btn-icon-remove" aria-hidden />
-                        </Button>
-                      ) : null}
-                      {!isSavedBoardActive ? (
-                        <Button
-                          htmlType="button"
-                          onClick={() =>
-                            openBulkWatchColumnAction(
-                              column,
-                              filteredVideos.map((video) => video.videoId),
-                              videoFilter !== "watched"
-                            )
-                          }
-                          disabled={column.loading || filteredVideos.length === 0 || videoFilter === "all"}
-                          aria-label={`Mark all shown videos in channel ${index + 1} as ${
-                            videoFilter === "watched" ? "new" : "watched"
-                          }`}
-                          className="bulk-watch-column-btn"
-                          data-testid="column-mark-all"
-                        >
-                          {videoFilter === "watched" ? (
-                            <span className="btn-icon btn-icon-undo" aria-hidden />
-                          ) : (
-                            <span className="btn-icon btn-icon-check" aria-hidden />
-                          )}
-                        </Button>
-                      ) : null}
-                      <Button
-                        htmlType="button"
-                        onClick={() => setDeletingColumnId(column.id)}
-                        disabled={column.loading || (isSavedBoardActive && columns.length <= 1)}
-                        aria-label={`Remove column ${index + 1}`}
-                        className="remove-column-btn"
-                        data-testid="column-delete"
-                      >
-                        <span className="btn-icon btn-icon-delete" aria-hidden />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <Form
-                    layout="vertical"
-                    className="full-width"
-                  >
-                    <div className="column-header">
-                      {isSavedBoardActive ? (
-                        channelThumbToShow ? (
-                          <img
-                            src={channelThumbToShow}
-                            alt={`Channel ${index + 1}`}
-                            className="channel-avatar"
-                            onError={() => {
-                              const brokenKey = `${activeBoardId}:${column.id}`;
-                              setBrokenChannelThumbnailKeys((prev) =>
-                                prev.includes(brokenKey) ? prev : [...prev, brokenKey]
-                              );
-                            }}
-                          />
-                        ) : (
-                          <div
-                            className="channel-avatar channel-avatar-placeholder"
-                            aria-label={`Channel ${index + 1} placeholder`}
-                          >
-                            <img
-                              src={SAVED_LIST_PLACEHOLDER_ICON}
-                              alt=""
-                              className="channel-avatar-placeholder-icon"
-                            />
-                          </div>
-                        )
-                      ) : (
-                        <button
-                          type="button"
-                          className="channel-avatar-toggle-btn"
-                          aria-label={`Hide ${column.handleInput || column.currentHandle || `channel ${index + 1}`}`}
-                          onClick={() => hideVisibleColumn(column.id)}
-                        >
-                          {channelThumbToShow ? (
-                            <img
-                              src={channelThumbToShow}
-                              alt={`Channel ${index + 1}`}
-                              className="channel-avatar"
-                              onError={() => {
-                                const brokenKey = `${activeBoardId}:${column.id}`;
-                                setBrokenChannelThumbnailKeys((prev) =>
-                                  prev.includes(brokenKey) ? prev : [...prev, brokenKey]
-                                );
-                              }}
-                            />
-                          ) : (
-                            <div
-                              className="channel-avatar channel-avatar-placeholder"
-                              aria-label={`Channel ${index + 1} placeholder`}
-                            >
-                              <img
-                                src={CHANNEL_PLACEHOLDER_ICON}
-                                alt=""
-                                className="channel-avatar-placeholder-icon"
-                              />
-                            </div>
-                          )}
-                        </button>
-                      )}
-                      <Input
-                        placeholder={isSavedBoardActive ? "List name" : "@channel"}
-                        value={column.handleInput}
-                        className="channel-handle-input"
-                        aria-label={`Channel ${index + 1} handle`}
-                        readOnly
-                        onClick={() => {
-                          if (isSavedBoardActive) {
-                            openEditSavedListModal(column);
-                            return;
-                          }
-                          openEditChannelModal(column);
-                        }}
-                        onPressEnter={(event) => {
-                          event.preventDefault();
-                        }}
-                      />
-                      <Text
-                        className={`column-video-count ${
-                          filteredVideos.length === 0 ? "is-zero" : ""
-                        }`}
-                      >
-                        {filteredVideos.length}
-                      </Text>
-                    </div>
-
-                  </Form>
-
-                  {column.loading && (
-                    <Space direction="vertical" className="full-width">
-                      <Text>Loading...</Text>
-                      <Spin />
-                      <Skeleton active paragraph={{ rows: 2 }} />
-                    </Space>
-                  )}
-
-                  {column.error && <Alert type="error" message={column.error} showIcon={false} />}
-
-                  {!column.loading && !column.error && filteredVideos.length === 0 && (
-                    <Empty description="Empty" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                  )}
-
-                  {!column.loading && filteredVideos.length > 0 && (
-                    <List
-                      itemLayout="vertical"
-                      dataSource={filteredVideos}
-                      renderItem={(video) => {
-                        const isWatched = isVideoMarkedWatched(watchedVideos, video.videoId);
-                        const isMetaRefreshInFlight = videoStatsBackfillInFlight.includes(
-                          video.videoId
-                        );
-                        const metaFeedback = videoMetaFeedbackById[video.videoId];
-                        return (
-                          <List.Item
-                            key={video.videoId}
-                            className="video-tile-item"
-                            data-url={video.videoUrl}
-                            data-video-id={video.videoId}
-                            data-board-id={activeBoardId}
-                            data-column-id={column.id}
-                            data-handle={(column.currentHandle || column.handleInput || "").trim()}
-                            data-state={isWatched ? "watched" : "new"}
-                          >
-                            <LazyRender minHeight={320} className="full-width">
-                              <Space direction="vertical" size="small" className="full-width">
-                              <div className="video-meta-row">
-                                <button
-                                  type="button"
-                                  className="video-meta-btn"
-                                  onClick={() => void backfillVideoStats(video.videoId)}
-                                  aria-label={`Refresh metadata for ${video.title}`}
-                                  disabled={isMetaRefreshInFlight}
-                                  data-testid="video-meta-refresh"
-                                >
-                                  <Text className="video-meta">
-                                    {metaFeedback ? (
-                                      <span
-                                        className={`video-meta-feedback is-${metaFeedback.kind}`}
-                                      >
-                                        {metaFeedback.text}
-                                      </span>
-                                    ) : isMetaRefreshInFlight ? (
-                                      <span className="video-meta-feedback is-info">
-                                        FETCHING
-                                      </span>
-                                    ) : (
-                                      formatVideoMeta(video)
-                                    )}
-                                  </Text>
-                                </button>
-                                {isSavedBoardActive ? (
-                                  <>
-                                    {column.savedSortMode === "manual" ? (
-                                      <>
-                                        <Button
-                                          htmlType="button"
-                                          className="column-move-btn"
-                                          aria-label={`Move ${video.title} up`}
-                                          onClick={() =>
-                                            moveSavedVideoInManualOrder(column.id, video.videoId, "up")
-                                          }
-                                          disabled={
-                                            (manualOrderIndexByVideoId.get(video.videoId) ?? 0) === 0
-                                          }
-                                        >
-                                          ↑
-                                        </Button>
-                                        <Button
-                                          htmlType="button"
-                                          className="column-move-btn"
-                                          aria-label={`Move ${video.title} down`}
-                                          onClick={() =>
-                                            moveSavedVideoInManualOrder(
-                                              column.id,
-                                              video.videoId,
-                                              "down"
-                                            )
-                                          }
-                                          disabled={
-                                            (manualOrderIndexByVideoId.get(video.videoId) ?? 0) ===
-                                            filteredVideos.length - 1
-                                          }
-                                        >
-                                          ↓
-                                        </Button>
-                                      </>
-                                    ) : null}
-                                    <Button
-                                      htmlType="button"
-                                      className="column-move-btn"
-                                      aria-label={`Open transcript for ${video.title}`}
-                                      onClick={() => void openTranscript(video)}
-                                    >
-                                      <span className="btn-icon btn-icon-transcript" aria-hidden />
-                                    </Button>
-                                    <Button
-                                      htmlType="button"
-                                      className={`column-move-btn link-copy-btn ${
-                                        copiedLinkVideoId === video.videoId ? "is-copied" : ""
-                                      }`}
-                                      aria-label={`Copy link for ${video.title}`}
-                                      onClick={() => void copyVideoLink(video)}
-                                      data-testid="video-copy-link"
-                                    >
-                                      <span className="btn-icon btn-icon-link" aria-hidden />
-                                    </Button>
-                                    <Button
-                                      htmlType="button"
-                                      className="column-move-btn"
-                                      aria-label={`Move ${video.title}`}
-                                      onClick={() =>
-                                        openMoveSavedVideoModal(column.id, video.videoId)
-                                      }
-                                      disabled={savedBoardColumns.length <= 1}
-                                    >
-                                      <span className="btn-icon btn-icon-move" aria-hidden />
-                                    </Button>
-                                    <Button
-                                      htmlType="button"
-                                      className="remove-column-btn video-delete-btn"
-                                      aria-label={`Delete ${video.title}`}
-                                      onClick={() =>
-                                        setDeletingSavedVideo({
-                                          columnId: column.id,
-                                          videoId: video.videoId
-                                        })
-                                      }
-                                    >
-                                      <span className="btn-icon btn-icon-remove" aria-hidden />
-                                    </Button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Button
-                                      htmlType="button"
-                                      className="column-move-btn"
-                                      aria-label={`Open transcript for ${video.title}`}
-                                      onClick={() =>
-                                        void openTranscript(
-                                          video,
-                                          column.currentHandle || column.handleInput
-                                        )
-                                      }
-                                    >
-                                      <span className="btn-icon btn-icon-transcript" aria-hidden />
-                                    </Button>
-                                    <Button
-                                      htmlType="button"
-                                      className={`column-move-btn link-copy-btn ${
-                                        copiedLinkVideoId === video.videoId ? "is-copied" : ""
-                                      }`}
-                                      aria-label={`Copy link for ${video.title}`}
-                                      onClick={() => void copyVideoLink(video)}
-                                    >
-                                      <span className="btn-icon btn-icon-link" aria-hidden />
-                                    </Button>
-                                    <Button
-                                      htmlType="button"
-                                      className="column-move-btn"
-                                      aria-label={`Save ${video.title}`}
-                                      onClick={() => openSaveVideoModal(video)}
-                                      disabled={saveDestinationColumns.length === 0}
-                                      data-testid="video-save"
-                                    >
-                                      <span className="btn-icon btn-icon-star" aria-hidden />
-                                    </Button>
-                                    <Button
-                                      htmlType="button"
-                                      className="video-watch-btn"
-                                      aria-label={`Mark ${video.title} as ${
-                                        isWatched ? "new" : "watched"
-                                      }`}
-                                      onClick={() => toggleWatched(video.videoId)}
-                                      data-testid="video-mark-toggle"
-                                    >
-                                      {isWatched ? (
-                                        <span className="btn-icon btn-icon-undo" aria-hidden />
-                                      ) : (
-                                        <span className="btn-icon btn-icon-check" aria-hidden />
-                                      )}
-                                    </Button>
-                                  </>
-                                )}
-                              </div>
-                              {getVideoThumbnailSrc(video) ? (
-                                <button
-                                  type="button"
-                                  className="video-thumb-btn"
-                                  onClick={() => openVideo(video)}
-                                >
-                                  <img
-                                    src={getVideoThumbnailSrc(video)}
-                                    alt={video.title}
-                                    className="video-thumb"
-                                    onError={() => handleVideoThumbnailError(video)}
-                                  />
-                                </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                className="video-link-btn"
-                                onClick={() => openVideo(video)}
-                              >
-                                <Title level={5} className="video-title">
-                                  {video.title}
-                                </Title>
-                              </button>
-                              </Space>
-                            </LazyRender>
-                          </List.Item>
-                        );
-                      }}
-                    />
-                  )}
-                </article>
-              );
-            })}
-            <aside className="add-column-rail">
-              <div className="add-column-stack">
-                <Button
-                  htmlType="button"
-                  onClick={addColumn}
-                  aria-label="Add column"
-                  className="add-column-btn add-column-plus-btn"
-                >
-                  +
-                </Button>
-                {!isSavedBoardActive && hiddenColumns.length > 0 ? (
-                  <div className="hidden-channel-thumbs">
-                    {hiddenColumns.map((column, index) => {
-                      const brokenKey = `${activeBoardId}:${column.id}`;
-                      const thumbnailUrl = brokenChannelThumbnailKeys.includes(brokenKey)
-                        ? column.videos[0]?.thumbnailUrl ?? ""
-                        : column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
-                      const rawName = column.currentHandle.trim() || column.handleInput.trim();
-                      const displayName = rawName
-                        ? rawName.startsWith("@")
-                          ? rawName
-                          : `@${rawName}`
-                        : `CHANNEL ${index + 1}`;
-                      return (
-                        <button
-                          type="button"
-                          key={column.id}
-                          className="hidden-channel-thumb"
-                          title={displayName.toUpperCase()}
-                          aria-label={`Hidden ${displayName}`}
-                          onClick={() => revealHiddenColumn(column.id)}
-                        >
-                          {thumbnailUrl ? (
-                            <img
-                              src={thumbnailUrl}
-                              alt={displayName}
-                              className="hidden-channel-thumb-image"
-                              onError={() => {
-                                setBrokenChannelThumbnailKeys((prev) =>
-                                  prev.includes(brokenKey) ? prev : [...prev, brokenKey]
-                                );
-                              }}
-                            />
-                          ) : (
-                            <div className="hidden-channel-thumb-placeholder">
-                              <img
-                                src={CHANNEL_PLACEHOLDER_ICON}
-                                alt=""
-                                className="channel-avatar-placeholder-icon"
-                              />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </div>
-            </aside>
-          </section>
-        </div>
-      </div>
+      <BoardColumns
+        scrollRef={scrollRef}
+        activeBoardId={activeBoardId}
+        isSavedBoardActive={isSavedBoardActive}
+        columns={columns}
+        visibleColumns={visibleColumns}
+        hiddenColumns={hiddenColumns}
+        hiddenColumnIdSet={hiddenColumnIdSet}
+        brokenChannelThumbnailKeys={brokenChannelThumbnailKeys}
+        savedListPlaceholderIcon={SAVED_LIST_PLACEHOLDER_ICON}
+        channelPlaceholderIcon={CHANNEL_PLACEHOLDER_ICON}
+        copiedLinkVideoId={copiedLinkVideoId}
+        videoFilter={videoFilter}
+        saveDestinationColumnsLength={saveDestinationColumns.length}
+        moveDestinationBoardsLength={moveDestinationBoards.length}
+        savedBoardColumnsLength={savedBoardColumns.length}
+        filteredVideosByColumnId={filteredVideosByColumnId}
+        isVideoMarkedWatched={(videoId) => isVideoMarkedWatched(watchedVideos, videoId)}
+        videoStatsBackfillInFlight={videoStatsBackfillInFlight}
+        videoMetaFeedbackById={videoMetaFeedbackById}
+        formatVideoMeta={formatVideoMeta}
+        backfillVideoStats={backfillVideoStats}
+        getVideoThumbnailSrc={getVideoThumbnailSrc}
+        handleVideoThumbnailError={handleVideoThumbnailError}
+        moveColumnById={moveColumnById}
+        openMoveColumnModal={openMoveColumnModal}
+        setSavedSortMode={handleSetSavedSortMode}
+        runFetch={runFetch}
+        playChannelVideos={(column) => playChannelVideos(column as ColumnState)}
+        copyAllVideoLinks={copyAllVideoLinks}
+        openRemoveAllSavedColumnModal={(column) => openRemoveAllSavedColumnModal(column as ColumnState)}
+        openBulkWatchColumnAction={(column, videoIds, watched) =>
+          openBulkWatchColumnAction(column as ColumnState, videoIds, watched)
+        }
+        setDeletingColumnId={setDeletingColumnId}
+        hideVisibleColumn={hideVisibleColumn}
+        revealHiddenColumn={revealHiddenColumn}
+        openEditSavedListModal={(column) => openEditSavedListModal(column as ColumnState)}
+        openEditChannelModal={(column) => openEditChannelModal(column as ColumnState)}
+        openTranscript={openTranscript}
+        copyVideoLink={copyVideoLink}
+        openSaveVideoModal={openSaveVideoModal}
+        toggleWatched={toggleWatched}
+        openVideo={openVideo}
+        openMoveSavedVideoModal={openMoveSavedVideoModal}
+        setDeletingSavedVideo={setDeletingSavedVideo}
+        moveSavedVideoInManualOrder={moveSavedVideoInManualOrder}
+        addColumn={addColumn}
+        onBrokenChannelThumbnail={handleBrokenChannelThumbnail}
+      />
       <div className="backup-actions">
         <Button
           htmlType="button"
@@ -8026,7 +7198,7 @@ function App() {
           <List
             size="small"
             dataSource={errorLogs}
-            renderItem={(log) => (
+            renderItem={(log: ErrorLogEntry) => (
               <List.Item key={log.id}>
                 <Text>
                   {log.time} | {log.board} | {log.column} | {log.action} | {log.message}
