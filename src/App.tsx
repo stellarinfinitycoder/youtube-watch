@@ -2439,6 +2439,8 @@ function App() {
   const fallbackIframeRef = useRef<HTMLIFrameElement | null>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerReadyRef = useRef(false);
+  const playerSessionRef = useRef(0);
+  const playerFallbackLockedRef = useRef(false);
   const transcriptRequestIdRef = useRef(0);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
   const linkCopyFeedbackTimeoutRef = useRef<number | null>(null);
@@ -3072,14 +3074,18 @@ function App() {
 
     let isCancelled = false;
     let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    const playerSession = playerSessionRef.current + 1;
+    playerSessionRef.current = playerSession;
     const shouldForceIframeFallback =
       typeof activeVideo.durationSeconds === "number" && activeVideo.durationSeconds <= 60;
     setAvailablePlaybackRates([...PLAYBACK_RATE_OPTIONS]);
     setPlaybackRate(preferredPlaybackRate);
     setIsPlayerReady(false);
     playerReadyRef.current = false;
+    playerFallbackLockedRef.current = false;
     setUseIframeFallback(false);
     if (shouldForceIframeFallback) {
+      playerFallbackLockedRef.current = true;
       setUseIframeFallback(true);
       if (playerRef.current) {
         playerRef.current.destroy();
@@ -3103,6 +3109,12 @@ function App() {
     }
     fallbackTimer = setTimeout(() => {
       if (!isCancelled && !playerReadyRef.current) {
+        playerFallbackLockedRef.current = true;
+        if (playerRef.current) {
+          playerRef.current.destroy();
+          playerRef.current = null;
+        }
+        playerHostNode.innerHTML = "";
         setUseIframeFallback(true);
       }
     }, 800);
@@ -3128,6 +3140,23 @@ function App() {
           },
           events: {
             onReady: (event) => {
+              if (isCancelled || playerSessionRef.current !== playerSession) {
+                try {
+                  event.target.destroy();
+                } catch {
+                  // Ignore stale player cleanup failures.
+                }
+                return;
+              }
+              if (playerFallbackLockedRef.current) {
+                try {
+                  event.target.destroy();
+                } catch {
+                  // Ignore fallback cleanup failures.
+                }
+                playerRef.current = null;
+                return;
+              }
               const rates = event.target.getAvailablePlaybackRates();
               const filteredRates = rates.filter((rate) =>
                 PLAYBACK_RATE_OPTIONS.includes(rate as (typeof PLAYBACK_RATE_OPTIONS)[number])
@@ -3160,6 +3189,9 @@ function App() {
               }
             },
             onStateChange: (event) => {
+              if (isCancelled || playerSessionRef.current !== playerSession) {
+                return;
+              }
               if (event.data !== 0 || !activeVideo) {
                 return;
               }
@@ -3187,7 +3219,11 @@ function App() {
       if (playerHostNode) {
         playerHostNode.innerHTML = "";
       }
+      if (playerSessionRef.current === playerSession) {
+        playerSessionRef.current += 1;
+      }
       playerReadyRef.current = false;
+      playerFallbackLockedRef.current = false;
     };
   }, [
     activeVideo,
