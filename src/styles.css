@@ -1873,6 +1873,14 @@ body {
   border: 0;
 }
 
+.video-player-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 22px;
+}
+
 .video-modal-wrap:fullscreen,
 .video-modal-wrap:-webkit-full-screen {
   width: 100vw;
@@ -1895,11 +1903,6 @@ body {
   height: 100%;
   max-width: 100vw;
   max-height: 100vh;
-}
-
-.video-modal-frame-hidden {
-  opacity: 0;
-  pointer-events: none;
 }
 
 @media (max-width: 1080px) {
