@@ -6,15 +6,10 @@ const { Text } = Typography;
 
 type VideoPlayerModalProps = {
   activeVideo: VideoItem | null;
-  playerStatusLabel: string | null;
-  playerFailed: boolean;
-  focusVideoPlayerSurface: () => void;
   closeVideoModal: () => void;
   stopPlaylist: () => void;
   videoModalWrapRef: React.RefObject<HTMLDivElement>;
-  setPlayerHost: (node: HTMLDivElement | null) => void;
   toggleVideoFullscreen: () => void;
-  isPlayerInteractive: boolean;
   copiedLinkVideoId: string | null;
   copyVideoLink: (video: VideoItem) => Promise<void>;
   openSaveVideoModal: (video: VideoItem) => void;
@@ -27,23 +22,15 @@ type VideoPlayerModalProps = {
   playlistChannelLabel: string;
   isSavedBoardActive: boolean;
   playlistOrderLabel: string;
-  availablePlaybackRates: number[];
-  playbackRate: number;
-  handlePlaybackRateClick: (rate: number) => void;
   openActiveVideoOnYouTube: () => void;
 };
 
 function VideoPlayerModalComponent({
   activeVideo,
-  playerStatusLabel,
-  playerFailed,
-  focusVideoPlayerSurface,
   closeVideoModal,
   stopPlaylist,
   videoModalWrapRef,
-  setPlayerHost,
   toggleVideoFullscreen,
-  isPlayerInteractive,
   copiedLinkVideoId,
   copyVideoLink,
   openSaveVideoModal,
@@ -56,20 +43,16 @@ function VideoPlayerModalComponent({
   playlistChannelLabel,
   isSavedBoardActive,
   playlistOrderLabel,
-  availablePlaybackRates,
-  playbackRate,
-  handlePlaybackRateClick,
   openActiveVideoOnYouTube
 }: VideoPlayerModalProps) {
+  const embedUrl = activeVideo
+    ? `https://www.youtube.com/embed/${activeVideo.videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
+    : "";
+
   return (
     <Modal
       title={activeVideo?.title ?? "Video"}
       open={activeVideo !== null}
-      afterOpenChange={(open) => {
-        if (open) {
-          focusVideoPlayerSurface();
-        }
-      }}
       onCancel={() => {
         stopPlaylist();
         closeVideoModal();
@@ -82,20 +65,15 @@ function VideoPlayerModalComponent({
     >
       {activeVideo ? (
         <Space direction="vertical" size="middle" className="full-width">
-          <div className="video-player-status-row">
-            {playerStatusLabel ? (
-              <Text className={`video-meta-feedback ${playerFailed ? "is-error" : "is-info"}`}>
-                {playerStatusLabel}
-              </Text>
-            ) : null}
-            {playerFailed ? (
-              <Button htmlType="button" className="column-move-btn link-copy-btn" onClick={openActiveVideoOnYouTube}>
-                Open on YouTube
-              </Button>
-            ) : null}
-          </div>
           <div ref={videoModalWrapRef} className="video-modal-wrap" tabIndex={0}>
-            <div ref={setPlayerHost} tabIndex={-1} className="video-modal-frame" />
+            <iframe
+              className="video-modal-frame"
+              src={embedUrl}
+              title={activeVideo.title}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
+            />
           </div>
           <div className="speed-controls">
             <div className="speed-controls-left">
@@ -104,9 +82,16 @@ function VideoPlayerModalComponent({
                 className="video-watch-btn modal-save-btn modal-fullscreen-btn"
                 aria-label="Toggle fullscreen"
                 onClick={toggleVideoFullscreen}
-                disabled={!isPlayerInteractive}
               >
                 <span className="btn-icon btn-icon-fullscreen" aria-hidden />
+              </Button>
+              <Button
+                htmlType="button"
+                className="column-move-btn link-copy-btn"
+                aria-label="Open on YouTube"
+                onClick={openActiveVideoOnYouTube}
+              >
+                YT
               </Button>
               <Button
                 htmlType="button"
@@ -144,20 +129,6 @@ function VideoPlayerModalComponent({
                   | {playlistOrderLabel}
                 </Text>
               ) : null}
-            </div>
-            <div className="speed-controls-right">
-              {availablePlaybackRates.map((rate) => (
-                <Button
-                  key={rate}
-                  htmlType="button"
-                  className="speed-btn"
-                  type={playbackRate === rate ? "primary" : "default"}
-                  onClick={() => handlePlaybackRateClick(rate)}
-                  disabled={!isPlayerInteractive}
-                >
-                  {rate}x
-                </Button>
-              ))}
             </div>
           </div>
         </Space>

@@ -56,7 +56,6 @@ import {
   BOARD_RUNTIME_STORAGE_KEY,
   ERROR_LOGS_STORAGE_KEY,
   QUOTA_ESTIMATE_STORAGE_KEY,
-  VIDEO_PROGRESS_STORAGE_KEY,
   readStoredJson as readProgressStoredJson,
   writeStoredJson as writeProgressStoredJson
 } from "./storage/progressStorage";
@@ -67,7 +66,6 @@ const CHANGE_STAMP = "180326090731";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const CHANNEL_PLACEHOLDER_ICON = "/svg/placeholder-channel.svg";
-const PLAYBACK_RATE_OPTIONS = [1, 1.5, 2] as const;
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const DEFAULT_SUMMARY_FORMAT_ID = "summary-default";
 const NEW_SUMMARY_FORMAT_OPTION = "__new_summary_format__";
@@ -130,14 +128,6 @@ type SummaryFormat = {
 type SummaryModelPreset = {
   value: string;
   label: string;
-};
-type PlayerState = "idle" | "loading" | "ready" | "playing" | "paused" | "retrying" | "failed";
-type PlayerControllerState = {
-  mode: "js";
-  state: PlayerState;
-  sessionId: number;
-  retryCount: number;
-  error: string | null;
 };
 type SavedSortMode =
   | "time_asc"
@@ -242,108 +232,10 @@ type FixturePayload = {
 
 const FIXTURE_DATA = fixtureBoards as FixturePayload;
 
-type YouTubePlayer = {
-  destroy: () => void;
-  setPlaybackRate: (suggestedRate: number) => void;
-  getAvailablePlaybackRates: () => number[];
-  seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
-  getCurrentTime: () => number;
-  getDuration?: () => number;
-  getPlayerState: () => number;
-  playVideo: () => void;
-  pauseVideo: () => void;
-};
-
-type YouTubePlayerEvent = {
-  target: YouTubePlayer;
-};
-
-type YouTubePlayerStateChangeEvent = {
-  target: YouTubePlayer;
-  data: number;
-};
-
-type YouTubePlayerErrorEvent = {
-  target: YouTubePlayer;
-  data: number;
-};
-
-type YouTubeNamespace = {
-  Player: new (
-    element: HTMLElement,
-    options: {
-      videoId: string;
-      playerVars?: Record<string, number>;
-      events?: {
-        onReady?: (event: YouTubePlayerEvent) => void;
-        onStateChange?: (event: YouTubePlayerStateChangeEvent) => void;
-        onError?: (event: YouTubePlayerErrorEvent) => void;
-      };
-    }
-  ) => YouTubePlayer;
-};
-
 declare global {
   interface Window {
-    YT?: YouTubeNamespace;
-    onYouTubeIframeAPIReady?: () => void;
     appAgent?: AppAgentApi;
   }
-}
-
-let youtubeIframeApiPromise: Promise<void> | null = null;
-const PLAYER_READY_TIMEOUT_MS = 1500;
-
-function loadYouTubeIframeApi(): Promise<void> {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("YouTube API unavailable in this environment."));
-  }
-
-  if (window.YT?.Player) {
-    return Promise.resolve();
-  }
-
-  if (youtubeIframeApiPromise) {
-    return youtubeIframeApiPromise;
-  }
-
-  youtubeIframeApiPromise = new Promise<void>((resolve) => {
-    const previousReady = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => {
-      if (typeof previousReady === "function") {
-        previousReady();
-      }
-      resolve();
-    };
-
-    const existing = document.querySelector<HTMLScriptElement>(
-      `script[src="${YOUTUBE_IFRAME_API_SRC}"]`
-    );
-    if (!existing) {
-      const script = document.createElement("script");
-      script.src = YOUTUBE_IFRAME_API_SRC;
-      document.head.appendChild(script);
-    }
-  });
-
-  return youtubeIframeApiPromise;
-}
-
-function canInteractWithPlayerState(state: PlayerState): boolean {
-  return state === "ready" || state === "playing" || state === "paused";
-}
-
-function getPlayerStatusLabel(state: PlayerState): string | null {
-  if (state === "loading") {
-    return "LOADING...";
-  }
-  if (state === "retrying") {
-    return "RETRYING...";
-  }
-  if (state === "failed") {
-    return "FAILED";
-  }
-  return null;
 }
 
 type ColumnState = FetchState & {
@@ -2239,46 +2131,16 @@ function readStoredQuotaEstimate(): QuotaEstimateState {
   };
 }
 
-type VideoProgressEntry = {
-  seconds: number;
-  updatedAt: number;
-};
-
-function readStoredVideoProgress(): Record<string, VideoProgressEntry> {
-  const parsed = readProgressStoredJson<unknown>(VIDEO_PROGRESS_STORAGE_KEY, {});
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return {};
-  }
-  return Object.fromEntries(
-    Object.entries(parsed).filter(
-      (entry): entry is [string, VideoProgressEntry] =>
-        typeof entry[0] === "string" &&
-        !!entry[1] &&
-        typeof entry[1] === "object" &&
-        typeof (entry[1] as { seconds?: unknown }).seconds === "number" &&
-        Number.isFinite((entry[1] as { seconds?: number }).seconds) &&
-        (entry[1] as { seconds: number }).seconds >= 0 &&
-        typeof (entry[1] as { updatedAt?: unknown }).updatedAt === "number" &&
-        Number.isFinite((entry[1] as { updatedAt?: number }).updatedAt)
-    )
-  );
-}
-
 function App() {
   const fixtureMode = isFixtureModeEnabled();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
-  const playerHostRef = useRef<HTMLDivElement | null>(null);
   const videoModalWrapRef = useRef<HTMLDivElement | null>(null);
-  const playerRef = useRef<YouTubePlayer | null>(null);
-  const playerSessionRef = useRef(0);
-  const playerAttemptRef = useRef(0);
   const transcriptRequestIdRef = useRef(0);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
   const linkCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const transcriptCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const logoSpinTimeoutRef = useRef<number | null>(null);
-  const [playerHostNode, setPlayerHostNode] = useState<HTMLDivElement | null>(null);
   const initialBoardsState = fixtureMode ? createFixtureBoardsState() : getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
   const [activeBoardId, setActiveBoardId] = useState<string>(
@@ -2328,9 +2190,6 @@ function App() {
   const [isLogoSpinning, setIsLogoSpinning] = useState(false);
   const [errorLogs, setErrorLogs] = useState<ErrorLogEntry[]>(readStoredErrorLogs);
   const [quotaEstimate, setQuotaEstimate] = useState<QuotaEstimateState>(readStoredQuotaEstimate);
-  const [videoProgressById, setVideoProgressById] = useState<Record<string, VideoProgressEntry>>(
-    readStoredVideoProgress
-  );
   const [videoStatsBackfillInFlight, setVideoStatsBackfillInFlight] = useState<string[]>(
     []
   );
@@ -2388,17 +2247,6 @@ function App() {
   const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
   const [playlistChannelLabel, setPlaylistChannelLabel] = useState<string>("");
   const [playlistOrderLabel, setPlaylistOrderLabel] = useState<string>("NEWEST FIRST");
-  const [playbackRate, setPlaybackRate] = useState<number>(1.5);
-  const [availablePlaybackRates, setAvailablePlaybackRates] = useState<number[]>(
-    [...PLAYBACK_RATE_OPTIONS]
-  );
-  const [playerController, setPlayerController] = useState<PlayerControllerState>({
-    mode: "js",
-    state: "idle",
-    sessionId: 0,
-    retryCount: 0,
-    error: null
-  });
   const [brokenChannelThumbnailKeys, setBrokenChannelThumbnailKeys] = useState<string[]>(
     []
   );
@@ -2407,8 +2255,6 @@ function App() {
   >([]);
   const activeBoard =
     boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
-  const playerStatus = playerController.state;
-  const isPlayerInteractive = canInteractWithPlayerState(playerStatus);
   const activeSummaryFormat =
     summaryFormats.find((item) => item.id === activeSummaryFormatId) ??
     getDefaultSummaryFormat(summaryFormats);
@@ -2489,7 +2335,6 @@ function App() {
   const videoWindowDays = activeBoard
     ? normalizeVideoWindowFilterForKind(activeBoard.kind, activeBoard.videoWindowDays)
     : DEFAULT_VIDEO_WINDOW_DAYS;
-  const preferredPlaybackRate = activeBoard?.defaultPlaybackRate ?? 1.5;
   const columnScopeFilter = useMemo(
     () =>
       normalizeColumnScopeFilter(activeBoard?.columnScopeFilter ?? [COLUMN_SCOPE_ALL], columns),
@@ -2676,10 +2521,6 @@ function App() {
   }, [activeBoardId, boards]);
 
   useEffect(() => {
-    setPlaybackRate(preferredPlaybackRate);
-  }, [preferredPlaybackRate]);
-
-  useEffect(() => {
     if (!isBulkModalOpen) {
       return;
     }
@@ -2723,13 +2564,6 @@ function App() {
     }
     writeProgressStoredJson(QUOTA_ESTIMATE_STORAGE_KEY, quotaEstimate);
   }, [fixtureMode, quotaEstimate]);
-
-  useEffect(() => {
-    if (fixtureMode) {
-      return;
-    }
-    writeProgressStoredJson(VIDEO_PROGRESS_STORAGE_KEY, videoProgressById);
-  }, [fixtureMode, videoProgressById]);
 
   useEffect(() => {
     const exists = summaryFormats.some((item) => item.id === activeSummaryFormatId);
@@ -2859,421 +2693,12 @@ function App() {
     setPendingBulkFetch([]);
   }, [pendingBulkFetch]);
 
-  const setPlayerHost = (node: HTMLDivElement | null): void => {
-    playerHostRef.current = node;
-    setPlayerHostNode(node);
-  };
-
-  const destroyPlayerInstance = (): void => {
-    if (playerRef.current) {
-      try {
-        playerRef.current.destroy();
-      } catch {
-        // Ignore destroy failures.
-      }
-      playerRef.current = null;
-    }
-    if (playerHostRef.current) {
-      playerHostRef.current.innerHTML = "";
-    }
-  };
-
-  const focusVideoPlayerSurface = (): void => {
-    const focusAttempt = (): void => {
-      const target = videoModalWrapRef.current ?? playerHostRef.current;
-      if (!target) {
-        return;
-      }
-      try {
-        target.setAttribute("tabindex", "0");
-        target.focus();
-      } catch {
-        // Ignore focus failures.
-      }
-    };
-
-    [0, 80, 180, 320, 520].forEach((delay) => {
-      window.setTimeout(focusAttempt, delay);
-    });
-  };
-
-  const readCurrentTime = (): number | null => {
-    if (!playerRef.current || !isPlayerInteractive) {
-      return null;
-    }
-    try {
-      const currentTime = playerRef.current.getCurrentTime();
-      return Number.isFinite(currentTime) ? currentTime : null;
-    } catch {
-      return null;
-    }
-  };
-
-  const seekBy = (deltaSeconds: number): void => {
-    if (!playerRef.current || !isPlayerInteractive) {
-      return;
-    }
-    try {
-      const currentTime = playerRef.current.getCurrentTime();
-      const nextTime = Math.max(0, currentTime + deltaSeconds);
-      playerRef.current.seekTo(nextTime, true);
-    } catch {
-      // Ignore unsupported seeks.
-    }
-  };
-
-  const playPause = (): void => {
-    if (!playerRef.current || !isPlayerInteractive) {
-      return;
-    }
-    try {
-      const currentState = playerRef.current.getPlayerState();
-      if (currentState === 1) {
-        playerRef.current.pauseVideo();
-      } else {
-        playerRef.current.playVideo();
-      }
-    } catch {
-      // Ignore unsupported play/pause controls.
-    }
-  };
-
-  const setRate = (rate: number): void => {
-    if (!playerRef.current || !isPlayerInteractive) {
-      return;
-    }
-    try {
-      playerRef.current.setPlaybackRate(rate);
-      setPlaybackRate(rate);
-    } catch {
-      // Ignore unsupported playback-rate calls.
-    }
-  };
-
   const openActiveVideoOnYouTube = (): void => {
     if (!activeVideo || typeof window === "undefined") {
       return;
     }
     window.open(activeVideo.videoUrl, "_blank", "noopener,noreferrer");
   };
-
-  useEffect(() => {
-    if (!activeVideo || !playerHostNode) {
-      return;
-    }
-
-    let isCancelled = false;
-    let readyTimer: number | null = null;
-    const sessionId = playerSessionRef.current + 1;
-    playerSessionRef.current = sessionId;
-
-    const clearReadyTimer = (): void => {
-      if (readyTimer) {
-        clearTimeout(readyTimer);
-        readyTimer = null;
-      }
-    };
-
-    const markFailed = (errorMessage: string, retryCount: number): void => {
-      if (isCancelled || playerSessionRef.current !== sessionId) {
-        return;
-      }
-      destroyPlayerInstance();
-      setAvailablePlaybackRates([...PLAYBACK_RATE_OPTIONS]);
-      setPlaybackRate(preferredPlaybackRate);
-      setPlayerController({
-        mode: "js",
-        state: "failed",
-        sessionId,
-        retryCount,
-        error: errorMessage
-      });
-    };
-
-    const startAttempt = (retryCount: number): void => {
-      if (isCancelled || !playerHostNode || playerSessionRef.current !== sessionId) {
-        return;
-      }
-
-      const attemptId = playerAttemptRef.current + 1;
-      playerAttemptRef.current = attemptId;
-      destroyPlayerInstance();
-      setAvailablePlaybackRates([...PLAYBACK_RATE_OPTIONS]);
-      setPlaybackRate(preferredPlaybackRate);
-      setPlayerController({
-        mode: "js",
-        state: retryCount === 0 ? "loading" : "retrying",
-        sessionId,
-        retryCount,
-        error: null
-      });
-
-      clearReadyTimer();
-      readyTimer = window.setTimeout(() => {
-        if (
-          isCancelled ||
-          playerSessionRef.current !== sessionId ||
-          playerAttemptRef.current !== attemptId
-        ) {
-          return;
-        }
-        if (retryCount < 1) {
-          startAttempt(retryCount + 1);
-          return;
-        }
-        markFailed("Player failed to load.", retryCount);
-      }, PLAYER_READY_TIMEOUT_MS);
-
-      loadYouTubeIframeApi()
-        .then(() => {
-          if (
-            isCancelled ||
-            !playerHostNode ||
-            !window.YT?.Player ||
-            playerSessionRef.current !== sessionId ||
-            playerAttemptRef.current !== attemptId
-          ) {
-            return;
-          }
-
-          playerRef.current = new window.YT.Player(playerHostNode, {
-            videoId: activeVideo.videoId,
-            playerVars: {
-              autoplay: 1,
-              rel: 0
-            },
-            events: {
-              onReady: (event) => {
-                if (
-                  isCancelled ||
-                  playerSessionRef.current !== sessionId ||
-                  playerAttemptRef.current !== attemptId
-                ) {
-                  try {
-                    event.target.destroy();
-                  } catch {
-                    // Ignore stale player cleanup failures.
-                  }
-                  return;
-                }
-
-                clearReadyTimer();
-                const rates = event.target.getAvailablePlaybackRates();
-                const filteredRates = rates.filter((rate) =>
-                  PLAYBACK_RATE_OPTIONS.includes(rate as (typeof PLAYBACK_RATE_OPTIONS)[number])
-                );
-                const normalizedRates =
-                  filteredRates.length > 0 ? filteredRates : [...PLAYBACK_RATE_OPTIONS];
-                setAvailablePlaybackRates(normalizedRates);
-                const preferred = normalizedRates.includes(preferredPlaybackRate)
-                  ? preferredPlaybackRate
-                  : normalizedRates.includes(1)
-                    ? 1
-                    : normalizedRates[0];
-                try {
-                  event.target.setPlaybackRate(preferred);
-                } catch {
-                  // Ignore unsupported playback-rate calls.
-                }
-                setPlaybackRate(preferred);
-                setPlayerController({
-                  mode: "js",
-                  state: "ready",
-                  sessionId,
-                  retryCount,
-                  error: null
-                });
-                const resumeSeconds = getResumeSecondsForVideo(activeVideo);
-                if (typeof resumeSeconds === "number" && resumeSeconds > 0) {
-                  try {
-                    event.target.seekTo(resumeSeconds, true);
-                  } catch {
-                    // Ignore unsupported resume seek.
-                  }
-                }
-                focusVideoPlayerSurface();
-              },
-              onStateChange: (event) => {
-                if (
-                  isCancelled ||
-                  playerSessionRef.current !== sessionId ||
-                  playerAttemptRef.current !== attemptId
-                ) {
-                  return;
-                }
-                if (event.data === 0) {
-                  markWatchedAndAdvanceOrClose();
-                  return;
-                }
-                if (event.data === 1) {
-                  setPlayerController((previous) => ({
-                    ...previous,
-                    state: "playing",
-                    error: null
-                  }));
-                  return;
-                }
-                if (event.data === 2) {
-                  setPlayerController((previous) => ({
-                    ...previous,
-                    state: "paused",
-                    error: null
-                  }));
-                  return;
-                }
-                if (event.data === 3) {
-                  setPlayerController((previous) => ({
-                    ...previous,
-                    state: previous.state === "failed" ? previous.state : "loading"
-                  }));
-                  return;
-                }
-                if (event.data === 5) {
-                  setPlayerController((previous) => ({
-                    ...previous,
-                    state: "ready",
-                    error: null
-                  }));
-                }
-              },
-              onError: () => {
-                if (
-                  isCancelled ||
-                  playerSessionRef.current !== sessionId ||
-                  playerAttemptRef.current !== attemptId
-                ) {
-                  return;
-                }
-                clearReadyTimer();
-                if (retryCount < 1) {
-                  startAttempt(retryCount + 1);
-                  return;
-                }
-                markFailed("Player failed to initialize.", retryCount);
-              }
-            }
-          });
-        })
-        .catch(() => {
-          if (
-            isCancelled ||
-            playerSessionRef.current !== sessionId ||
-            playerAttemptRef.current !== attemptId
-          ) {
-            return;
-          }
-          clearReadyTimer();
-          if (retryCount < 1) {
-            startAttempt(retryCount + 1);
-            return;
-          }
-          markFailed("Player unavailable.", retryCount);
-        });
-    };
-
-    startAttempt(0);
-
-    return () => {
-      isCancelled = true;
-      clearReadyTimer();
-      destroyPlayerInstance();
-      if (playerSessionRef.current === sessionId) {
-        playerSessionRef.current += 1;
-      }
-    };
-  }, [activeVideo, playerHostNode, playlistIndex, playlistQueue, preferredPlaybackRate]);
-
-  useEffect(() => {
-    if (!activeVideo) {
-      return;
-    }
-    focusVideoPlayerSurface();
-  }, [activeVideo, playerStatus]);
-
-  useEffect(() => {
-    if (!activeVideo) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (shouldIgnoreShortcutTarget(event.target)) {
-        return;
-      }
-
-      const key = event.key.toLowerCase();
-      const isSeekShortcut =
-        key === "arrowleft" || key === "arrowright" || key === "j" || key === "l";
-      const isSpaceShortcut = event.code === "Space" || key === " ";
-      const isFullscreenShortcut = key === "f";
-      if (!isSeekShortcut && !isSpaceShortcut && !isFullscreenShortcut) {
-        return;
-      }
-
-      if (isSeekShortcut) {
-        event.preventDefault();
-        seekBy(key === "arrowleft" || key === "j" ? -10 : 10);
-        return;
-      }
-
-      if (isSpaceShortcut) {
-        event.preventDefault();
-        playPause();
-        return;
-      }
-
-      if (isFullscreenShortcut) {
-        event.preventDefault();
-        toggleVideoFullscreen();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [activeVideo, playerStatus]);
-
-  useEffect(() => {
-    if (!activeVideo || !isPlayerInteractive) {
-      return;
-    }
-
-    const saveProgressTick = (): void => {
-      const currentTime = readCurrentTime();
-      if (currentTime === null || currentTime <= 1) {
-        return;
-      }
-      const duration = activeVideo.durationSeconds;
-      if (
-        typeof duration === "number" &&
-        Number.isFinite(duration) &&
-        duration > 0 &&
-        currentTime >= duration * 0.95
-      ) {
-        setVideoProgressById((previous) => {
-          if (!previous[activeVideo.videoId]) {
-            return previous;
-          }
-          const next = { ...previous };
-          delete next[activeVideo.videoId];
-          return next;
-        });
-        return;
-      }
-      setVideoProgressById((previous) => ({
-        ...previous,
-        [activeVideo.videoId]: {
-          seconds: Math.max(0, Math.floor(currentTime)),
-          updatedAt: Date.now()
-        }
-      }));
-    };
-
-    const intervalId = window.setInterval(saveProgressTick, 5000);
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [activeVideo, isPlayerInteractive, playerStatus]);
 
   const setBoard = (
     boardId: string,
@@ -3866,30 +3291,6 @@ function App() {
     }, 0);
   };
 
-  const handlePlaybackRateClick = (rate: number): void => {
-    if (!activeBoard) {
-      return;
-    }
-    setPlaybackRate(rate);
-    setBoard(activeBoard.id, (board) => ({
-      ...board,
-      defaultPlaybackRate: rate
-    }));
-    setRate(rate);
-  };
-
-  const handlePreferredPlaybackRateChange = (rate: number): void => {
-    if (!activeBoard) {
-      return;
-    }
-    setPlaybackRate(rate);
-    setBoard(activeBoard.id, (board) => ({
-      ...board,
-      defaultPlaybackRate: rate
-    }));
-    setRate(rate);
-  };
-
   const setWatchedStatusAcrossBoards = (
     videoIds: string[],
     watched: boolean
@@ -3923,14 +3324,6 @@ function App() {
     if (!activeBoard) {
       return;
     }
-    setVideoProgressById((previous) => {
-      if (!previous[videoId]) {
-        return previous;
-      }
-      const next = { ...previous };
-      delete next[videoId];
-      return next;
-    });
     setWatchedStatusAcrossBoards([videoId], true);
   };
 
@@ -3943,46 +3336,7 @@ function App() {
   };
 
   const closeVideoModal = (): void => {
-    if (activeVideo) {
-      const currentTime = readCurrentTime();
-      if (currentTime !== null && currentTime > 1) {
-        const duration = activeVideo.durationSeconds;
-        if (
-          typeof duration === "number" &&
-          Number.isFinite(duration) &&
-          duration > 0 &&
-          currentTime >= duration * 0.95
-        ) {
-          setVideoProgressById((previous) => {
-            if (!previous[activeVideo.videoId]) {
-              return previous;
-            }
-            const next = { ...previous };
-            delete next[activeVideo.videoId];
-            return next;
-          });
-        } else {
-          setVideoProgressById((previous) => ({
-            ...previous,
-            [activeVideo.videoId]: {
-              seconds: Math.max(0, Math.floor(currentTime)),
-              updatedAt: Date.now()
-            }
-          }));
-        }
-      }
-    }
-    playerSessionRef.current += 1;
-    playerAttemptRef.current += 1;
-    destroyPlayerInstance();
     setActiveVideo(null);
-    setPlayerController({
-      mode: "js",
-      state: "idle",
-      sessionId: playerSessionRef.current,
-      retryCount: 0,
-      error: null
-    });
   };
 
   const markWatchedAndAdvanceOrClose = (): void => {
@@ -4028,25 +3382,6 @@ function App() {
     } catch {
       // Ignore unsupported fullscreen requests.
     }
-  };
-
-  const getResumeSecondsForVideo = (video: VideoItem): number | null => {
-    if (activeBoard && isVideoMarkedWatched(activeBoard.watchedVideos, video.videoId)) {
-      return null;
-    }
-    const stored = videoProgressById[video.videoId];
-    if (!stored || !Number.isFinite(stored.seconds) || stored.seconds <= 1) {
-      return null;
-    }
-    if (
-      typeof video.durationSeconds === "number" &&
-      Number.isFinite(video.durationSeconds) &&
-      video.durationSeconds > 0 &&
-      stored.seconds >= video.durationSeconds * 0.95
-    ) {
-      return null;
-    }
-    return Math.floor(stored.seconds);
   };
 
   const openTranscript = async (
@@ -5203,12 +4538,6 @@ function App() {
         );
         setBoards(importedBoards);
         setActiveBoardId(backup.activeBoardId);
-        const importedActiveBoard =
-          importedBoards.find((board) => board.id === backup.activeBoardId) ??
-          importedBoards[0];
-        if (importedActiveBoard) {
-          setPlaybackRate(importedActiveBoard.defaultPlaybackRate);
-        }
       } catch {
         window.alert("Backup file could not be imported.");
       } finally {
@@ -5898,14 +5227,6 @@ function App() {
                   : board.columnScopeFilter,
               defaultPlaybackRate: nextRate
             }));
-            setPlaybackRate(nextRate);
-            if (playerRef.current) {
-              try {
-                playerRef.current.setPlaybackRate(nextRate);
-              } catch {
-                // Ignore unsupported playback-rate calls.
-              }
-            }
             return {
               ok: true,
               action: "setFilters",
@@ -6367,12 +5688,6 @@ function App() {
         onVideoDurationChange={handleVideoDurationSelect}
         formatDurationFilterSummary={() => formatDurationFilterSummary(videoDurationFilter)}
         videoDurationFilterOptions={VIDEO_DURATION_FILTER_OPTIONS}
-        preferredPlaybackRate={preferredPlaybackRate}
-        onPreferredPlaybackRateChange={(value) => {
-          handlePreferredPlaybackRateChange(value);
-          blurActiveTopbarControl();
-        }}
-        playbackRateOptions={PLAYBACK_RATE_OPTIONS}
         playAllVideos={playAllVideos}
         openBulkWatchBoardAction={openBulkWatchBoardAction}
         shownVideosTotal={shownVideosTotal}
@@ -6413,15 +5728,10 @@ function App() {
 
       <VideoPlayerModal
         activeVideo={activeVideo}
-        playerStatusLabel={getPlayerStatusLabel(playerStatus)}
-        playerFailed={playerStatus === "failed"}
-        focusVideoPlayerSurface={focusVideoPlayerSurface}
         closeVideoModal={closeVideoModal}
         stopPlaylist={stopPlaylist}
         videoModalWrapRef={videoModalWrapRef}
-        setPlayerHost={setPlayerHost}
         toggleVideoFullscreen={toggleVideoFullscreen}
-        isPlayerInteractive={isPlayerInteractive}
         copiedLinkVideoId={copiedLinkVideoId}
         copyVideoLink={copyVideoLink}
         openSaveVideoModal={openSaveVideoModal}
@@ -6434,9 +5744,6 @@ function App() {
         playlistChannelLabel={playlistChannelLabel}
         isSavedBoardActive={isSavedBoardActive}
         playlistOrderLabel={playlistOrderLabel}
-        availablePlaybackRates={availablePlaybackRates}
-        playbackRate={playbackRate}
-        handlePlaybackRateClick={handlePlaybackRateClick}
         openActiveVideoOnYouTube={openActiveVideoOnYouTube}
       />
 

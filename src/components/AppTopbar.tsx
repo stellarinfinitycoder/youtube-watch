@@ -41,9 +41,6 @@ type AppTopbarProps = {
   onVideoDurationChange: (value: string[]) => void;
   formatDurationFilterSummary: () => string;
   videoDurationFilterOptions: Array<{ value: string; label: string }>;
-  preferredPlaybackRate: number;
-  onPreferredPlaybackRateChange: (value: number) => void;
-  playbackRateOptions: readonly number[];
   playAllVideos: () => void;
   openBulkWatchBoardAction: () => void;
   shownVideosTotal: number;
@@ -83,9 +80,6 @@ function AppTopbarComponent({
   onVideoDurationChange,
   formatDurationFilterSummary,
   videoDurationFilterOptions,
-  preferredPlaybackRate,
-  onPreferredPlaybackRateChange,
-  playbackRateOptions,
   playAllVideos,
   openBulkWatchBoardAction,
   shownVideosTotal,
@@ -261,17 +255,6 @@ function AppTopbarComponent({
         maxTagPlaceholder={formatDurationFilterSummary}
         showSearch={false}
         options={videoDurationFilterOptions}
-      />
-      <Select<number>
-        value={preferredPlaybackRate}
-        onChange={onPreferredPlaybackRateChange}
-        aria-label="Default playback speed"
-        className="video-filter-select playback-speed-select"
-        data-testid="topbar-speed-select"
-        options={playbackRateOptions.map((value) => ({
-          value,
-          label: `${value}X`
-        }))}
       />
       <Button
         htmlType="button"
