@@ -78,17 +78,22 @@ Notes:
 ## Phase 4
 Goal: optimize heavy board views.
 
-1. Virtualize video tiles inside columns
-   Only if needed after phases 1–3.
+Status: in progress.
+
+Completed:
+1. Split [src/components/BoardColumns.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/BoardColumns.tsx) into smaller render units:
+   - [src/components/ChannelColumn.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/ChannelColumn.tsx)
+   - [src/components/SavedListColumn.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/SavedListColumn.tsx)
+   - [src/components/VideoTile.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/VideoTile.tsx)
+   - [src/components/boardColumnsShared.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/boardColumnsShared.ts)
+2. Added memo boundaries on the split render units so column and tile rerenders are more localized.
+3. Reduced offscreen column work by moving lazy rendering to the column-body level, so far-off columns do not mount full video lists immediately.
+
+Planned:
+1. Cache derived filtered results per board/filter signature if profiling still shows repeated heavy work on `LAST 90D` and large boards.
+2. Virtualize video tiles inside columns only if the current split/memo/lazy-render structure is still insufficient.
    Likely:
    - [src/components/VirtualVideoList.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/VirtualVideoList.tsx)
-
-2. Lazy render offscreen columns
-   - full content only when near viewport
-   - hidden columns remain thumbnail-only
-
-3. Cache derived filtered results per board/filter signature
-   - especially for `LAST 90D` and large boards
 
 ## Phase 5
 Goal: structural cleanup.
@@ -111,13 +116,20 @@ Goal: structural cleanup.
 4. Measure again on `LAST 90D`
 5. Add virtualization only if still needed
 
+## Separate Bundle Track
+Goal: reduce initial-load bundle size without mixing it into runtime rendering work.
+
+1. Lazy-load:
+   - [src/components/TranscriptSummaryModal.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/TranscriptSummaryModal.tsx)
+   - [src/pages/PublisherAdminPage.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/pages/PublisherAdminPage.tsx)
+2. Consider manual chunking only after lazy-loading the heavy rarely used flows.
+
 ## Best immediate implementation scope
 If we do one focused refactor next, choose:
 
-1. `Topbar`
-2. `ChannelColumn`
-3. `SavedListColumn`
-4. `VideoTile`
-5. debounced sliced persistence
+1. [src/components/BoardColumns.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/BoardColumns.tsx)
+2. [src/components/ChannelColumn.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/ChannelColumn.tsx)
+3. [src/components/SavedListColumn.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/SavedListColumn.tsx)
+4. [src/components/VideoTile.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/VideoTile.tsx)
 
-That should give the biggest speed improvement with manageable risk.
+That should give the biggest runtime speed improvement with manageable risk.
