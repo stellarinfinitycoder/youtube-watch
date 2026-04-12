@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -15,15 +15,11 @@ import {
 } from "antd";
 import type { FetchState } from "./types/youtube";
 import {
-  fetchSummaryByVideoInput,
-  fetchTranscriptByVideoInput,
   fetchPlaylistDiscoveryPage,
   fetchVideoStatsByVideoIds,
   resolveChannelByInputWithThumbnail,
   resolveChannelByHandleWithThumbnail
 } from "./api/youtube";
-import { publishVideoSummary } from "./api/publisher";
-import { normalizeHandle } from "./utils/handle";
 import type { VideoItem } from "./types/youtube";
 import fixtureBoards from "./fixtures/fixture-boards.json";
 import { AppTopbar } from "./components/AppTopbar";
@@ -34,22 +30,8 @@ import {
   readStoredActiveBoardId,
   readStoredBoardsPayload
 } from "./storage/boardsStorage";
+import { SUMMARY_CACHE_KEY_PREFIX, pruneSummaryCaches } from "./storage/summariesStorage";
 import {
-  SUMMARY_CACHE_KEY_PREFIX,
-  SUMMARY_FORMATS_STORAGE_KEY,
-  SUMMARY_MODEL_PRESETS_STORAGE_KEY,
-  SUMMARY_PROMPT_STORAGE_KEY,
-  readCachedSummary as readCachedSummaryEntry,
-  readStoredJson,
-  readStoredString,
-  writeCachedSummary as writeCachedSummaryEntry,
-  writeStoredJson,
-  pruneSummaryCaches,
-  type SummaryCacheEntry
-} from "./storage/summariesStorage";
-import {
-  readCachedTranscript,
-  writeCachedTranscript,
   pruneTranscriptCaches
 } from "./storage/transcriptsStorage";
 import {
@@ -59,6 +41,70 @@ import {
   readStoredJson as readProgressStoredJson,
   writeStoredJson as writeProgressStoredJson
 } from "./storage/progressStorage";
+import {
+  appendBoardColumns,
+  moveBoardColumnById,
+  removeBoardColumnById,
+  updateBoardById,
+  updateBoardColumnById
+} from "./domain/boards";
+import {
+  CHANNEL_VIDEO_WINDOW_OPTIONS,
+  DEFAULT_VIDEO_WINDOW_DAYS,
+  SAVED_VIDEO_WINDOW_OPTIONS,
+  VIDEO_DURATION_FILTER_OPTIONS,
+  formatDurationFilterSummary,
+  formatColumnScopeSummary,
+  getVideoPublishedTime,
+  matchesDurationFilter,
+  matchesVideoWindowFilter,
+  normalizeColumnScopeFilter,
+  normalizeVideoDurationFilter,
+  normalizeVideoWindowFilterForKind,
+  resolveColumnScopeFilterSelection,
+  resolveVideoDurationFilterSelection,
+  type BoardKind,
+  type ChannelVideoWindowFilter,
+  type VideoDurationFilter,
+  type VideoDurationFilterOption,
+  type VideoWindowDays,
+  type VideoWindowFilter
+} from "./domain/filters";
+import {
+  collectMissingDurationNewVideoIds,
+  isVideoMarkedWatched,
+  setWatchedForVideoIds
+} from "./domain/watched";
+import {
+  addVideoToSavedColumn,
+  clearSavedColumnVideos,
+  getNextSavedListName,
+  moveSavedVideoBetweenColumns,
+  moveSavedVideoInManualOrder as moveSavedVideoInManualOrderForColumn,
+  normalizeSavedColumnOrderData,
+  removeVideoFromSavedColumn,
+  sortSavedVideosByMode,
+  type SavedSortMode
+} from "./domain/savedLists";
+import {
+  ALL_SUMMARY_FORMATS_OPTION,
+  DEFAULT_SUMMARY_PROMPT,
+  NEW_SUMMARY_FORMAT_OPTION,
+  NEW_SUMMARY_MODEL_OPTION,
+  SUMMARY_MODE_OPTION_PREFIX,
+  looksLikeMarkdown,
+  preserveTreeBlocksInMarkdown,
+  useTranscriptSummary,
+  type InlineMetaFeedback,
+  type SummaryFormat,
+  type SummaryModelPreset
+} from "./hooks/useTranscriptSummary";
+import {
+  type BoardFilterBoard,
+  getBoardFilterDerivedData,
+  useBoardFilters
+} from "./hooks/useBoardFilters";
+import { normalizeHandle } from "./utils/handle";
 
 const { Text } = Typography;
 const DEFAULT_COLUMN_COUNT = 3;
@@ -67,109 +113,14 @@ const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/log
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const CHANNEL_PLACEHOLDER_ICON = "/svg/placeholder-channel.svg";
 const BUILD_INFO_LABEL = CHANGE_STAMP;
-const DEFAULT_SUMMARY_FORMAT_ID = "summary-default";
-const NEW_SUMMARY_FORMAT_OPTION = "__new_summary_format__";
-const ALL_SUMMARY_FORMATS_OPTION = "__all_summary_formats__";
-const NEW_SUMMARY_MODEL_OPTION = "__new_summary_model__";
-const SUMMARY_MODE_OPTION_PREFIX = "summary:";
-const DEFAULT_SUMMARY_PROMPT = [
-  "Focus on practical takeaways.",
-  "Keep summary concise.",
-  "Highlight important risks and decisions."
-].join(" ");
-const DEFAULT_SUMMARY_FORMAT_NAME = "SUMMARY";
-const DEFAULT_SUMMARY_MODEL_PRESETS: Array<{ value: string; label: string }> = [
-  { value: "", label: "DEFAULT (ENV)" },
-  { value: "openai/gpt-4o-mini", label: "OPENAI GPT-4O-MINI" },
-  { value: "google/gemini-2.5-flash-lite", label: "GEMINI 2.5 FLASH-LITE" },
-  { value: "google/gemini-2.5-flash", label: "GEMINI 2.5 FLASH" },
-  { value: "qwen/qwen3.6-plus:free", label: "QWEN 3.6 PLUS FREE" },
-  { value: "nvidia/nemotron-3-super-120b-a12b:free", label: "NEMOTRON FREE" },
-  { value: "minimax/minimax-m2.7", label: "MINIMAX M2.7" }
-];
 const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 const LEGACY_WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
 const LEGACY_PLAYBACK_RATE_STORAGE_KEY = "youtube-watch:playback-rate:v1";
-const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 const BOARDS_PERSIST_DEBOUNCE_MS = 400;
 
 type VideoFilter = "all" | "new" | "watched";
-type VideoWindowDays = 1 | 3 | 7 | 30 | 60 | 90 | 120 | 180 | 360;
-type ChannelVideoWindowFilter =
-  | VideoWindowDays
-  | "older_1"
-  | "older_3"
-  | "older_7"
-  | "older_30"
-  | "older_60";
-type VideoWindowFilter = ChannelVideoWindowFilter | "all";
-type VideoDurationFilterOption =
-  | "all"
-  | "under_1"
-  | "min_1_3"
-  | "min_3_10"
-  | "min_10_30"
-  | "min_30_60"
-  | "long"
-  | "unknown";
-type VideoDurationFilter = VideoDurationFilterOption[];
 type PlaylistScope = "all" | "channel";
-type BoardKind = "channels" | "saved";
-type SummaryFormat = {
-  id: string;
-  name: string;
-  prompt: string;
-  model: string;
-  isDefault: boolean;
-  createdAt: number;
-  updatedAt: number;
-};
-type SummaryModelPreset = {
-  value: string;
-  label: string;
-};
-type SavedSortMode =
-  | "time_asc"
-  | "time_desc"
-  | "added_asc"
-  | "added_desc"
-  | "manual";
-const CHANNEL_VIDEO_WINDOW_OPTIONS: ChannelVideoWindowFilter[] = [
-  1,
-  3,
-  7,
-  30,
-  60,
-  90,
-  "older_1",
-  "older_3",
-  "older_7",
-  "older_30",
-  "older_60"
-];
-const SAVED_VIDEO_WINDOW_OPTIONS: VideoWindowFilter[] = [
-  1,
-  3,
-  7,
-  30,
-  60,
-  90,
-  120,
-  180,
-  360,
-  "all"
-];
-const VIDEO_DURATION_FILTER_OPTIONS: Array<{ value: VideoDurationFilterOption; label: string }> = [
-  { value: "all", label: "ANY LENGTH" },
-  { value: "under_1", label: "< 1 MIN" },
-  { value: "min_1_3", label: "1 - 3 MIN" },
-  { value: "min_3_10", label: "3 - 10 MIN" },
-  { value: "min_10_30", label: "10 - 30 MIN" },
-  { value: "min_30_60", label: "30 - 60 MIN" },
-  { value: "long", label: "60+ MIN" },
-  { value: "unknown", label: "UNKNOWN" }
-];
 const SAVED_SORT_MODE_OPTIONS: Array<{ value: SavedSortMode; label: string }> = [
   { value: "time_asc", label: "TIME ↑" },
   { value: "time_desc", label: "TIME ↓" },
@@ -178,7 +129,6 @@ const SAVED_SORT_MODE_OPTIONS: Array<{ value: SavedSortMode; label: string }> = 
   { value: "manual", label: "MANUAL" }
 ];
 const DEFAULT_SAVED_SORT_MODE: SavedSortMode = "added_desc";
-const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowFilter = 90;
 const STORAGE_VIDEO_WINDOW_DAYS: VideoWindowDays = 90;
 const CHANNEL_VIDEO_WINDOW_SELECT_OPTIONS: Array<{
   value: ChannelVideoWindowFilter;
@@ -335,11 +285,6 @@ type BoardDurationBackfillAction = {
   estimatedQueries: number;
 };
 
-type InlineMetaFeedback = {
-  kind: "info" | "success" | "warning" | "error";
-  text: string;
-};
-
 type QuotaEstimateState = {
   dayKey: string;
   todayUnits: number;
@@ -460,88 +405,6 @@ function createColumnState(overrides?: Partial<ColumnState>): ColumnState {
   };
 }
 
-function normalizeSavedColumnOrderData(
-  videos: VideoItem[],
-  savedAddedAtByVideoId: Record<string, number> | undefined,
-  savedManualOrder: string[] | undefined
-): { savedAddedAtByVideoId: Record<string, number>; savedManualOrder: string[] } {
-  const videoIds = videos.map((video) => video.videoId);
-  const idSet = new Set(videoIds);
-  const nextAdded: Record<string, number> = {};
-  if (savedAddedAtByVideoId) {
-    for (const [videoId, value] of Object.entries(savedAddedAtByVideoId)) {
-      if (!idSet.has(videoId) || !Number.isFinite(value)) {
-        continue;
-      }
-      nextAdded[videoId] = value;
-    }
-  }
-
-  // Preserve existing list order when backfilling missing "added at" values.
-  const base = Date.now();
-  videoIds.forEach((videoId, index) => {
-    if (typeof nextAdded[videoId] === "number") {
-      return;
-    }
-    nextAdded[videoId] = base - index;
-  });
-
-  const manualUnique = new Set<string>();
-  const nextManual = (savedManualOrder ?? []).filter((videoId) => {
-    if (!idSet.has(videoId) || manualUnique.has(videoId)) {
-      return false;
-    }
-    manualUnique.add(videoId);
-    return true;
-  });
-  videoIds.forEach((videoId) => {
-    if (!manualUnique.has(videoId)) {
-      nextManual.push(videoId);
-    }
-  });
-
-  return {
-    savedAddedAtByVideoId: nextAdded,
-    savedManualOrder: nextManual
-  };
-}
-
-function sortSavedVideosByMode(column: ColumnState): VideoItem[] {
-  const videos = [...column.videos];
-  const { savedSortMode, savedAddedAtByVideoId, savedManualOrder } = column;
-  if (savedSortMode === "manual") {
-    const orderById = new Map(savedManualOrder.map((videoId, index) => [videoId, index]));
-    return videos.sort((a, b) => {
-      const aIndex = orderById.get(a.videoId);
-      const bIndex = orderById.get(b.videoId);
-      if (typeof aIndex === "number" && typeof bIndex === "number") {
-        return aIndex - bIndex;
-      }
-      if (typeof aIndex === "number") {
-        return -1;
-      }
-      if (typeof bIndex === "number") {
-        return 1;
-      }
-      return 0;
-    });
-  }
-
-  if (savedSortMode === "time_asc" || savedSortMode === "time_desc") {
-    return videos.sort((a, b) => {
-      const delta = getVideoPublishedTime(a) - getVideoPublishedTime(b);
-      return savedSortMode === "time_asc" ? delta : -delta;
-    });
-  }
-
-  return videos.sort((a, b) => {
-    const aAdded = savedAddedAtByVideoId[a.videoId] ?? 0;
-    const bAdded = savedAddedAtByVideoId[b.videoId] ?? 0;
-    const delta = aAdded - bAdded;
-    return savedSortMode === "added_asc" ? delta : -delta;
-  });
-}
-
 function readLegacyStoredHandles(): string[] {
   if (typeof window === "undefined") {
     return [];
@@ -631,32 +494,6 @@ function sanitizeWatchedVideos(raw: unknown): Record<string, boolean> {
       (entry): entry is [string, boolean] => typeof entry[1] === "boolean"
     )
   );
-}
-
-function isVideoWindowFilter(value: unknown): value is VideoWindowFilter {
-  return (
-    value === "all" ||
-    value === "older_1" ||
-    value === "older_3" ||
-    value === "older_7" ||
-    value === "older_30" ||
-    value === "older_60" ||
-    typeof value === "number" &&
-      [...CHANNEL_VIDEO_WINDOW_OPTIONS, ...SAVED_VIDEO_WINDOW_OPTIONS]
-        .filter((item): item is VideoWindowDays => typeof item === "number")
-        .includes(value as VideoWindowDays)
-  );
-}
-
-function normalizeVideoWindowFilterForKind(
-  kind: BoardKind,
-  value: unknown
-): VideoWindowFilter {
-  if (!isVideoWindowFilter(value)) {
-    return kind === "saved" ? "all" : DEFAULT_VIDEO_WINDOW_DAYS;
-  }
-  const allowed = kind === "saved" ? SAVED_VIDEO_WINDOW_OPTIONS : CHANNEL_VIDEO_WINDOW_OPTIONS;
-  return allowed.includes(value) ? value : kind === "saved" ? "all" : DEFAULT_VIDEO_WINDOW_DAYS;
 }
 
 function sanitizeNumericMap(raw: unknown): Record<string, number> {
@@ -961,253 +798,11 @@ function readLegacyStoredColumns(): PersistedColumnState[] {
   }
 }
 
-function createDefaultSummaryFormat(promptOverride?: string): SummaryFormat {
-  const now = Date.now();
-  const nextPrompt = (promptOverride ?? DEFAULT_SUMMARY_PROMPT).trim() || DEFAULT_SUMMARY_PROMPT;
-  return {
-    id: DEFAULT_SUMMARY_FORMAT_ID,
-    name: DEFAULT_SUMMARY_FORMAT_NAME,
-    prompt: nextPrompt,
-    model: "",
-    isDefault: true,
-    createdAt: now,
-    updatedAt: now
-  };
-}
-
-function normalizeStoredSummaryFormats(input: unknown): SummaryFormat[] {
-  if (!Array.isArray(input)) {
-    return [createDefaultSummaryFormat()];
-  }
-  const sanitized = input
-    .map((item) => {
-      if (!item || typeof item !== "object") {
-        return null;
-      }
-      const candidate = item as Partial<SummaryFormat>;
-      const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
-      const name = typeof candidate.name === "string" ? candidate.name.trim() : "";
-      const prompt = typeof candidate.prompt === "string" ? candidate.prompt.trim() : "";
-      const model = typeof candidate.model === "string" ? candidate.model.trim() : "";
-      if (!id || !name || !prompt) {
-        return null;
-      }
-      return {
-        id,
-        name,
-        prompt,
-        model,
-        isDefault: candidate.isDefault === true,
-        createdAt:
-          typeof candidate.createdAt === "number" && Number.isFinite(candidate.createdAt)
-            ? candidate.createdAt
-            : Date.now(),
-        updatedAt:
-          typeof candidate.updatedAt === "number" && Number.isFinite(candidate.updatedAt)
-            ? candidate.updatedAt
-            : Date.now()
-      };
-    })
-    .filter((item): item is SummaryFormat => item !== null);
-
-  if (sanitized.length === 0) {
-    return [createDefaultSummaryFormat()];
-  }
-
-  const defaultCount = sanitized.filter((item) => item.isDefault).length;
-  if (defaultCount !== 1) {
-    sanitized.forEach((item, index) => {
-      item.isDefault = index === 0;
-    });
-  }
-  return sanitized;
-}
-
-function getDefaultSummaryFormat(formats: SummaryFormat[]): SummaryFormat {
-  return formats.find((item) => item.isDefault) ?? formats[0] ?? createDefaultSummaryFormat();
-}
-
-function normalizeSummaryModelPresets(input: unknown): SummaryModelPreset[] {
-  const defaults = [...DEFAULT_SUMMARY_MODEL_PRESETS];
-  if (!Array.isArray(input)) {
-    return defaults;
-  }
-
-  const merged = [...defaults];
-  const existingValues = new Set(merged.map((item) => item.value.trim().toLowerCase()));
-
-  input.forEach((item) => {
-    if (!item || typeof item !== "object") {
-      return;
-    }
-    const candidate = item as Partial<SummaryModelPreset>;
-    const value = typeof candidate.value === "string" ? candidate.value.trim() : "";
-    if (!value) {
-      return;
-    }
-    const key = value.toLowerCase();
-    if (existingValues.has(key)) {
-      return;
-    }
-    const label = typeof candidate.label === "string" && candidate.label.trim().length > 0
-      ? candidate.label.trim()
-      : value.toUpperCase();
-    merged.push({ value, label });
-    existingValues.add(key);
-  });
-
-  return merged;
-}
-
-function readStoredSummaryModelPresets(): SummaryModelPreset[] {
-  return readStoredJson(
-    SUMMARY_MODEL_PRESETS_STORAGE_KEY,
-    [...DEFAULT_SUMMARY_MODEL_PRESETS],
-    normalizeSummaryModelPresets
-  );
-}
-
-function buildAllFormatsCombinedPrompt(formats: SummaryFormat[]): string {
-  const normalizedFormats = formats
-    .map((format) => ({
-      id: format.id.trim(),
-      name: format.name.trim() || "FORMAT",
-      prompt: format.prompt.trim()
-    }))
-    .filter((format) => format.id && format.prompt);
-
-  const instructionBlock = normalizedFormats
-    .map(
-      (format, index) =>
-        `${index + 1}. ${format.name}\nInstruction: ${format.prompt}`
-    )
-    .join("\n\n");
-
-  return [
-    "Generate one combined response containing all requested formats.",
-    "Use only transcript content. No fabricated facts.",
-    "Return plain markdown text only.",
-    "For each format, output:",
-    "- A heading: ## <FORMAT NAME>",
-    "- Then the formatted content based on its instruction.",
-    "Do not add any preface or footer.",
-    "",
-    "Formats:",
-    instructionBlock
-  ].join("\n");
-}
-
-function hashText(value: string): string {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash +=
-      (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
-  }
-  return (hash >>> 0).toString(16);
-}
-
-function looksLikeMarkdown(value: string): boolean {
-  const text = value.trim();
-  if (!text) {
-    return false;
-  }
-  return (
-    /^#{1,6}\s/m.test(text) ||
-    /(^|\n)\s*[-*+]\s+/.test(text) ||
-    /(^|\n)\s*\d+\.\s+/.test(text) ||
-    /\[.+?\]\(.+?\)/.test(text) ||
-    /\*\*[^*]+\*\*/.test(text) ||
-    /`[^`]+`/.test(text) ||
-    /^>\s/m.test(text)
-  );
-}
-
-function preserveTreeBlocksInMarkdown(value: string): string {
-  const lines = value.replace(/\r\n/g, "\n").split("\n");
-  const isTreeLine = (line: string): boolean => /[│├└─]/.test(line) || /^\s*\|/.test(line);
-  const chunks: string[] = [];
-  let index = 0;
-
-  while (index < lines.length) {
-    if (!isTreeLine(lines[index])) {
-      chunks.push(lines[index]);
-      index += 1;
-      continue;
-    }
-
-    const treeLines: string[] = [];
-    while (index < lines.length && isTreeLine(lines[index])) {
-      treeLines.push(lines[index]);
-      index += 1;
-    }
-    chunks.push("```text");
-    chunks.push(...treeLines);
-    chunks.push("```");
-  }
-
-  return chunks.join("\n");
-}
-
 function pruneCachedTranscriptAndSummary(storage: Storage): boolean {
   if (pruneTranscriptCaches(storage)) {
     return true;
   }
   return pruneSummaryCaches(storage);
-}
-
-function readStoredSummaryPrompt(): string {
-  return readStoredString(SUMMARY_PROMPT_STORAGE_KEY, DEFAULT_SUMMARY_PROMPT);
-}
-
-function readStoredSummaryFormats(): SummaryFormat[] {
-  const legacyPrompt = readStoredSummaryPrompt();
-  return readStoredJson(
-    SUMMARY_FORMATS_STORAGE_KEY,
-    [createDefaultSummaryFormat(legacyPrompt)],
-    normalizeStoredSummaryFormats
-  );
-}
-
-function readCachedSummary(
-  videoId: string,
-  transcriptText: string,
-  promptText: string
-): SummaryCacheEntry | null {
-  if (typeof window === "undefined" || videoId.trim().length === 0) {
-    return null;
-  }
-  const promptHash = hashText(promptText.trim());
-  const transcriptHash = hashText(transcriptText.trim());
-  const parsed = readCachedSummaryEntry(videoId, promptHash);
-  if (!parsed) {
-    return null;
-  }
-  if (parsed.transcriptHash !== transcriptHash || parsed.promptHash !== promptHash) {
-    return null;
-  }
-  return parsed;
-}
-
-function writeCachedSummary(
-  videoId: string,
-  transcriptText: string,
-  promptText: string,
-  payload: { summary: string; keyPoints: string[]; model: string }
-): void {
-  if (typeof window === "undefined" || videoId.trim().length === 0) {
-    return;
-  }
-  const promptHash = hashText(promptText.trim());
-  const cacheEntry: SummaryCacheEntry = {
-    summary: payload.summary,
-    keyPoints: payload.keyPoints,
-    model: payload.model,
-    transcriptHash: hashText(transcriptText.trim()),
-    promptHash,
-    cachedAt: Date.now()
-  };
-  writeCachedSummaryEntry(videoId, promptHash, cacheEntry);
 }
 
 function hasLegacyStoredColumnsState(): boolean {
@@ -1256,19 +851,6 @@ function createSavedBoardState(overrides?: Partial<BoardState>): BoardState {
     videoWindowDays: "all",
     ...overrides
   }, 1);
-}
-
-function getNextSavedListName(columns: ColumnState[]): string {
-  let index = 1;
-  const used = new Set(
-    columns
-      .map((column) => column.handleInput.trim().toUpperCase())
-      .filter((name) => /^LIST \d+$/.test(name))
-  );
-  while (used.has(`LIST ${index}`)) {
-    index += 1;
-  }
-  return `LIST ${index}`;
 }
 
 function createSavedListColumn(existing: ColumnState[]): ColumnState {
@@ -1539,7 +1121,12 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
     id: board.id,
     kind: board.kind === "saved" ? "saved" : "channels",
     columns: restoredColumns,
-    columnScopeFilter: normalizeColumnScopeFilter(board.columnScopeFilter, restoredColumns),
+    columnScopeFilter: normalizeColumnScopeFilter(
+      board.columnScopeFilter,
+      restoredColumns,
+      COLUMN_SCOPE_ALL,
+      COLUMN_SCOPE_NOT_EMPTY
+    ),
     watchedVideos: board.watchedVideos,
     viewCountRefreshedAtByVideoId: board.viewCountRefreshedAtByVideoId,
     videoFilter: board.videoFilter,
@@ -1696,253 +1283,11 @@ function formatDuration(durationSeconds: number | null | undefined): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-function matchesDurationFilter(
-  durationSeconds: number | null | undefined,
-  filters: VideoDurationFilter
-): boolean {
-  const normalized =
-    filters.length === 0 || filters.includes("all")
-      ? (["all"] as VideoDurationFilter)
-      : filters;
-  if (normalized.includes("all")) {
-    return true;
-  }
-  if (typeof durationSeconds !== "number" || !Number.isFinite(durationSeconds)) {
-    return normalized.includes("unknown");
-  }
-  return normalized.some((filter) => {
-    if (filter === "unknown" || filter === "all") {
-      return false;
-    }
-    if (filter === "under_1") {
-      return durationSeconds < 60;
-    }
-    if (filter === "min_1_3") {
-      return durationSeconds >= 60 && durationSeconds < 180;
-    }
-    if (filter === "min_3_10") {
-      return durationSeconds >= 180 && durationSeconds < 600;
-    }
-    if (filter === "min_10_30") {
-      return durationSeconds >= 600 && durationSeconds < 1800;
-    }
-    if (filter === "min_30_60") {
-      return durationSeconds >= 1800 && durationSeconds < 3600;
-    }
-    return durationSeconds >= 3600;
-  });
-}
-
-function normalizeVideoDurationFilter(input: unknown): VideoDurationFilter {
-  const isValid = (value: unknown): value is VideoDurationFilterOption =>
-    value === "all" ||
-    value === "under_1" ||
-    value === "min_1_3" ||
-    value === "min_3_10" ||
-    value === "min_10_30" ||
-    value === "min_30_60" ||
-    value === "long" ||
-    value === "unknown";
-
-  if (Array.isArray(input)) {
-    const next = [...new Set(input.filter((item): item is VideoDurationFilterOption => isValid(item)))];
-    if (next.includes("all") || next.length === 0) {
-      return ["all"];
-    }
-    return next;
-  }
-  if (isValid(input)) {
-    return [input];
-  }
-  return ["all"];
-}
-
-function normalizeColumnScopeFilter(
-  input: unknown,
-  columns: ColumnState[]
-): string[] {
-  const validValues = new Set<string>([
-    COLUMN_SCOPE_ALL,
-    COLUMN_SCOPE_NOT_EMPTY,
-    ...columns.map((column) => column.id)
-  ]);
-  const raw = Array.isArray(input) ? input : [input];
-  const next = [
-    ...new Set(
-      raw.filter((value): value is string => typeof value === "string" && validValues.has(value))
-    )
-  ];
-  if (next.length === 0 || next.includes(COLUMN_SCOPE_ALL)) {
-    return [COLUMN_SCOPE_ALL];
-  }
-  if (next.includes(COLUMN_SCOPE_NOT_EMPTY)) {
-    return [COLUMN_SCOPE_NOT_EMPTY];
-  }
-  return next;
-}
-
-function resolveColumnScopeFilterSelection(
-  nextInput: unknown,
-  previous: string[],
-  columns: ColumnState[]
-): string[] {
-  const previousNormalized = normalizeColumnScopeFilter(previous, columns);
-  const raw = Array.isArray(nextInput) ? nextInput : [nextInput];
-  const validValues = new Set<string>([
-    COLUMN_SCOPE_ALL,
-    COLUMN_SCOPE_NOT_EMPTY,
-    ...columns.map((column) => column.id)
-  ]);
-  const validRaw = [
-    ...new Set(
-      raw.filter((value): value is string => typeof value === "string" && validValues.has(value))
-    )
-  ];
-
-  if (validRaw.includes(COLUMN_SCOPE_ALL)) {
-    if (validRaw.length > 1) {
-      return previousNormalized.includes(COLUMN_SCOPE_ALL)
-        ? validRaw.filter((value) => value !== COLUMN_SCOPE_ALL)
-        : [COLUMN_SCOPE_ALL];
-    }
-    return [COLUMN_SCOPE_ALL];
-  }
-
-  if (validRaw.includes(COLUMN_SCOPE_NOT_EMPTY)) {
-    if (validRaw.length > 1) {
-      return previousNormalized.includes(COLUMN_SCOPE_NOT_EMPTY)
-        ? validRaw.filter((value) => value !== COLUMN_SCOPE_NOT_EMPTY)
-        : [COLUMN_SCOPE_NOT_EMPTY];
-    }
-    return [COLUMN_SCOPE_NOT_EMPTY];
-  }
-
-  if (validRaw.length === 0) {
-    return [COLUMN_SCOPE_ALL];
-  }
-
-  return validRaw;
-}
-
-function formatColumnScopeSummary(
-  values: string[],
-  isSavedBoardActive: boolean,
-  columns: ColumnState[]
-): string {
-  const normalized = normalizeColumnScopeFilter(values, columns);
-  if (normalized.includes(COLUMN_SCOPE_ALL)) {
-    return isSavedBoardActive ? "ALL LISTS" : "ALL CHANNELS";
-  }
-  if (normalized.includes(COLUMN_SCOPE_NOT_EMPTY)) {
-    return "ACTIVE CHANNELS";
-  }
-  if (normalized.length === 1) {
-    const selectedColumn = columns.find((column) => column.id === normalized[0]);
-    if (!selectedColumn) {
-      return "1 SELECTED";
-    }
-    const raw = selectedColumn.currentHandle.trim() || selectedColumn.handleInput.trim();
-    if (raw.length === 0) {
-      return isSavedBoardActive ? "1 LIST" : "1 CHANNEL";
-    }
-    const label = isSavedBoardActive
-      ? raw
-      : raw.startsWith("@")
-      ? raw
-      : `@${raw}`;
-    return label.toUpperCase();
-  }
-  return `${normalized.length} SELECTED`;
-}
-
-function resolveVideoDurationFilterSelection(
-  nextInput: unknown,
-  previous: VideoDurationFilter
-): VideoDurationFilter {
-  const previousNormalized = normalizeVideoDurationFilter(previous);
-  const raw = Array.isArray(nextInput) ? nextInput : [nextInput];
-  const isValid = (value: unknown): value is VideoDurationFilterOption =>
-    value === "all" ||
-    value === "under_1" ||
-    value === "min_1_3" ||
-    value === "min_3_10" ||
-    value === "min_10_30" ||
-    value === "min_30_60" ||
-    value === "long" ||
-    value === "unknown";
-  const validRaw = [...new Set(raw.filter((value): value is VideoDurationFilterOption => isValid(value)))];
-
-  if (validRaw.includes("all")) {
-    if (validRaw.length > 1) {
-      return previousNormalized.includes("all")
-        ? validRaw.filter((value) => value !== "all")
-        : ["all"];
-    }
-    return ["all"];
-  }
-
-  if (validRaw.includes("unknown")) {
-    if (validRaw.length > 1) {
-      return previousNormalized.includes("unknown")
-        ? validRaw.filter((value) => value !== "unknown")
-        : ["unknown"];
-    }
-    return ["unknown"];
-  }
-
-  if (validRaw.length === 0) {
-    return ["all"];
-  }
-
-  return validRaw;
-}
-
-function getDurationFilterOptionLabel(value: VideoDurationFilterOption): string {
-  return (
-    VIDEO_DURATION_FILTER_OPTIONS.find((option) => option.value === value)?.label ?? "SELECT LENGTH"
-  );
-}
-
-function formatDurationFilterSummary(filters: VideoDurationFilter): string {
-  const normalized = normalizeVideoDurationFilter(filters);
-  if (normalized.includes("all")) {
-    return "ANY LENGTH";
-  }
-  if (normalized.length === 1) {
-    return getDurationFilterOptionLabel(normalized[0]);
-  }
-  return "SELECT LENGTH";
-}
-
-function matchesVideoIdKey(storedVideoId: string, targetVideoId: string): boolean {
-  return storedVideoId.toLowerCase() === targetVideoId.toLowerCase();
-}
-
-function isVideoMarkedWatched(
-  watchedVideos: Record<string, boolean>,
-  videoId: string
-): boolean {
-  if (watchedVideos[videoId] === true) {
-    return true;
-  }
-  return Object.entries(watchedVideos).some(
-    ([storedVideoId, watched]) => watched === true && matchesVideoIdKey(storedVideoId, videoId)
-  );
-}
-
 function collectBoardMissingDurationNewVideoIds(board: BoardState): string[] {
-  const unique = new Set<string>();
-  board.columns.forEach((column) => {
-    column.videos.forEach((video) => {
-      const isWatched = isVideoMarkedWatched(board.watchedVideos, video.videoId);
-      const hasDuration = typeof video.durationSeconds === "number";
-      if (isWatched || hasDuration) {
-        return;
-      }
-      unique.add(video.videoId);
-    });
-  });
-  return [...unique];
+  return collectMissingDurationNewVideoIds(
+    board.watchedVideos,
+    board.columns.flatMap((column) => column.videos)
+  );
 }
 
 function formatVideoMeta(video: VideoItem): string {
@@ -1950,16 +1295,9 @@ function formatVideoMeta(video: VideoItem): string {
   return `${dateLabel} | ${formatDuration(video.durationSeconds)} | ${formatViewCount(video.viewCount)}`;
 }
 
-function getVideoPublishedTime(video: VideoItem): number {
-  const parsed = Date.parse(video.publishedAt);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function getWindowCutoffTime(days: VideoWindowFilter, now = Date.now()): number {
-  if (days === "all") {
-    return 0;
-  }
   if (
+    days === "all" ||
     days === "older_1" ||
     days === "older_3" ||
     days === "older_7" ||
@@ -1969,35 +1307,6 @@ function getWindowCutoffTime(days: VideoWindowFilter, now = Date.now()): number 
     return 0;
   }
   return now - days * 24 * 60 * 60 * 1000;
-}
-
-function matchesVideoWindowFilter(
-  publishedTime: number,
-  windowFilter: VideoWindowFilter,
-  now = Date.now()
-): boolean {
-  if (!Number.isFinite(publishedTime) || publishedTime <= 0) {
-    return false;
-  }
-  if (windowFilter === "all") {
-    return true;
-  }
-  if (windowFilter === "older_1") {
-    return publishedTime <= now - 1 * 24 * 60 * 60 * 1000;
-  }
-  if (windowFilter === "older_3") {
-    return publishedTime <= now - 3 * 24 * 60 * 60 * 1000;
-  }
-  if (windowFilter === "older_7") {
-    return publishedTime <= now - 7 * 24 * 60 * 60 * 1000;
-  }
-  if (windowFilter === "older_30") {
-    return publishedTime <= now - 30 * 24 * 60 * 60 * 1000;
-  }
-  if (windowFilter === "older_60") {
-    return publishedTime <= now - 60 * 24 * 60 * 60 * 1000;
-  }
-  return publishedTime >= now - windowFilter * 24 * 60 * 60 * 1000;
 }
 
 function shouldIgnoreShortcutTarget(target: EventTarget | null): boolean {
@@ -2139,7 +1448,6 @@ function App() {
   const transcriptRequestIdRef = useRef(0);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
   const linkCopyFeedbackTimeoutRef = useRef<number | null>(null);
-  const transcriptCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const logoSpinTimeoutRef = useRef<number | null>(null);
   const initialBoardsState = fixtureMode ? createFixtureBoardsState() : getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
@@ -2202,46 +1510,60 @@ function App() {
   const [copiedLinkVideoId, setCopiedLinkVideoId] = useState<string | null>(null);
   const [bulkInput, setBulkInput] = useState("");
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
-  const [transcriptVideo, setTranscriptVideo] = useState<VideoItem | null>(null);
-  const [transcriptLoading, setTranscriptLoading] = useState(false);
-  const [transcriptText, setTranscriptText] = useState("");
-  const [transcriptError, setTranscriptError] = useState<string | null>(null);
-  const [transcriptSourceHandle, setTranscriptSourceHandle] = useState<string>("");
-  const [transcriptViewMode, setTranscriptViewMode] = useState<"transcript" | "summary">(
-    "transcript"
-  );
-  const [isTranscriptCopied, setIsTranscriptCopied] = useState(false);
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [summaryText, setSummaryText] = useState("");
-  const [summaryKeyPoints, setSummaryKeyPoints] = useState<string[]>([]);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [summaryModel, setSummaryModel] = useState("");
-  const [isPublishingSummary, setIsPublishingSummary] = useState(false);
-  const [publishSummaryFeedback, setPublishSummaryFeedback] = useState<InlineMetaFeedback | null>(
-    null
-  );
-  const [summaryFormats, setSummaryFormats] = useState<SummaryFormat[]>(readStoredSummaryFormats);
-  const [summaryModelPresets, setSummaryModelPresets] = useState<SummaryModelPreset[]>(
-    readStoredSummaryModelPresets
-  );
-  const [activeSummaryFormatId, setActiveSummaryFormatId] = useState<string>(() =>
-    getDefaultSummaryFormat(readStoredSummaryFormats()).id
-  );
-  const [isAllSummaryFormatsMode, setIsAllSummaryFormatsMode] = useState(false);
-  const [isSummaryPromptEditMode, setIsSummaryPromptEditMode] = useState(false);
-  const [editingSummaryFormatId, setEditingSummaryFormatId] = useState<string | null>(null);
-  const [summaryFormatNameDraft, setSummaryFormatNameDraft] = useState<string>("");
-  const [summaryPromptDraft, setSummaryPromptDraft] = useState<string>("");
-  const [summaryFormatModelDraft, setSummaryFormatModelDraft] = useState<string>("");
-  const [isNewSummaryModelDraftMode, setIsNewSummaryModelDraftMode] = useState<boolean>(false);
-  const [summaryFormatDefaultDraft, setSummaryFormatDefaultDraft] = useState<boolean>(false);
   const bulkInputDraftRef = useRef("");
   const renameBoardInputDraftRef = useRef("");
   const savedListNameDraftRef = useRef("");
   const channelNameDraftRef = useRef("");
-  const summaryFormatNameDraftRef = useRef("");
-  const summaryPromptDraftRef = useRef("");
-  const summaryFormatModelDraftRef = useRef("");
+  const {
+    transcriptVideo,
+    transcriptLoading,
+    transcriptText,
+    transcriptError,
+    transcriptViewMode,
+    isTranscriptCopied,
+    summaryLoading,
+    summaryText,
+    summaryKeyPoints,
+    summaryError,
+    summaryModel,
+    isPublishingSummary,
+    publishSummaryFeedback,
+    summaryFormats,
+    summaryModelPresets,
+    activeSummaryFormat,
+    activeSummaryFormatId,
+    isAllSummaryFormatsMode,
+    isSummaryPromptEditMode,
+    editingSummaryFormatId,
+    summaryFormatNameDraft,
+    summaryPromptDraft,
+    summaryFormatModelDraft,
+    isNewSummaryModelDraftMode,
+    summaryFormatDefaultDraft,
+    hasPublishableSummary,
+    isSummaryBusy,
+    setSummaryFormatNameDraft,
+    setSummaryPromptDraft,
+    setSummaryFormatModelDraft,
+    setSummaryFormats,
+    setIsNewSummaryModelDraftMode,
+    setSummaryFormatDefaultDraft,
+    setIsAllSummaryFormatsMode,
+    setActiveSummaryFormatId,
+    setIsSummaryPromptEditMode,
+    clearPublishFeedback,
+    openTranscript,
+    closeTranscriptModal,
+    handleTranscriptViewModeChange,
+    copyTranscriptText,
+    regenerateSummary,
+    publishCurrentVideoSummary,
+    openSummaryFormatEditor,
+    moveSummaryFormat,
+    removeSummaryModelPreset,
+    saveSummaryPromptAndClose,
+    deleteSummaryFormatAndClose
+  } = useTranscriptSummary();
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
   const [playlistIndex, setPlaylistIndex] = useState<number>(-1);
   const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
@@ -2255,16 +1577,6 @@ function App() {
   >([]);
   const activeBoard =
     boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
-  const activeSummaryFormat =
-    summaryFormats.find((item) => item.id === activeSummaryFormatId) ??
-    getDefaultSummaryFormat(summaryFormats);
-  const defaultSummaryFormat = getDefaultSummaryFormat(summaryFormats);
-  const activeSummaryPrompt = isAllSummaryFormatsMode
-    ? buildAllFormatsCombinedPrompt(summaryFormats)
-    : activeSummaryFormat.prompt;
-  const activeSummaryModel = isAllSummaryFormatsMode
-    ? (defaultSummaryFormat.model ?? "").trim()
-    : (activeSummaryFormat.model ?? "").trim();
   const displayedBoards = [
     ...boards.filter((board) => board.kind !== "saved"),
     ...boards.filter((board) => board.kind === "saved")
@@ -2335,11 +1647,27 @@ function App() {
   const videoWindowDays = activeBoard
     ? normalizeVideoWindowFilterForKind(activeBoard.kind, activeBoard.videoWindowDays)
     : DEFAULT_VIDEO_WINDOW_DAYS;
-  const columnScopeFilter = useMemo(
-    () =>
-      normalizeColumnScopeFilter(activeBoard?.columnScopeFilter ?? [COLUMN_SCOPE_ALL], columns),
-    [activeBoard?.columnScopeFilter, columns]
+  const getSourceVideosForBoard = useCallback(
+    (board: BoardFilterBoard<ColumnState>, column: ColumnState): VideoItem[] =>
+      board.kind === "saved" ? sortSavedVideosByMode(column, getVideoPublishedTime) : column.videos,
+    []
   );
+  const {
+    columnScopeFilter,
+    filteredVideosByColumnId,
+    shownVideoCountByColumnId,
+    visibleColumns,
+    hiddenColumns,
+    shownVideosTotal,
+    visibleColumnIdSet,
+    hiddenColumnIdSet,
+    columnScopeOptions
+  } = useBoardFilters({
+    board: activeBoard,
+    allValue: COLUMN_SCOPE_ALL,
+    notEmptyValue: COLUMN_SCOPE_NOT_EMPTY,
+    getSourceVideos: getSourceVideosForBoard
+  });
   const quotaEstimateText = `LAST Q: ${quotaEstimate.lastActionUnits} | TODAY: ${quotaEstimate.todayUnits}`;
   const topbarLastFetchLabel = activeBoard
     ? formatLastFetchTooltipLabel(
@@ -2358,111 +1686,8 @@ function App() {
         }, null)
       )
     : "-";
-  const filteredVideosByColumnId = useMemo(() => {
-    const nextMap = new Map<string, VideoItem[]>();
-    if (!activeBoard) {
-      return nextMap;
-    }
-    const now = Date.now();
-    columns.forEach((column) => {
-      const sourceVideos = activeBoard.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
-      const filteredVideos = sourceVideos.filter((video) => {
-        if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
-          return false;
-        }
-        if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
-          return false;
-        }
-        const isWatched = isVideoMarkedWatched(watchedVideos, video.videoId);
-        if (videoFilter === "all") {
-          return true;
-        }
-        if (videoFilter === "watched") {
-          return isWatched;
-        }
-        return !isWatched;
-      });
-      nextMap.set(column.id, filteredVideos);
-    });
-    return nextMap;
-  }, [activeBoard, columns, videoWindowDays, videoDurationFilter, watchedVideos, videoFilter]);
-
-  const shownVideoCountByColumnId = useMemo(() => {
-    const nextMap = new Map<string, number>();
-    columns.forEach((column) => {
-      nextMap.set(column.id, filteredVideosByColumnId.get(column.id)?.length ?? 0);
-    });
-    return nextMap;
-  }, [columns, filteredVideosByColumnId]);
-
-  const visibleColumns = useMemo(() => {
-    if (columnScopeFilter.includes(COLUMN_SCOPE_ALL)) {
-      return columns;
-    }
-    if (columnScopeFilter.includes(COLUMN_SCOPE_NOT_EMPTY)) {
-      return columns.filter((column) => (shownVideoCountByColumnId.get(column.id) ?? 0) > 0);
-    }
-    return columns.filter((column) => columnScopeFilter.includes(column.id));
-  }, [columnScopeFilter, columns, shownVideoCountByColumnId]);
-
-  const shownVideosTotal = useMemo(
-    () =>
-      visibleColumns.reduce(
-        (total, column) => total + (shownVideoCountByColumnId.get(column.id) ?? 0),
-        0
-      ),
-    [visibleColumns, shownVideoCountByColumnId]
-  );
-
-  const visibleColumnIdSet = useMemo(
-    () => new Set(visibleColumns.map((column) => column.id)),
-    [visibleColumns]
-  );
-
-  const hiddenColumns = useMemo(
-    () =>
-      isSavedBoardActive
-        ? []
-        : columns.filter((column) => !visibleColumnIdSet.has(column.id)),
-    [isSavedBoardActive, columns, visibleColumnIdSet]
-  );
-
-  const hiddenColumnIdSet = useMemo(
-    () => new Set(hiddenColumns.map((column) => column.id)),
-    [hiddenColumns]
-  );
   const getShownVideosForColumn = (column: ColumnState, _now?: number): VideoItem[] =>
     filteredVideosByColumnId.get(column.id) ?? [];
-
-  const columnScopeOptions = useMemo(
-    () => [
-      {
-        value: COLUMN_SCOPE_ALL,
-        label: isSavedBoardActive ? "ALL LISTS" : "ALL CHANNELS"
-      },
-      {
-        value: COLUMN_SCOPE_NOT_EMPTY,
-        label: "ACTIVE CHANNELS"
-      },
-      ...columns.map((column, index) => {
-        const raw = column.currentHandle.trim() || column.handleInput.trim();
-        const normalized = raw
-          ? raw.startsWith("@")
-            ? raw
-            : isSavedBoardActive
-            ? raw
-            : `@${raw}`
-          : isSavedBoardActive
-          ? `LIST ${index + 1}`
-          : `CHANNEL ${index + 1}`;
-        return {
-          value: column.id,
-          label: normalized.toUpperCase()
-        };
-      })
-    ],
-    [columns, isSavedBoardActive]
-  );
   const channelScopeDropdownListHeight =
     Math.min(columnScopeOptions.length, CHANNEL_SCOPE_DROPDOWN_MAX_VISIBLE) *
       BOARD_DROPDOWN_ITEM_HEIGHT +
@@ -2490,10 +1715,6 @@ function App() {
         normalizedSummaryPromptDraft !== editingSummaryFormat.prompt ||
         normalizedSummaryModelDraft !== (editingSummaryFormat.model ?? "") ||
         summaryFormatDefaultDraft !== editingSummaryFormat.isDefault;
-  const hasPublishableSummary =
-    summaryText.trim().length > 0 ||
-    summaryKeyPoints.some((point) => point.trim().length > 0);
-  const isSummaryBusy = transcriptViewMode === "summary" && summaryLoading;
 
   const focusBulkModalInput = (): void => {
     const focusNow = () => {
@@ -2549,9 +1770,6 @@ function App() {
       if (linkCopyFeedbackTimeoutRef.current) {
         window.clearTimeout(linkCopyFeedbackTimeoutRef.current);
       }
-      if (transcriptCopyFeedbackTimeoutRef.current) {
-        window.clearTimeout(transcriptCopyFeedbackTimeoutRef.current);
-      }
       if (logoSpinTimeoutRef.current) {
         window.clearTimeout(logoSpinTimeoutRef.current);
       }
@@ -2564,27 +1782,6 @@ function App() {
     }
     writeProgressStoredJson(QUOTA_ESTIMATE_STORAGE_KEY, quotaEstimate);
   }, [fixtureMode, quotaEstimate]);
-
-  useEffect(() => {
-    const exists = summaryFormats.some((item) => item.id === activeSummaryFormatId);
-    if (!exists) {
-      setActiveSummaryFormatId(getDefaultSummaryFormat(summaryFormats).id);
-    }
-  }, [activeSummaryFormatId, summaryFormats]);
-
-  useEffect(() => {
-    if (fixtureMode) {
-      return;
-    }
-    writeStoredJson(SUMMARY_FORMATS_STORAGE_KEY, summaryFormats);
-  }, [fixtureMode, summaryFormats]);
-
-  useEffect(() => {
-    if (fixtureMode) {
-      return;
-    }
-    writeStoredJson(SUMMARY_MODEL_PRESETS_STORAGE_KEY, summaryModelPresets);
-  }, [fixtureMode, summaryModelPresets]);
 
   useEffect(() => {
     if (fixtureMode) {
@@ -2704,11 +1901,7 @@ function App() {
     boardId: string,
     updater: (state: BoardState) => BoardState
   ) => {
-    setBoards((previous) =>
-      previous.map((board) =>
-        board.id === boardId ? updater(board) : board
-      )
-    );
+    setBoards((previous) => updateBoardById(previous, boardId, updater));
   };
 
   const setColumn = (
@@ -2717,10 +1910,7 @@ function App() {
     updater: (state: ColumnState) => ColumnState
   ) => {
     setBoard(boardId, (board) => ({
-      ...board,
-      columns: board.columns.map((column) =>
-        column.id === columnId ? updater(column) : column
-      )
+      ...updateBoardColumnById(board, columnId, updater)
     }));
   };
 
@@ -2993,11 +2183,16 @@ function App() {
     }
     setBoard(activeBoard.id, (board) => {
       const nextColumns = board.columns.filter((column) => column.id !== columnIdToRemove);
-      return {
-        ...board,
-        columns: nextColumns,
-        columnScopeFilter: normalizeColumnScopeFilter(board.columnScopeFilter, nextColumns)
-      };
+      return removeBoardColumnById(
+        board,
+        columnIdToRemove,
+        normalizeColumnScopeFilter(
+          board.columnScopeFilter,
+          nextColumns,
+          COLUMN_SCOPE_ALL,
+          COLUMN_SCOPE_NOT_EMPTY
+        )
+      );
     });
   };
 
@@ -3005,23 +2200,7 @@ function App() {
     if (!activeBoard) {
       return;
     }
-    setBoard(activeBoard.id, (board) => {
-      const fromIndex = board.columns.findIndex((column) => column.id === columnIdToMove);
-      if (fromIndex < 0) {
-        return board;
-      }
-      const toIndex = direction === "left" ? fromIndex - 1 : fromIndex + 1;
-      if (toIndex < 0 || toIndex >= board.columns.length) {
-        return board;
-      }
-      const nextColumns = [...board.columns];
-      const [moved] = nextColumns.splice(fromIndex, 1);
-      nextColumns.splice(toIndex, 0, moved);
-      return {
-        ...board,
-        columns: nextColumns
-      };
-    });
+    setBoard(activeBoard.id, (board) => moveBoardColumnById(board, columnIdToMove, direction));
   };
 
   const confirmDeleteColumn = (): void => {
@@ -3051,10 +2230,7 @@ function App() {
           handleInput: name.trim().length > 0 ? name : getNextSavedListName(activeBoard.columns)
         })
       );
-      setBoard(activeBoard.id, (board) => ({
-        ...board,
-        columns: [...board.columns, ...created]
-      }));
+      setBoard(activeBoard.id, (board) => appendBoardColumns(board, created));
       scrollToColumnsEndSoon();
       setIsBulkModalOpen(false);
       setBulkInput("");
@@ -3073,14 +2249,16 @@ function App() {
     const created = handles.map((handle) =>
       createColumnState({ handleInput: handle })
     );
-    setBoard(activeBoard.id, (board) => ({
-      ...board,
-      columns: [...board.columns, ...created],
-      columnScopeFilter: includeNewColumnsInScope(
+    setBoard(activeBoard.id, (board) =>
+      appendBoardColumns(
         board,
-        created.map((column) => column.id)
+        created,
+        includeNewColumnsInScope(
+          board,
+          created.map((column) => column.id)
+        )
       )
-    }));
+    );
     scrollToColumnsEndSoon();
     setPendingBulkFetch(
       created.map((column) => ({
@@ -3238,7 +2416,12 @@ function App() {
   }, [activeVideo]);
 
   const includeNewColumnsInScope = (board: BoardState, newColumnIds: string[]): string[] => {
-    const normalizedScope = normalizeColumnScopeFilter(board.columnScopeFilter, board.columns);
+    const normalizedScope = normalizeColumnScopeFilter(
+      board.columnScopeFilter,
+      board.columns,
+      COLUMN_SCOPE_ALL,
+      COLUMN_SCOPE_NOT_EMPTY
+    );
     if (normalizedScope.includes(COLUMN_SCOPE_ALL)) {
       return [COLUMN_SCOPE_ALL];
     }
@@ -3300,21 +2483,9 @@ function App() {
     }
     setBoards((previous) =>
       previous.map((board) => {
-        const next = { ...board.watchedVideos };
-        videoIds.forEach((videoId) => {
-          if (watched) {
-            next[videoId] = true;
-          } else {
-            Object.keys(next).forEach((storedVideoId) => {
-              if (matchesVideoIdKey(storedVideoId, videoId)) {
-                delete next[storedVideoId];
-              }
-            });
-          }
-        });
         return {
           ...board,
-          watchedVideos: next
+          watchedVideos: setWatchedForVideoIds(board.watchedVideos, videoIds, watched)
         };
       })
     );
@@ -3382,640 +2553,6 @@ function App() {
     } catch {
       // Ignore unsupported fullscreen requests.
     }
-  };
-
-  const openTranscript = async (
-    video: VideoItem,
-    sourceHandleRaw?: string
-  ): Promise<void> => {
-    let normalizedSourceHandle = "";
-    const candidate = (sourceHandleRaw ?? "").trim();
-    if (candidate) {
-      try {
-        normalizedSourceHandle = normalizeHandle(candidate);
-      } catch {
-        normalizedSourceHandle = candidate.startsWith("@") ? candidate : `@${candidate}`;
-      }
-    }
-    setTranscriptSourceHandle(normalizedSourceHandle);
-    const defaultSummaryFormat = getDefaultSummaryFormat(summaryFormats);
-    setIsAllSummaryFormatsMode(false);
-    setActiveSummaryFormatId(defaultSummaryFormat.id);
-    setEditingSummaryFormatId(defaultSummaryFormat.id);
-    setTranscriptVideo(video);
-    setTranscriptViewMode("summary");
-    setIsSummaryPromptEditMode(false);
-    setSummaryFormatNameDraft(defaultSummaryFormat.name);
-    setSummaryPromptDraft(defaultSummaryFormat.prompt);
-    setSummaryFormatModelDraft(defaultSummaryFormat.model ?? "");
-    summaryFormatNameDraftRef.current = defaultSummaryFormat.name;
-    summaryPromptDraftRef.current = defaultSummaryFormat.prompt;
-    summaryFormatModelDraftRef.current = defaultSummaryFormat.model ?? "";
-    setIsNewSummaryModelDraftMode(false);
-    setSummaryFormatDefaultDraft(defaultSummaryFormat.isDefault);
-    setTranscriptLoading(true);
-    setTranscriptError(null);
-    setTranscriptText("");
-    setIsTranscriptCopied(false);
-    setSummaryLoading(false);
-    setSummaryText("");
-    setSummaryKeyPoints([]);
-    setSummaryError(null);
-    setSummaryModel("");
-    setIsPublishingSummary(false);
-    setPublishSummaryFeedback(null);
-    transcriptRequestIdRef.current += 1;
-    const requestId = transcriptRequestIdRef.current;
-    try {
-      const cached = readCachedTranscript(video.videoId);
-      if (cached) {
-        if (requestId !== transcriptRequestIdRef.current) {
-          return;
-        }
-        setTranscriptText(cached);
-        return;
-      }
-      const payload = await fetchTranscriptByVideoInput({
-        videoId: video.videoId,
-        videoUrl: video.videoUrl
-      });
-      if (requestId !== transcriptRequestIdRef.current) {
-        return;
-      }
-      const text = payload.text.trim();
-      if (!text) {
-        setTranscriptError("No transcript.");
-        return;
-      }
-      setTranscriptText(text);
-      writeCachedTranscript(video.videoId, text);
-    } catch (error) {
-      if (requestId !== transcriptRequestIdRef.current) {
-        return;
-      }
-      const message = error instanceof Error ? error.message : "No transcript.";
-      setTranscriptError(message);
-    } finally {
-      if (requestId === transcriptRequestIdRef.current) {
-        setTranscriptLoading(false);
-      }
-    }
-  };
-
-  const loadSummary = async (options?: {
-    force?: boolean;
-    promptOverride?: string;
-    modelOverride?: string;
-    allowFetch?: boolean;
-  }): Promise<void> => {
-    if (!transcriptVideo || transcriptLoading || transcriptError || !transcriptText.trim()) {
-      return;
-    }
-    if (summaryLoading) {
-      return;
-    }
-
-    const promptToUse =
-      typeof options?.promptOverride === "string" && options.promptOverride.trim().length > 0
-        ? options.promptOverride.trim()
-        : activeSummaryPrompt;
-    const hasExplicitModelOverride =
-      options !== undefined && Object.prototype.hasOwnProperty.call(options, "modelOverride");
-    const modelToUse = hasExplicitModelOverride
-      ? String(options?.modelOverride ?? "").trim()
-      : activeSummaryModel;
-
-    if (!options?.force) {
-      const cached = readCachedSummary(
-        transcriptVideo.videoId,
-        transcriptText,
-        `${promptToUse}\n__MODEL__:${modelToUse || ""}`
-      );
-      if (cached) {
-        setSummaryText(cached.summary);
-        setSummaryKeyPoints(cached.keyPoints);
-        setSummaryError(null);
-        setSummaryModel(cached.model);
-        return;
-      }
-      if (options?.allowFetch !== true) {
-        setSummaryText("");
-        setSummaryKeyPoints([]);
-        setSummaryError(null);
-        setSummaryModel("");
-        return;
-      }
-    }
-
-    setSummaryLoading(true);
-    setSummaryError(null);
-    try {
-      const payload = await fetchSummaryByVideoInput({
-        videoId: transcriptVideo.videoId,
-        videoUrl: transcriptVideo.videoUrl,
-        transcriptText,
-        mode: "short",
-        prompt: promptToUse,
-        model: modelToUse || undefined
-      });
-      const nextSummary = payload.summary.trim();
-      const nextKeyPoints = payload.keyPoints
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0);
-      if (!nextSummary && nextKeyPoints.length === 0) {
-        setSummaryError("No summary.");
-        return;
-      }
-      setSummaryText(nextSummary);
-      setSummaryKeyPoints(nextKeyPoints);
-      setSummaryModel(payload.model);
-      writeCachedSummary(
-        transcriptVideo.videoId,
-        transcriptText,
-        `${promptToUse}\n__MODEL__:${modelToUse || ""}`,
-        {
-          summary: nextSummary,
-          keyPoints: nextKeyPoints,
-          model: payload.model
-        }
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Summary failed.";
-      setSummaryError(message);
-    } finally {
-      setSummaryLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!transcriptVideo) {
-      return;
-    }
-    if (transcriptViewMode !== "summary") {
-      return;
-    }
-    if (isSummaryPromptEditMode) {
-      return;
-    }
-    if (transcriptLoading || transcriptError) {
-      return;
-    }
-    if (!transcriptText.trim()) {
-      return;
-    }
-    if (summaryLoading || summaryError) {
-      return;
-    }
-    if (summaryText.trim().length > 0 || summaryKeyPoints.length > 0) {
-      return;
-    }
-    void loadSummary({ allowFetch: true });
-  }, [
-    transcriptVideo,
-    transcriptViewMode,
-    isSummaryPromptEditMode,
-    transcriptLoading,
-    transcriptError,
-    transcriptText,
-    summaryLoading,
-    summaryError,
-    summaryText,
-    summaryKeyPoints,
-    activeSummaryPrompt,
-    activeSummaryModel
-  ]);
-
-  const openSummaryFormatEditor = (formatId: string | null): void => {
-    const format =
-      formatId !== null ? summaryFormats.find((item) => item.id === formatId) ?? null : null;
-    setEditingSummaryFormatId(format?.id ?? null);
-    setSummaryFormatNameDraft(format?.name ?? "");
-    setSummaryPromptDraft(format?.prompt ?? "");
-    setSummaryFormatModelDraft(format?.model ?? "");
-    summaryFormatNameDraftRef.current = format?.name ?? "";
-    summaryPromptDraftRef.current = format?.prompt ?? "";
-    summaryFormatModelDraftRef.current = format?.model ?? "";
-    setIsNewSummaryModelDraftMode(false);
-    setSummaryFormatDefaultDraft(format?.isDefault ?? false);
-    setIsSummaryPromptEditMode(true);
-  };
-
-  const switchToSummaryFormat = async (formatId: string): Promise<void> => {
-    const format = summaryFormats.find((item) => item.id === formatId);
-    if (!format) {
-      return;
-    }
-    setIsAllSummaryFormatsMode(false);
-    setActiveSummaryFormatId(format.id);
-    setEditingSummaryFormatId(format.id);
-    setSummaryFormatNameDraft(format.name);
-    setSummaryPromptDraft(format.prompt);
-    setSummaryFormatModelDraft(format.model ?? "");
-    summaryFormatNameDraftRef.current = format.name;
-    summaryPromptDraftRef.current = format.prompt;
-    summaryFormatModelDraftRef.current = format.model ?? "";
-    setIsNewSummaryModelDraftMode(false);
-    setSummaryFormatDefaultDraft(format.isDefault);
-    setIsSummaryPromptEditMode(false);
-    setTranscriptViewMode("summary");
-    setSummaryText("");
-    setSummaryKeyPoints([]);
-    setSummaryError(null);
-    setSummaryModel("");
-    if (!transcriptLoading && !transcriptError && transcriptText.trim().length > 0) {
-      await loadSummary({
-        force: false,
-        allowFetch: true,
-        promptOverride: format.prompt,
-        modelOverride: format.model
-      });
-    }
-  };
-
-  const moveSummaryFormat = (formatId: string, direction: "up" | "down"): void => {
-    const currentIndex = summaryFormats.findIndex((item) => item.id === formatId);
-    if (currentIndex < 0) {
-      return;
-    }
-    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= summaryFormats.length) {
-      return;
-    }
-    const nextFormats = [...summaryFormats];
-    const [moved] = nextFormats.splice(currentIndex, 1);
-    nextFormats.splice(targetIndex, 0, moved);
-    setSummaryFormats(normalizeStoredSummaryFormats(nextFormats));
-  };
-
-  const handleTranscriptViewModeChange = async (
-    mode: "transcript" | "summary" | string
-  ): Promise<void> => {
-    setPublishSummaryFeedback(null);
-    if (mode === NEW_SUMMARY_FORMAT_OPTION) {
-      setIsAllSummaryFormatsMode(false);
-      setTranscriptViewMode("summary");
-      openSummaryFormatEditor(null);
-      return;
-    }
-    if (mode === ALL_SUMMARY_FORMATS_OPTION) {
-      setIsAllSummaryFormatsMode(true);
-      setIsSummaryPromptEditMode(false);
-      setTranscriptViewMode("summary");
-      setSummaryText("");
-      setSummaryKeyPoints([]);
-      setSummaryError(null);
-      setSummaryModel("");
-      if (!transcriptLoading && !transcriptError && transcriptText.trim().length > 0) {
-        const allFormatsDefault = getDefaultSummaryFormat(summaryFormats);
-        await loadSummary({
-          force: false,
-          allowFetch: true,
-          promptOverride: buildAllFormatsCombinedPrompt(summaryFormats),
-          modelOverride: allFormatsDefault.model ?? ""
-        });
-      }
-      return;
-    }
-    if (mode === "transcript") {
-      setIsAllSummaryFormatsMode(false);
-      setIsSummaryPromptEditMode(false);
-      if (transcriptViewMode === "transcript") {
-        return;
-      }
-      setTranscriptViewMode("transcript");
-      return;
-    }
-    if (mode.startsWith(SUMMARY_MODE_OPTION_PREFIX)) {
-      const formatId = mode.slice(SUMMARY_MODE_OPTION_PREFIX.length);
-      await switchToSummaryFormat(formatId);
-      return;
-    }
-    setIsSummaryPromptEditMode(false);
-    setTranscriptViewMode("summary");
-    if (!summaryText && summaryKeyPoints.length === 0 && !summaryError) {
-      await loadSummary({ allowFetch: true });
-    }
-  };
-
-  const regenerateSummary = async (): Promise<void> => {
-    setPublishSummaryFeedback(null);
-    setIsSummaryPromptEditMode(false);
-    setTranscriptViewMode("summary");
-    await loadSummary({ force: true });
-  };
-
-  const addSummaryModelPresetIfMissing = (modelValue: string): void => {
-    const trimmed = modelValue.trim();
-    if (!trimmed) {
-      return;
-    }
-    setSummaryModelPresets((previous) => {
-      const exists = previous.some(
-        (item) => item.value.trim().toLowerCase() === trimmed.toLowerCase()
-      );
-      if (exists) {
-        return previous;
-      }
-      return [...previous, { value: trimmed, label: trimmed.toUpperCase() }];
-    });
-  };
-
-  const removeSummaryModelPreset = (modelValue: string): void => {
-    const trimmed = modelValue.trim();
-    if (!trimmed) {
-      return;
-    }
-    setSummaryModelPresets((previous) =>
-      previous.filter((item) => item.value.trim().toLowerCase() !== trimmed.toLowerCase())
-    );
-    if (summaryFormatModelDraft.trim().toLowerCase() === trimmed.toLowerCase()) {
-      setSummaryFormatModelDraft("");
-      summaryFormatModelDraftRef.current = "";
-    }
-  };
-
-  const saveSummaryPromptAndClose = async (): Promise<void> => {
-    setPublishSummaryFeedback(null);
-    const nextName = (
-      typeof summaryFormatNameDraftRef.current === "string"
-        ? summaryFormatNameDraftRef.current
-        : summaryFormatNameDraft
-    )
-      .trim()
-      .slice(0, 20);
-    const nextPrompt =
-      (
-        typeof summaryPromptDraftRef.current === "string"
-          ? summaryPromptDraftRef.current
-          : summaryPromptDraft
-      ).trim() || DEFAULT_SUMMARY_PROMPT;
-    const nextModel = (
-      typeof summaryFormatModelDraftRef.current === "string"
-        ? summaryFormatModelDraftRef.current
-        : summaryFormatModelDraft
-    ).trim();
-    addSummaryModelPresetIfMissing(nextModel);
-    const nextDefault = summaryFormatDefaultDraft;
-    if (!nextName) {
-      return;
-    }
-
-    if (
-      summaryFormats.some(
-        (format) =>
-          format.id !== editingSummaryFormatId &&
-          format.name.trim().toLowerCase() === nextName.toLowerCase()
-      )
-    ) {
-      return;
-    }
-
-    if (editingSummaryFormatId === null) {
-      const now = Date.now();
-      const newFormat: SummaryFormat = {
-        id: `summary-format-${now}`,
-        name: nextName,
-        prompt: nextPrompt,
-        model: nextModel,
-        isDefault: nextDefault,
-        createdAt: now,
-        updatedAt: now
-      };
-      const nextFormats = [...summaryFormats, newFormat].map((format) => ({
-        ...format,
-        isDefault: nextDefault ? format.id === newFormat.id : format.isDefault
-      }));
-      setSummaryFormats(normalizeStoredSummaryFormats(nextFormats));
-      setIsAllSummaryFormatsMode(false);
-      setActiveSummaryFormatId(newFormat.id);
-      setEditingSummaryFormatId(newFormat.id);
-      setSummaryFormatNameDraft(newFormat.name);
-      setSummaryFormatModelDraft(newFormat.model ?? "");
-      summaryFormatNameDraftRef.current = newFormat.name;
-      summaryPromptDraftRef.current = newFormat.prompt;
-      summaryFormatModelDraftRef.current = newFormat.model ?? "";
-      setIsNewSummaryModelDraftMode(false);
-      setIsSummaryPromptEditMode(false);
-      setTranscriptViewMode("summary");
-      setSummaryText("");
-      setSummaryKeyPoints([]);
-      setSummaryError(null);
-      setSummaryModel("");
-      await loadSummary({
-        force: true,
-        promptOverride: nextPrompt,
-        modelOverride: nextModel
-      });
-      return;
-    }
-
-    const baseFormat =
-      summaryFormats.find((format) => format.id === editingSummaryFormatId) ?? activeSummaryFormat;
-    const hasNoChanges =
-      baseFormat.name === nextName &&
-      baseFormat.prompt === nextPrompt &&
-      (baseFormat.model ?? "") === nextModel &&
-      baseFormat.isDefault === nextDefault;
-    if (hasNoChanges) {
-      setSummaryFormatNameDraft(baseFormat.name);
-      setSummaryPromptDraft(baseFormat.prompt);
-      setSummaryFormatModelDraft(baseFormat.model ?? "");
-      summaryFormatNameDraftRef.current = baseFormat.name;
-      summaryPromptDraftRef.current = baseFormat.prompt;
-      summaryFormatModelDraftRef.current = baseFormat.model ?? "";
-      setIsNewSummaryModelDraftMode(false);
-      setSummaryFormatDefaultDraft(baseFormat.isDefault);
-      setEditingSummaryFormatId(baseFormat.id);
-      setIsSummaryPromptEditMode(false);
-      return;
-    }
-
-    const now = Date.now();
-    const nextFormats = summaryFormats.map((format) => {
-      if (format.id === baseFormat.id) {
-        return {
-          ...format,
-          name: nextName,
-          prompt: nextPrompt,
-          model: nextModel,
-          isDefault: nextDefault,
-          updatedAt: now
-        };
-      }
-      return {
-        ...format,
-        isDefault: nextDefault ? false : format.isDefault
-      };
-    });
-    const normalizedFormats = normalizeStoredSummaryFormats(nextFormats);
-    setSummaryFormats(normalizedFormats);
-    setIsAllSummaryFormatsMode(false);
-    setActiveSummaryFormatId(baseFormat.id);
-    setEditingSummaryFormatId(baseFormat.id);
-    setSummaryFormatNameDraft(nextName);
-    setSummaryPromptDraft(nextPrompt);
-    setSummaryFormatModelDraft(nextModel);
-    summaryFormatNameDraftRef.current = nextName;
-    summaryPromptDraftRef.current = nextPrompt;
-    summaryFormatModelDraftRef.current = nextModel;
-    setIsNewSummaryModelDraftMode(false);
-    setSummaryFormatDefaultDraft(nextDefault);
-    setIsSummaryPromptEditMode(false);
-    setTranscriptViewMode("summary");
-    setSummaryText("");
-    setSummaryKeyPoints([]);
-    setSummaryError(null);
-    setSummaryModel("");
-    await loadSummary({
-      force: true,
-      promptOverride: nextPrompt,
-      modelOverride: nextModel
-    });
-  };
-
-  const deleteSummaryFormatAndClose = (): void => {
-    if (!editingSummaryFormatId || summaryFormats.length <= 1) {
-      return;
-    }
-    const nextFormats = summaryFormats.filter((format) => format.id !== editingSummaryFormatId);
-    if (nextFormats.length === 0) {
-      return;
-    }
-    const hadDefault =
-      summaryFormats.find((format) => format.id === editingSummaryFormatId)?.isDefault === true;
-    if (hadDefault || !nextFormats.some((format) => format.isDefault)) {
-      nextFormats.forEach((format, index) => {
-        format.isDefault = index === 0;
-      });
-    }
-    const normalizedFormats = normalizeStoredSummaryFormats(nextFormats);
-    setSummaryFormats(normalizedFormats);
-    setIsAllSummaryFormatsMode(false);
-    const defaultFormat = getDefaultSummaryFormat(normalizedFormats);
-    setActiveSummaryFormatId(defaultFormat.id);
-    setEditingSummaryFormatId(defaultFormat.id);
-    setSummaryFormatNameDraft(defaultFormat.name);
-    setSummaryPromptDraft(defaultFormat.prompt);
-    setSummaryFormatModelDraft(defaultFormat.model ?? "");
-    summaryFormatNameDraftRef.current = defaultFormat.name;
-    summaryPromptDraftRef.current = defaultFormat.prompt;
-    summaryFormatModelDraftRef.current = defaultFormat.model ?? "";
-    setIsNewSummaryModelDraftMode(false);
-    setSummaryFormatDefaultDraft(defaultFormat.isDefault);
-    setIsSummaryPromptEditMode(false);
-    setTranscriptViewMode("summary");
-    setSummaryText("");
-    setSummaryKeyPoints([]);
-    setSummaryError(null);
-    setSummaryModel("");
-  };
-
-  const buildSummaryTextForPublish = (): string => {
-    const summary = summaryText.trim();
-    const points = summaryKeyPoints
-      .map((point) => point.trim())
-      .filter((point) => point.length > 0);
-    const pointsBlock =
-      points.length > 0 ? `\n\n${points.map((point) => `- ${point}`).join("\n")}` : "";
-    return `${summary}${pointsBlock}`.trim();
-  };
-
-  const normalizePublishStatusText = (value: string): string => {
-    const next = value.trim();
-    if (!next) {
-      return next;
-    }
-    if (next.endsWith("...")) {
-      return next;
-    }
-    return next.replace(/[.]+$/, "");
-  };
-
-  const publishCurrentVideoSummary = async (): Promise<void> => {
-    if (!transcriptVideo) {
-      return;
-    }
-    const summaryForPublish = buildSummaryTextForPublish();
-    if (!summaryForPublish) {
-      return;
-    }
-    if (isPublishingSummary) {
-      return;
-    }
-
-    setPublishSummaryFeedback(null);
-    setIsPublishingSummary(true);
-    try {
-      await publishVideoSummary({
-        videoId: transcriptVideo.videoId,
-        videoUrl: transcriptVideo.videoUrl,
-        title: transcriptVideo.title,
-        summary: summaryForPublish,
-        thumbnailUrl: transcriptVideo.thumbnailUrl,
-        channelTitle: transcriptSourceHandle || transcriptVideo.channelTitle,
-        publishedAt: transcriptVideo.publishedAt,
-        durationSeconds: transcriptVideo.durationSeconds ?? null,
-        viewCount: transcriptVideo.viewCount ?? null
-      });
-      setPublishSummaryFeedback({
-        kind: "success",
-        text: "PUBLISHED"
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Publish failed.";
-      setPublishSummaryFeedback({
-        kind: "error",
-        text: normalizePublishStatusText(message)
-      });
-    } finally {
-      setIsPublishingSummary(false);
-    }
-  };
-
-  const getVisibleTranscriptPanelText = (): string => {
-    if (transcriptViewMode === "summary") {
-      const summary = summaryText.trim();
-      const points = summaryKeyPoints
-        .map((point) => point.trim())
-        .filter((point) => point.length > 0);
-      const pointsBlock =
-        points.length > 0 ? `\n\n${points.map((point) => `- ${point}`).join("\n")}` : "";
-      return `${summary}${pointsBlock}`.trim();
-    }
-    return transcriptText.trim();
-  };
-
-  const copyTranscriptText = async (): Promise<void> => {
-    setPublishSummaryFeedback(null);
-    const text = getVisibleTranscriptPanelText();
-    if (!text) {
-      return;
-    }
-    try {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-        await navigator.clipboard.writeText(text);
-      } else {
-        throw new Error("Clipboard API unavailable.");
-      }
-    } catch {
-      const area = document.createElement("textarea");
-      area.value = text;
-      area.setAttribute("readonly", "true");
-      area.style.position = "fixed";
-      area.style.opacity = "0";
-      document.body.appendChild(area);
-      area.select();
-      document.execCommand("copy");
-      document.body.removeChild(area);
-    }
-    setIsTranscriptCopied(true);
-    if (transcriptCopyFeedbackTimeoutRef.current) {
-      window.clearTimeout(transcriptCopyFeedbackTimeoutRef.current);
-    }
-    transcriptCopyFeedbackTimeoutRef.current = window.setTimeout(() => {
-      setIsTranscriptCopied(false);
-      transcriptCopyFeedbackTimeoutRef.current = null;
-    }, 1000);
   };
 
   const getVideoThumbnailSrc = (video: VideoItem): string => {
@@ -4305,7 +2842,9 @@ function App() {
   const playChannelVideos = (column: ColumnState): void => {
     const now = Date.now();
     const sourceVideos =
-      activeBoard?.kind === "saved" ? sortSavedVideosByMode(column) : [...column.videos];
+      activeBoard?.kind === "saved"
+        ? sortSavedVideosByMode(column, getVideoPublishedTime)
+        : [...column.videos];
     const queue = sourceVideos
       .filter((video) => {
         if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
@@ -4565,15 +3104,12 @@ function App() {
       }
       keysToDelete.forEach((key) => storage.removeItem(key));
       setSummaryFormats((previous) =>
-        normalizeStoredSummaryFormats(
-          previous.map((format) => ({
-            ...format,
-            model: ""
-          }))
-        )
+        previous.map((format) => ({
+          ...format,
+          model: ""
+        }))
       );
       setSummaryFormatModelDraft("");
-      summaryFormatModelDraftRef.current = "";
       setIsNewSummaryModelDraftMode(false);
       setIsDeleteSummariesModalOpen(false);
     } catch {
@@ -4600,29 +3136,11 @@ function App() {
         }
         return {
           ...board,
-          columns: board.columns.map((column) => {
-            if (column.id !== saveTargetColumnId) {
-              return column;
-            }
-            const exists = column.videos.some((video) => video.videoId === savingVideo.videoId);
-            if (exists) {
-              return column;
-            }
-            const nextVideos = [savingVideo, ...column.videos];
-            const nextManualOrder = [
-              savingVideo.videoId,
-              ...column.savedManualOrder.filter((videoId) => videoId !== savingVideo.videoId)
-            ];
-            return {
-              ...column,
-              videos: nextVideos,
-              savedAddedAtByVideoId: {
-                ...column.savedAddedAtByVideoId,
-                [savingVideo.videoId]: now
-              },
-              savedManualOrder: nextManualOrder
-            };
-          }),
+          columns: board.columns.map((column) =>
+            column.id === saveTargetColumnId
+              ? addVideoToSavedColumn(column, savingVideo, now)
+              : column
+          ),
           watchedVideos: nextWatchedVideos,
           viewCountRefreshedAtByVideoId: {
             ...board.viewCountRefreshedAtByVideoId,
@@ -4706,18 +3224,7 @@ function App() {
     setBoard(savedBoard.id, (board) => ({
       ...board,
       columns: board.columns.map((column) =>
-        column.id === columnId
-          ? {
-              ...column,
-              videos: column.videos.filter((video) => video.videoId !== videoId),
-              savedAddedAtByVideoId: Object.fromEntries(
-                Object.entries(column.savedAddedAtByVideoId).filter(
-                  (entry) => entry[0] !== videoId
-                )
-              ),
-              savedManualOrder: column.savedManualOrder.filter((id) => id !== videoId)
-            }
-          : column
+        column.id === columnId ? removeVideoFromSavedColumn(column, videoId) : column
       ),
       viewCountRefreshedAtByVideoId: Object.fromEntries(
         Object.entries(board.viewCountRefreshedAtByVideoId).filter(
@@ -4748,12 +3255,7 @@ function App() {
       ...board,
       columns: board.columns.map((column) =>
         column.id === removeAllSavedColumnAction.columnId
-          ? {
-              ...column,
-              videos: [],
-              savedAddedAtByVideoId: {},
-              savedManualOrder: []
-            }
+          ? clearSavedColumnVideos(column)
           : column
       ),
       viewCountRefreshedAtByVideoId: Object.fromEntries(
@@ -4793,43 +3295,15 @@ function App() {
       return;
     }
 
-    setBoard(savedBoard.id, (board) => ({
-      ...board,
-      columns: board.columns.map((column) => {
-        if (column.id === sourceColumnId) {
-          return {
-            ...column,
-            videos: column.videos.filter((video) => video.videoId !== videoId),
-            savedAddedAtByVideoId: Object.fromEntries(
-              Object.entries(column.savedAddedAtByVideoId).filter(
-                (entry) => entry[0] !== videoId
-              )
-            ),
-            savedManualOrder: column.savedManualOrder.filter((id) => id !== videoId)
-          };
-        }
-        if (column.id === moveSavedVideoTargetColumnId) {
-          const exists = column.videos.some((video) => video.videoId === videoId);
-          if (exists) {
-            return column;
-          }
-          const now = Date.now();
-          return {
-            ...column,
-            videos: [videoToMove, ...column.videos],
-            savedAddedAtByVideoId: {
-              ...column.savedAddedAtByVideoId,
-              [videoId]: now
-            },
-            savedManualOrder: [
-              videoId,
-              ...column.savedManualOrder.filter((id) => id !== videoId)
-            ]
-          };
-        }
-        return column;
-      })
-    }));
+    setBoard(savedBoard.id, (board) =>
+      moveSavedVideoBetweenColumns(
+        board,
+        sourceColumnId,
+        moveSavedVideoTargetColumnId,
+        videoId,
+        Date.now()
+      )
+    );
 
     setMovingSavedVideo(null);
     setMoveSavedVideoTargetColumnId("");
@@ -4844,31 +3318,7 @@ function App() {
       return;
     }
     setColumn(activeBoard.id, columnId, (column) => {
-      if (column.savedSortMode !== "manual") {
-        return column;
-      }
-      const normalizedOrderData = normalizeSavedColumnOrderData(
-        column.videos,
-        column.savedAddedAtByVideoId,
-        column.savedManualOrder
-      );
-      const nextOrder = [...normalizedOrderData.savedManualOrder];
-      const index = nextOrder.indexOf(videoId);
-      if (index === -1) {
-        return column;
-      }
-      const swapIndex = direction === "up" ? index - 1 : index + 1;
-      if (swapIndex < 0 || swapIndex >= nextOrder.length) {
-        return {
-          ...column,
-          savedManualOrder: nextOrder
-        };
-      }
-      [nextOrder[index], nextOrder[swapIndex]] = [nextOrder[swapIndex], nextOrder[index]];
-      return {
-        ...column,
-        savedManualOrder: nextOrder
-      };
+      return moveSavedVideoInManualOrderForColumn(column, videoId, direction);
     });
   };
 
@@ -4914,50 +3364,18 @@ function App() {
     );
   };
 
-  const getShownVideosForColumnInBoard = (board: BoardState, column: ColumnState): VideoItem[] => {
-    const watched = board.watchedVideos ?? {};
-    const now = Date.now();
-    const sourceVideos = board.kind === "saved" ? sortSavedVideosByMode(column) : column.videos;
-    return sourceVideos.filter((video) => {
-      if (!matchesVideoWindowFilter(getVideoPublishedTime(video), board.videoWindowDays, now)) {
-        return false;
-      }
-      if (!matchesDurationFilter(video.durationSeconds, board.videoDurationFilter)) {
-        return false;
-      }
-      const isWatched = watched[video.videoId] === true;
-      if (board.videoFilter === "all") {
-        return true;
-      }
-      if (board.videoFilter === "watched") {
-        return isWatched;
-      }
-      return !isWatched;
-    });
-  };
-
-  const getVisibleColumnsForBoard = (board: BoardState): ColumnState[] => {
-    const scope = normalizeColumnScopeFilter(board.columnScopeFilter, board.columns);
-    if (scope.includes(COLUMN_SCOPE_ALL)) {
-      return board.columns;
-    }
-    if (scope.includes(COLUMN_SCOPE_NOT_EMPTY)) {
-      return board.columns.filter((column) => getShownVideosForColumnInBoard(board, column).length > 0);
-    }
-    return board.columns.filter((column) => scope.includes(column.id));
-  };
-
   const readAgentState = (): ReturnType<AppAgentApi["readState"]> => {
     const currentActiveBoard =
       boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
-    const visible = currentActiveBoard ? getVisibleColumnsForBoard(currentActiveBoard) : [];
-    const visibleSet = new Set(visible.map((column) => column.id));
-    const totalShown = currentActiveBoard
-      ? visible.reduce(
-          (sum, column) => sum + getShownVideosForColumnInBoard(currentActiveBoard, column).length,
-          0
-        )
-      : 0;
+    const currentDerived = getBoardFilterDerivedData({
+      board: currentActiveBoard,
+      allValue: COLUMN_SCOPE_ALL,
+      notEmptyValue: COLUMN_SCOPE_NOT_EMPTY,
+      getSourceVideos: getSourceVideosForBoard
+    });
+    const visible = currentDerived.visibleColumns;
+    const visibleSet = currentDerived.visibleColumnIdSet;
+    const totalShown = currentDerived.shownVideosTotal;
 
     return {
       activeBoardId: currentActiveBoard?.id ?? null,
@@ -4967,23 +3385,26 @@ function App() {
             videoFilter: currentActiveBoard.videoFilter,
             videoWindowDays: currentActiveBoard.videoWindowDays,
             videoDurationFilter: currentActiveBoard.videoDurationFilter,
-            columnScopeFilter: normalizeColumnScopeFilter(
-              currentActiveBoard.columnScopeFilter,
-              currentActiveBoard.columns
-            ),
+            columnScopeFilter: currentDerived.columnScopeFilter,
             playbackRate: currentActiveBoard.defaultPlaybackRate
           }
         : null,
       shownVideosTotal: totalShown,
       boards: boards.map((board) => {
-        const boardVisibleSet = new Set(getVisibleColumnsForBoard(board).map((column) => column.id));
+        const boardDerived = getBoardFilterDerivedData({
+          board,
+          allValue: COLUMN_SCOPE_ALL,
+          notEmptyValue: COLUMN_SCOPE_NOT_EMPTY,
+          getSourceVideos: getSourceVideosForBoard
+        });
+        const boardVisibleSet = boardDerived.visibleColumnIdSet;
         return {
           id: board.id,
           name: board.name,
           kind: board.kind,
           columnCount: board.columns.length,
           columns: board.columns.map((column) => {
-            const shown = getShownVideosForColumnInBoard(board, column);
+            const shown = boardDerived.filteredVideosByColumnId.get(column.id) ?? [];
             return {
               id: column.id,
               handle: column.currentHandle || column.handleInput,
@@ -4998,9 +3419,7 @@ function App() {
       }),
       visibleColumns: visible.map((column) => column.id),
       hiddenColumns: currentActiveBoard
-        ? currentActiveBoard.columns
-            .filter((column) => !visibleSet.has(column.id))
-            .map((column) => column.id)
+        ? currentDerived.hiddenColumns.map((column) => column.id)
         : []
     };
   };
@@ -5223,7 +3642,12 @@ function App() {
                   : board.videoDurationFilter,
               columnScopeFilter:
                 Array.isArray(patch.columnScopeFilter)
-                  ? normalizeColumnScopeFilter(patch.columnScopeFilter, board.columns)
+                  ? normalizeColumnScopeFilter(
+                      patch.columnScopeFilter,
+                      board.columns,
+                      COLUMN_SCOPE_ALL,
+                      COLUMN_SCOPE_NOT_EMPTY
+                    )
                   : board.columnScopeFilter,
               defaultPlaybackRate: nextRate
             }));
@@ -5598,10 +4022,16 @@ function App() {
     if (!activeBoard) {
       return;
     }
-    const next = resolveColumnScopeFilterSelection(value, columnScopeFilter, columns);
+    const resolved = resolveColumnScopeFilterSelection(
+      value,
+      columnScopeFilter,
+      columns,
+      COLUMN_SCOPE_ALL,
+      COLUMN_SCOPE_NOT_EMPTY
+    );
     setBoard(activeBoard.id, (board) => ({
       ...board,
-      columnScopeFilter: next
+      columnScopeFilter: resolved
     }));
     blurActiveTopbarControl();
   };
@@ -5674,7 +4104,13 @@ function App() {
         columnScopeFilter={columnScopeFilter}
         columnScopeDropdownListHeight={channelScopeDropdownListHeight}
         formatColumnScopeSummary={() =>
-          formatColumnScopeSummary(columnScopeFilter, isSavedBoardActive, columns)
+          formatColumnScopeSummary(
+            columnScopeFilter,
+            isSavedBoardActive,
+            columns,
+            COLUMN_SCOPE_ALL,
+            COLUMN_SCOPE_NOT_EMPTY
+          )
         }
         columnScopeOptions={columnScopeOptions}
         onColumnScopeChange={handleColumnScopeChange}
@@ -5945,32 +4381,7 @@ function App() {
           </div>
         }
         open={transcriptVideo !== null}
-        onCancel={() => {
-          transcriptRequestIdRef.current += 1;
-          setTranscriptVideo(null);
-          setTranscriptLoading(false);
-          setTranscriptText("");
-          setTranscriptError(null);
-          setTranscriptViewMode("transcript");
-          setIsTranscriptCopied(false);
-          setSummaryLoading(false);
-          setSummaryText("");
-          setSummaryKeyPoints([]);
-          setSummaryError(null);
-          setSummaryModel("");
-          setIsPublishingSummary(false);
-          setPublishSummaryFeedback(null);
-          setIsSummaryPromptEditMode(false);
-          setEditingSummaryFormatId(activeSummaryFormat.id);
-          setSummaryFormatNameDraft(activeSummaryFormat.name);
-          setSummaryPromptDraft(activeSummaryFormat.prompt);
-          setSummaryFormatModelDraft(activeSummaryFormat.model ?? "");
-          summaryFormatNameDraftRef.current = activeSummaryFormat.name;
-          summaryPromptDraftRef.current = activeSummaryFormat.prompt;
-          summaryFormatModelDraftRef.current = activeSummaryFormat.model ?? "";
-          setIsNewSummaryModelDraftMode(false);
-          setSummaryFormatDefaultDraft(activeSummaryFormat.isDefault);
-        }}
+        onCancel={closeTranscriptModal}
         footer={null}
         width={900}
         destroyOnHidden
@@ -5982,18 +4393,14 @@ function App() {
               <Input
                 key={`summary-name-${editingSummaryFormatId ?? "new"}-${isSummaryPromptEditMode ? "open" : "closed"}`}
                 defaultValue={summaryFormatNameDraft}
-                onChange={(event) => {
-                  summaryFormatNameDraftRef.current = event.target.value;
-                }}
+                onChange={(event) => setSummaryFormatNameDraft(event.target.value)}
                 placeholder="Name"
                 maxLength={20}
               />
               <Input.TextArea
                 key={`summary-prompt-${editingSummaryFormatId ?? "new"}-${isSummaryPromptEditMode ? "open" : "closed"}`}
                 defaultValue={summaryPromptDraft}
-                onChange={(event) => {
-                  summaryPromptDraftRef.current = event.target.value;
-                }}
+                onChange={(event) => setSummaryPromptDraft(event.target.value)}
                 autoSize={{ minRows: 8, maxRows: 18 }}
                 placeholder="Enter plain summary instructions (style/focus)."
               />
@@ -6007,13 +4414,11 @@ function App() {
                   if (value === NEW_SUMMARY_MODEL_OPTION) {
                     setIsNewSummaryModelDraftMode(true);
                     setSummaryFormatModelDraft("");
-                    summaryFormatModelDraftRef.current = "";
                     return;
                   }
                   setIsNewSummaryModelDraftMode(false);
                   const nextValue = value === "__default_model__" ? "" : value;
                   setSummaryFormatModelDraft(nextValue);
-                  summaryFormatModelDraftRef.current = nextValue;
                 }}
                 className="video-filter-select"
                 options={[
@@ -6058,7 +4463,6 @@ function App() {
                 onChange={(event) => {
                   const nextValue = event.target.value;
                   setSummaryFormatModelDraft(nextValue);
-                  summaryFormatModelDraftRef.current = nextValue;
                 }}
                 placeholder="OPENROUTER MODEL ID"
               />
@@ -6084,13 +4488,9 @@ function App() {
                     className="summary-prompt-action-btn"
                     onClick={() => {
                       setIsSummaryPromptEditMode(false);
-                      setEditingSummaryFormatId(activeSummaryFormat.id);
                       setSummaryFormatNameDraft(activeSummaryFormat.name);
                       setSummaryPromptDraft(activeSummaryFormat.prompt);
                       setSummaryFormatModelDraft(activeSummaryFormat.model ?? "");
-                      summaryFormatNameDraftRef.current = activeSummaryFormat.name;
-                      summaryPromptDraftRef.current = activeSummaryFormat.prompt;
-                      summaryFormatModelDraftRef.current = activeSummaryFormat.model ?? "";
                       setIsNewSummaryModelDraftMode(false);
                       setSummaryFormatDefaultDraft(activeSummaryFormat.isDefault);
                     }}

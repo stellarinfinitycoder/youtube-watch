@@ -39,24 +39,41 @@ Completed:
 ## Phase 3
 Goal: simplify logic.
 
-1. Extract domain helpers
-   Create:
-   - [src/domain/boards.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/domain/boards.ts)
-   - [src/domain/videos.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/domain/videos.ts)
+Status: completed.
+
+Completed:
+1. Extracted filter/domain logic into:
    - [src/domain/filters.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/domain/filters.ts)
    - [src/domain/watched.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/domain/watched.ts)
+   - [src/domain/boards.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/domain/boards.ts)
    - [src/domain/savedLists.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/domain/savedLists.ts)
-
-2. Extract hooks
-   Create:
-   - [src/hooks/useBoardFilters.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/hooks/useBoardFilters.ts)
-   - [src/hooks/usePlaybackController.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/hooks/usePlaybackController.ts)
+2. Extracted transcript/summary state and actions into:
    - [src/hooks/useTranscriptSummary.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/hooks/useTranscriptSummary.ts)
-   - [src/hooks/usePersistedState.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/hooks/usePersistedState.ts)
+3. Extracted active-board selector logic into:
+   - [src/hooks/useBoardFilters.ts](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/hooks/useBoardFilters.ts)
+4. Rewired [src/App.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/App.tsx) to use the shared domain/helpers instead of duplicating:
+   - video window filtering
+   - duration filtering
+   - watched-state checks and mutations
+   - transcript/summary modal orchestration
+   - active-board visible/hidden/shown-video selectors
+5. Reused the same board selector logic for agent-mode state reads, removing the parallel filtering implementation.
+6. Extracted saved-list ordering and mutations into shared saved-list helpers:
+   - list-name generation
+   - saved-order normalization
+   - saved sort projection
+   - add/remove/clear/move video mutations
+   - manual reordering helper
+7. Extracted basic board/column mutation helpers:
+   - update board by id
+   - update column by id
+   - append columns
+   - remove column
+   - move column left/right
 
-3. Move published/admin logic out of app shell
-   - keep [src/pages/PublisherAdminPage.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/pages/PublisherAdminPage.tsx) isolated
-   - remove any publisher-specific state from board runtime where possible
+Notes:
+1. `usePersistedState` was intentionally skipped. It does not currently remove enough real complexity to justify another abstraction.
+2. Publisher/admin logic remains isolated in [src/pages/PublisherAdminPage.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/pages/PublisherAdminPage.tsx), which is sufficient for this phase.
 
 ## Phase 4
 Goal: optimize heavy board views.
