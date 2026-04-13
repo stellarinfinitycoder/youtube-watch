@@ -35,13 +35,6 @@ Status: completed
 - Cached default-format summary is hydrated immediately when available.
 - Regeneration still happens only on explicit regenerate or format change.
 
-### 5. Memoize combined summary formatting
-- Build combined all-formats output only when source summaries change.
-- Avoid rebuilding it on unrelated modal state updates.
-- Goal: reduce modal interaction lag.
-
-Status: pending
-
 ### 6. Defer publisher actions
 - Only enable/load publisher-specific actions once a summary exists.
 - Keep publish-related state/actions out of the hot open path as much as possible.
@@ -56,8 +49,7 @@ Status: completed
 2. Step 2
 3. Step 4
 4. Step 3
-5. Step 5
-6. Step 6
+5. Step 6
 
 ### Best first implementation slice
 - Step 1 + Step 2 + Step 4

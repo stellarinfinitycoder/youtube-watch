@@ -86,7 +86,6 @@ import {
   type SavedSortMode
 } from "./domain/savedLists";
 import {
-  ALL_SUMMARY_FORMATS_OPTION,
   DEFAULT_SUMMARY_PROMPT,
   useTranscriptSummary,
   type InlineMetaFeedback,
@@ -1524,7 +1523,6 @@ function App() {
     summaryModelPresets,
     activeSummaryFormat,
     activeSummaryFormatId,
-    isAllSummaryFormatsMode,
     isSummaryPromptEditMode,
     editingSummaryFormatId,
     summaryFormatNameDraft,
@@ -1540,7 +1538,6 @@ function App() {
     setSummaryFormats,
     setIsNewSummaryModelDraftMode,
     setSummaryFormatDefaultDraft,
-    setIsAllSummaryFormatsMode,
     setActiveSummaryFormatId,
     setIsSummaryPromptEditMode,
     clearPublishFeedback,
@@ -4194,7 +4191,6 @@ function App() {
             summaryFormats={summaryFormats}
             summaryModelPresets={summaryModelPresets}
             activeSummaryFormat={activeSummaryFormat}
-            isAllSummaryFormatsMode={isAllSummaryFormatsMode}
             isSummaryPromptEditMode={isSummaryPromptEditMode}
             editingSummaryFormatId={editingSummaryFormatId}
             summaryFormatNameDraft={summaryFormatNameDraft}
@@ -4210,7 +4206,6 @@ function App() {
             setSummaryFormatModelDraft={setSummaryFormatModelDraft}
             setIsNewSummaryModelDraftMode={setIsNewSummaryModelDraftMode}
             setSummaryFormatDefaultDraft={setSummaryFormatDefaultDraft}
-            setIsAllSummaryFormatsMode={setIsAllSummaryFormatsMode}
             setActiveSummaryFormatId={setActiveSummaryFormatId}
             setIsSummaryPromptEditMode={setIsSummaryPromptEditMode}
             handleTranscriptViewModeChange={handleTranscriptViewModeChange}

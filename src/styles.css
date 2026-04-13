@@ -1797,33 +1797,6 @@ body {
   text-transform: uppercase;
 }
 
-.summary-combined-text {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--text);
-  font-size: 15px;
-  line-height: 1.55;
-  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
-}
-
-.summary-combined-markdown pre {
-  margin: 8px 0 12px;
-  white-space: pre;
-  overflow-x: auto;
-  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
-  font-size: 15px;
-  line-height: 1.55;
-  color: var(--text);
-  background: transparent;
-  border: 0;
-  padding: 0;
-}
-
-.summary-combined-markdown code {
-  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
-}
-
 .publisher-edit-modal .ant-input,
 .publisher-edit-modal .ant-input::placeholder {
   text-transform: none !important;

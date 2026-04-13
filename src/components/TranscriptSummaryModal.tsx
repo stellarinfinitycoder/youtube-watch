@@ -4,11 +4,9 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { VideoItem } from "../types/youtube";
 import {
-  ALL_SUMMARY_FORMATS_OPTION,
   looksLikeMarkdown,
   NEW_SUMMARY_FORMAT_OPTION,
   NEW_SUMMARY_MODEL_OPTION,
-  preserveTreeBlocksInMarkdown,
   SUMMARY_MODE_OPTION_PREFIX,
   type InlineMetaFeedback,
   type SummaryFormat,
@@ -34,7 +32,6 @@ type TranscriptSummaryModalProps = {
   summaryFormats: SummaryFormat[];
   summaryModelPresets: SummaryModelPreset[];
   activeSummaryFormat: SummaryFormat;
-  isAllSummaryFormatsMode: boolean;
   isSummaryPromptEditMode: boolean;
   editingSummaryFormatId: string | null;
   summaryFormatNameDraft: string;
@@ -50,7 +47,6 @@ type TranscriptSummaryModalProps = {
   setSummaryFormatModelDraft: (value: string) => void;
   setIsNewSummaryModelDraftMode: (value: boolean) => void;
   setSummaryFormatDefaultDraft: (value: boolean) => void;
-  setIsAllSummaryFormatsMode: (value: boolean) => void;
   setActiveSummaryFormatId: (value: string) => void;
   setIsSummaryPromptEditMode: (value: boolean) => void;
   handleTranscriptViewModeChange: (value: "transcript" | "summary" | string) => Promise<void>;
@@ -82,7 +78,6 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
     summaryFormats,
     summaryModelPresets,
     activeSummaryFormat,
-    isAllSummaryFormatsMode,
     isSummaryPromptEditMode,
     editingSummaryFormatId,
     summaryFormatNameDraft,
@@ -98,7 +93,6 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
     setSummaryFormatModelDraft,
     setIsNewSummaryModelDraftMode,
     setSummaryFormatDefaultDraft,
-    setIsAllSummaryFormatsMode,
     setActiveSummaryFormatId,
     setIsSummaryPromptEditMode,
     handleTranscriptViewModeChange,
@@ -117,11 +111,6 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
       summaryKeyPoints.length > 0 ? summaryKeyPoints.map((point) => `- ${point}`).join("\n") : "";
     return [summaryText, pointsBlock].filter(Boolean).join("\n\n").trim();
   }, [summaryKeyPoints, summaryText]);
-
-  const combinedWithTreeBlocks = useMemo(
-    () => preserveTreeBlocksInMarkdown(combinedSummary),
-    [combinedSummary]
-  );
   const markdownMode = useMemo(
     () => looksLikeMarkdown(combinedSummary),
     [combinedSummary]
@@ -170,9 +159,7 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                     ? NEW_SUMMARY_FORMAT_OPTION
                     : transcriptViewMode === "transcript"
                       ? "transcript"
-                      : isAllSummaryFormatsMode
-                        ? ALL_SUMMARY_FORMATS_OPTION
-                        : `${SUMMARY_MODE_OPTION_PREFIX}${activeSummaryFormat.id}`
+                      : `${SUMMARY_MODE_OPTION_PREFIX}${activeSummaryFormat.id}`
                 }
                 onChange={(value) => void handleTranscriptViewModeChange(value)}
                 aria-label="Transcript view mode"
@@ -188,9 +175,6 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
               >
                 <Select.Option value="transcript" title="TRANSCRIPT">
                   TRANSCRIPT
-                </Select.Option>
-                <Select.Option value={ALL_SUMMARY_FORMATS_OPTION} title="ALL FORMATS">
-                  ALL FORMATS
                 </Select.Option>
                 {summaryFormats.map((format, formatIndex) => (
                   <Select.Option
@@ -246,7 +230,6 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                           onClick={(event) => {
                             event.preventDefault();
                             event.stopPropagation();
-                            setIsAllSummaryFormatsMode(false);
                             setActiveSummaryFormatId(format.id);
                             openSummaryFormatEditor(format.id);
                           }}
@@ -460,11 +443,7 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
             {!summaryLoading && summaryError ? <Text type="danger">{summaryError}</Text> : null}
             {!summaryLoading && !summaryError && (summaryText || summaryKeyPoints.length > 0) ? (
               <div className="summary-content">
-                {isAllSummaryFormatsMode ? (
-                  <div className="summary-markdown summary-combined-markdown">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{combinedWithTreeBlocks}</ReactMarkdown>
-                  </div>
-                ) : !markdownMode ? (
+                {!markdownMode ? (
                   <>
                     {summaryText ? <p className="summary-paragraph">{summaryText}</p> : null}
                     {summaryKeyPoints.length > 0 ? (
