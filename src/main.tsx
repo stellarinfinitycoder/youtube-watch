@@ -1,10 +1,10 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import ReactDOM from "react-dom/client";
 import "antd/dist/reset.css";
 import "./styles.css";
 import App from "./App";
-import PublisherAdminPage from "./pages/PublisherAdminPage";
-import PublicNewsPage from "./pages/PublicNewsPage";
+const PublisherAdminPage = lazy(() => import("./pages/PublisherAdminPage"));
+const PublicNewsPage = lazy(() => import("./pages/PublicNewsPage"));
 
 const faviconHref = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const faviconLink =
@@ -17,13 +17,21 @@ if (!faviconLink.parentElement) {
   document.head.appendChild(faviconLink);
 }
 
+const pathname = window.location.pathname;
+const isPublisherRoute =
+  pathname.startsWith("/admin/rssfeed") || pathname.startsWith("/admin/publisher");
+const isNewsRoute = pathname === "/news" || pathname.startsWith("/news/");
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {window.location.pathname.startsWith("/admin/rssfeed") ||
-    window.location.pathname.startsWith("/admin/publisher") ? (
-      <PublisherAdminPage />
-    ) : window.location.pathname === "/news" || window.location.pathname.startsWith("/news/") ? (
-      <PublicNewsPage />
+    {isPublisherRoute ? (
+      <Suspense fallback={<main className="app-shell">Loading...</main>}>
+        <PublisherAdminPage />
+      </Suspense>
+    ) : isNewsRoute ? (
+      <Suspense fallback={<main className="app-shell">Loading...</main>}>
+        <PublicNewsPage />
+      </Suspense>
     ) : (
       <App />
     )}
