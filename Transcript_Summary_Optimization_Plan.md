@@ -24,6 +24,10 @@ Status: completed
 - Keep all-formats mode efficient and avoid unnecessary markdown parsing.
 - Goal: reduce render cost for long summaries.
 
+Status: completed
+- Plain text remains the default render path for summaries.
+- Markdown rendering now loads lazily through a dedicated renderer component and only when the summary content actually needs markdown.
+
 ### 4. Strengthen cache-first flow
 - Read transcript cache before any fetch.
 - Read per-format summary cache before any generation.

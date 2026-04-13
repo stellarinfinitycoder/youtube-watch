@@ -1,7 +1,5 @@
 import { Button, Checkbox, Input, Modal, Select, Space, Typography } from "antd";
-import { memo, useMemo } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Suspense, lazy, memo, useMemo } from "react";
 import type { VideoItem } from "../types/youtube";
 import {
   looksLikeMarkdown,
@@ -14,6 +12,7 @@ import {
 } from "../hooks/useTranscriptSummary";
 
 const { Text } = Typography;
+const SummaryMarkdownRenderer = lazy(() => import("./SummaryMarkdownRenderer"));
 
 type TranscriptSummaryModalProps = {
   transcriptVideo: VideoItem;
@@ -114,6 +113,14 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
   const markdownMode = useMemo(
     () => looksLikeMarkdown(combinedSummary),
     [combinedSummary]
+  );
+  const plainSummaryText = summaryText.trim();
+  const plainSummaryPoints = useMemo(
+    () =>
+      summaryKeyPoints
+        .map((point) => point.trim())
+        .filter((point) => point.length > 0),
+    [summaryKeyPoints]
   );
   const showPublishButton =
     transcriptViewMode === "summary" &&
@@ -445,19 +452,32 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
               <div className="summary-content">
                 {!markdownMode ? (
                   <>
-                    {summaryText ? <p className="summary-paragraph">{summaryText}</p> : null}
-                    {summaryKeyPoints.length > 0 ? (
+                    {plainSummaryText ? <p className="summary-paragraph">{plainSummaryText}</p> : null}
+                    {plainSummaryPoints.length > 0 ? (
                       <ul className="summary-points">
-                        {summaryKeyPoints.map((point, index) => (
+                        {plainSummaryPoints.map((point, index) => (
                           <li key={`${index}-${point.slice(0, 24)}`}>{point}</li>
                         ))}
                       </ul>
                     ) : null}
                   </>
                 ) : (
-                  <div className="summary-markdown">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{combinedSummary}</ReactMarkdown>
-                  </div>
+                  <Suspense
+                    fallback={
+                      <>
+                        {plainSummaryText ? <p className="summary-paragraph">{plainSummaryText}</p> : null}
+                        {plainSummaryPoints.length > 0 ? (
+                          <ul className="summary-points">
+                            {plainSummaryPoints.map((point, index) => (
+                              <li key={`${index}-${point.slice(0, 24)}`}>{point}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </>
+                    }
+                  >
+                    <SummaryMarkdownRenderer content={combinedSummary} />
+                  </Suspense>
                 )}
               </div>
             ) : null}
