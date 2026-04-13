@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchSummaryByVideoInput, fetchTranscriptByVideoInput } from "../api/youtube";
-import { publishVideoSummary } from "../api/publisher";
 import {
   SUMMARY_FORMATS_STORAGE_KEY,
   SUMMARY_MODEL_PRESETS_STORAGE_KEY,
@@ -956,6 +955,7 @@ export function useTranscriptSummary() {
     setPublishSummaryFeedback(null);
     setIsPublishingSummary(true);
     try {
+      const { publishVideoSummary } = await import("../api/publisherPublish");
       await publishVideoSummary({
         videoId: transcriptVideo.videoId,
         videoUrl: transcriptVideo.videoUrl,

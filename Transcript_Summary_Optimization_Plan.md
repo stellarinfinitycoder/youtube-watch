@@ -5,10 +5,18 @@
 - Keep transcript/summary/publisher-related UI out of the main bundle until opened.
 - Goal: reduce initial load and main bundle weight.
 
+Status: completed
+- Transcript/summary modal stack now loads through `React.lazy`.
+- Transcript/summary UI moved out of the main app render path into its own chunk.
+
 ### 2. Keep transcript/summary tree mounted only while open
 - Ensure modal subtree is created only when active.
 - Avoid hidden mounted content doing work in the background.
 - Goal: reduce idle UI cost.
+
+Status: completed
+- Transcript/summary modal subtree now mounts only when an active transcript video exists.
+- Hidden transcript/summary UI no longer stays mounted in the main tree.
 
 ### 3. Simplify summary rendering path
 - Use plain text rendering by default.
@@ -22,15 +30,26 @@
 - Only regenerate on explicit user action or format change.
 - Goal: eliminate unnecessary network/model work.
 
+Status: completed
+- Transcript cache is read first on open.
+- Cached default-format summary is hydrated immediately when available.
+- Regeneration still happens only on explicit regenerate or format change.
+
 ### 5. Memoize combined summary formatting
 - Build combined all-formats output only when source summaries change.
 - Avoid rebuilding it on unrelated modal state updates.
 - Goal: reduce modal interaction lag.
 
+Status: pending
+
 ### 6. Defer publisher actions
 - Only enable/load publisher-specific actions once a summary exists.
 - Keep publish-related state/actions out of the hot open path as much as possible.
 - Goal: reduce summary modal overhead.
+
+Status: completed
+- `publishVideoSummary` now loads via dynamic import from `useTranscriptSummary` through a dedicated publish-only API module.
+- Publish button in the transcript/summary modal now renders only when a summary is actually publishable or publish feedback is active.
 
 ### Recommended execution order
 1. Step 1

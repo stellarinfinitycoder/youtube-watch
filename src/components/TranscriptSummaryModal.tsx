@@ -126,6 +126,9 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
     () => looksLikeMarkdown(combinedSummary),
     [combinedSummary]
   );
+  const showPublishButton =
+    transcriptViewMode === "summary" &&
+    (hasPublishableSummary || isPublishingSummary || publishSummaryFeedback !== null);
 
   return (
     <Modal
@@ -297,26 +300,27 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
               >
                 <span className="btn-icon btn-icon-fetch" aria-hidden />
               </Button>
-              <Button
-                htmlType="button"
-                className="column-move-btn transcript-publish-btn"
-                aria-label="Publish summary"
-                onClick={() => void publishCurrentVideoSummary()}
-                disabled={
-                  transcriptViewMode === "transcript" ||
-                  isSummaryBusy ||
-                  isSummaryPromptEditMode ||
-                  isPublishingSummary ||
-                  transcriptLoading ||
-                  !!transcriptError ||
-                  !hasPublishableSummary
-                }
-              >
-                <span
-                  className={`btn-icon btn-icon-feed ${isPublishingSummary ? "is-spinning" : ""}`}
-                  aria-hidden
-                />
-              </Button>
+              {showPublishButton ? (
+                <Button
+                  htmlType="button"
+                  className="column-move-btn transcript-publish-btn"
+                  aria-label="Publish summary"
+                  onClick={() => void publishCurrentVideoSummary()}
+                  disabled={
+                    isSummaryBusy ||
+                    isSummaryPromptEditMode ||
+                    isPublishingSummary ||
+                    transcriptLoading ||
+                    !!transcriptError ||
+                    !hasPublishableSummary
+                  }
+                >
+                  <span
+                    className={`btn-icon btn-icon-feed ${isPublishingSummary ? "is-spinning" : ""}`}
+                    aria-hidden
+                  />
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
