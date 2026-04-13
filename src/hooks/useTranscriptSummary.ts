@@ -391,6 +391,27 @@ export function useTranscriptSummary() {
     setPublishSummaryFeedback(null);
   };
 
+  const hydrateCachedSummary = (
+    videoId: string,
+    transcriptBody: string,
+    promptText: string,
+    modelText: string
+  ): boolean => {
+    const cached = readCachedSummary(
+      videoId,
+      transcriptBody,
+      `${promptText}\n__MODEL__:${modelText || ""}`
+    );
+    if (!cached) {
+      return false;
+    }
+    setSummaryText(cached.summary);
+    setSummaryKeyPoints(cached.keyPoints);
+    setSummaryError(null);
+    setSummaryModel(cached.model);
+    return true;
+  };
+
   const openTranscript = async (video: VideoItem, sourceHandleRaw?: string): Promise<void> => {
     let normalizedSourceHandle = "";
     const candidate = (sourceHandleRaw ?? "").trim();
@@ -437,6 +458,12 @@ export function useTranscriptSummary() {
           return;
         }
         setTranscriptText(cached);
+        hydrateCachedSummary(
+          video.videoId,
+          cached,
+          currentDefaultSummaryFormat.prompt,
+          (currentDefaultSummaryFormat.model ?? "").trim()
+        );
         return;
       }
       const payload = await fetchTranscriptByVideoInput({
@@ -453,6 +480,12 @@ export function useTranscriptSummary() {
       }
       setTranscriptText(text);
       writeCachedTranscript(video.videoId, text);
+      hydrateCachedSummary(
+        video.videoId,
+        text,
+        currentDefaultSummaryFormat.prompt,
+        (currentDefaultSummaryFormat.model ?? "").trim()
+      );
     } catch (error) {
       if (requestId !== transcriptRequestIdRef.current) {
         return;

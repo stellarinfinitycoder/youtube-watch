@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   Alert,
   Button,
@@ -24,6 +22,7 @@ import type { VideoItem } from "./types/youtube";
 import fixtureBoards from "./fixtures/fixture-boards.json";
 import { AppTopbar } from "./components/AppTopbar";
 import { BoardColumns } from "./components/BoardColumns";
+const TranscriptSummaryModal = lazy(() => import("./components/TranscriptSummaryModal"));
 import { VideoPlayerModal } from "./components/VideoPlayerModal";
 import {
   persistBoardsPayload,
@@ -89,15 +88,8 @@ import {
 import {
   ALL_SUMMARY_FORMATS_OPTION,
   DEFAULT_SUMMARY_PROMPT,
-  NEW_SUMMARY_FORMAT_OPTION,
-  NEW_SUMMARY_MODEL_OPTION,
-  SUMMARY_MODE_OPTION_PREFIX,
-  looksLikeMarkdown,
-  preserveTreeBlocksInMarkdown,
   useTranscriptSummary,
   type InlineMetaFeedback,
-  type SummaryFormat,
-  type SummaryModelPreset
 } from "./hooks/useTranscriptSummary";
 import {
   type BoardFilterBoard,
@@ -4183,388 +4175,56 @@ function App() {
         openActiveVideoOnYouTube={openActiveVideoOnYouTube}
       />
 
-      <Modal
-        title={
-          <div>
-            <div className="transcript-modal-status-row">
-              {transcriptLoading ? (
-                <Text className="video-meta-feedback is-info">FETCHING TRANSCRIPT...</Text>
-              ) : null}
-              {!transcriptLoading && summaryLoading ? (
-                <Text className="video-meta-feedback is-info">SUMMARIZING...</Text>
-              ) : null}
-              {publishSummaryFeedback ? (
-                <Text className={`video-meta-feedback is-${publishSummaryFeedback.kind}`}>
-                  {publishSummaryFeedback.text}
-                </Text>
-              ) : null}
-              {isPublishingSummary ? (
-                <Text className="video-meta-feedback is-info">PUBLISHING...</Text>
-              ) : null}
-              {!transcriptLoading &&
-              !summaryLoading &&
-              !isPublishingSummary &&
-              !publishSummaryFeedback &&
-              transcriptViewMode === "summary" &&
-              !isSummaryPromptEditMode &&
-              summaryModel ? (
-                <Text className="video-meta-feedback is-info">MODEL: {summaryModel}</Text>
-              ) : null}
-            </div>
-            <div className="transcript-modal-header-row">
-              <span className="transcript-modal-header-title">
-                {isSummaryPromptEditMode
-                  ? "EDIT SUMMARY FORMAT"
-                  : transcriptVideo?.title ?? "Transcript"}
-              </span>
-              <div className="transcript-modal-header-controls">
-                <Select<string>
-                  value={
-                    isSummaryPromptEditMode && editingSummaryFormatId === null
-                      ? NEW_SUMMARY_FORMAT_OPTION
-                      : transcriptViewMode === "transcript"
-                      ? "transcript"
-                      : isAllSummaryFormatsMode
-                      ? ALL_SUMMARY_FORMATS_OPTION
-                      : `${SUMMARY_MODE_OPTION_PREFIX}${activeSummaryFormat.id}`
-                  }
-                  onChange={(value) => void handleTranscriptViewModeChange(value)}
-                  aria-label="Transcript view mode"
-                  className="video-filter-select transcript-mode-select"
-                  popupClassName="summary-format-dropdown"
-                  optionLabelProp="title"
-                  disabled={
-                    isSummaryBusy ||
-                    transcriptLoading ||
-                    !!transcriptError ||
-                    transcriptText.trim().length === 0
-                  }
-                >
-                  <Select.Option value="transcript" title="TRANSCRIPT">
-                    TRANSCRIPT
-                  </Select.Option>
-                  <Select.Option value={ALL_SUMMARY_FORMATS_OPTION} title="ALL FORMATS">
-                    ALL FORMATS
-                  </Select.Option>
-                  {summaryFormats.map((format, formatIndex) => (
-                    <Select.Option
-                      key={format.id}
-                      value={`${SUMMARY_MODE_OPTION_PREFIX}${format.id}`}
-                      title={format.name.toUpperCase()}
-                    >
-                      <div className="board-option-row">
-                        <span className="board-option-name">{format.name.toUpperCase()}</span>
-                        <div className="board-option-actions">
-                          <button
-                            type="button"
-                            className="board-option-move-btn"
-                            aria-label={`Move ${format.name} up`}
-                            disabled={formatIndex === 0}
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                            }}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              moveSummaryFormat(format.id, "up");
-                            }}
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            className="board-option-move-btn"
-                            aria-label={`Move ${format.name} down`}
-                            disabled={formatIndex === summaryFormats.length - 1}
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                            }}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              moveSummaryFormat(format.id, "down");
-                            }}
-                          >
-                            ↓
-                          </button>
-                          <button
-                            type="button"
-                            className="board-option-edit-btn"
-                            aria-label={`Edit ${format.name}`}
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                            }}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              setIsAllSummaryFormatsMode(false);
-                              setActiveSummaryFormatId(format.id);
-                              openSummaryFormatEditor(format.id);
-                            }}
-                          >
-                            <span className="btn-icon btn-icon-edit-board" aria-hidden />
-                          </button>
-                        </div>
-                      </div>
-                    </Select.Option>
-                  ))}
-                  <Select.Option value={NEW_SUMMARY_FORMAT_OPTION} title="NEW FORMAT">
-                    NEW FORMAT
-                  </Select.Option>
-                </Select>
-                <Button
-                  htmlType="button"
-                  className={`column-move-btn transcript-copy-btn ${
-                    isTranscriptCopied ? "is-copied" : ""
-                  }`}
-                  aria-label={
-                    transcriptViewMode === "summary" ? "Copy summary" : "Copy transcript"
-                  }
-                  onClick={() => void copyTranscriptText()}
-                  disabled={
-                    isSummaryPromptEditMode
-                      ? true
-                      : transcriptViewMode === "summary"
-                    ? summaryLoading ||
-                      !!summaryError ||
-                      (summaryText.trim().length === 0 && summaryKeyPoints.length === 0)
-                    : transcriptLoading || !!transcriptError || transcriptText.trim().length === 0
-                  }
-                >
-                  {isTranscriptCopied ? (
-                    <span className="btn-icon btn-icon-check" aria-hidden />
-                  ) : (
-                    <span className="btn-icon btn-icon-copy" aria-hidden />
-                  )}
-                </Button>
-                <Button
-                  htmlType="button"
-                  className="column-move-btn transcript-regenerate-btn"
-                  aria-label="Regenerate summary"
-                  onClick={() => void regenerateSummary()}
-                  disabled={
-                    transcriptViewMode === "transcript" ||
-                    isSummaryBusy ||
-                    isSummaryPromptEditMode ||
-                    transcriptLoading ||
-                    !!transcriptError ||
-                    transcriptText.trim().length === 0
-                  }
-                >
-                  <span className="btn-icon btn-icon-fetch" aria-hidden />
-                </Button>
-                <Button
-                  htmlType="button"
-                  className="column-move-btn transcript-publish-btn"
-                  aria-label="Publish summary"
-                  onClick={() => void publishCurrentVideoSummary()}
-                  disabled={
-                    transcriptViewMode === "transcript" ||
-                    isSummaryBusy ||
-                    isSummaryPromptEditMode ||
-                    isPublishingSummary ||
-                    transcriptLoading ||
-                    !!transcriptError ||
-                    !hasPublishableSummary
-                  }
-                >
-                  <span
-                    className={`btn-icon btn-icon-feed ${isPublishingSummary ? "is-spinning" : ""}`}
-                    aria-hidden
-                  />
-                </Button>
-              </div>
-            </div>
-          </div>
-        }
-        open={transcriptVideo !== null}
-        onCancel={closeTranscriptModal}
-        footer={null}
-        width={900}
-        destroyOnHidden
-        className="transcript-modal"
-      >
-        <div className="transcript-modal-body">
-          {isSummaryPromptEditMode ? (
-            <div className="summary-prompt-editor">
-              <Input
-                key={`summary-name-${editingSummaryFormatId ?? "new"}-${isSummaryPromptEditMode ? "open" : "closed"}`}
-                defaultValue={summaryFormatNameDraft}
-                onChange={(event) => setSummaryFormatNameDraft(event.target.value)}
-                placeholder="Name"
-                maxLength={20}
-              />
-              <Input.TextArea
-                key={`summary-prompt-${editingSummaryFormatId ?? "new"}-${isSummaryPromptEditMode ? "open" : "closed"}`}
-                defaultValue={summaryPromptDraft}
-                onChange={(event) => setSummaryPromptDraft(event.target.value)}
-                autoSize={{ minRows: 8, maxRows: 18 }}
-                placeholder="Enter plain summary instructions (style/focus)."
-              />
-              <Select<string>
-                value={
-                  isNewSummaryModelDraftMode
-                    ? NEW_SUMMARY_MODEL_OPTION
-                    : summaryFormatModelDraft || "__default_model__"
-                }
-                onChange={(value) => {
-                  if (value === NEW_SUMMARY_MODEL_OPTION) {
-                    setIsNewSummaryModelDraftMode(true);
-                    setSummaryFormatModelDraft("");
-                    return;
-                  }
-                  setIsNewSummaryModelDraftMode(false);
-                  const nextValue = value === "__default_model__" ? "" : value;
-                  setSummaryFormatModelDraft(nextValue);
-                }}
-                className="video-filter-select"
-                options={[
-                  ...summaryModelPresets.map((preset) => ({
-                    value: preset.value.trim().length === 0 ? "__default_model__" : preset.value,
-                    label: preset.label
-                  })),
-                  { value: NEW_SUMMARY_MODEL_OPTION, label: "NEW MODEL" }
-                ]}
-                optionRender={(option) => {
-                  const optionValue = String(option.data.value ?? "");
-                  const optionLabel = String(option.data.label ?? optionValue);
-                  const isDefaultEnv = optionValue === "__default_model__";
-                  const isNewModel = optionValue === NEW_SUMMARY_MODEL_OPTION;
-                  return (
-                    <div className="summary-model-option-row">
-                      <span>{optionLabel}</span>
-                      {!isDefaultEnv && !isNewModel ? (
-                        <button
-                          type="button"
-                          className="summary-model-remove-btn"
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                          }}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            removeSummaryModelPreset(optionValue);
-                          }}
-                          aria-label={`Remove model preset ${optionLabel}`}
-                        >
-                          ×
-                        </button>
-                      ) : null}
-                    </div>
-                  );
-                }}
-              />
-              <Input
-                value={summaryFormatModelDraft}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  setSummaryFormatModelDraft(nextValue);
-                }}
-                placeholder="OPENROUTER MODEL ID"
-              />
-              <Checkbox
-                className="summary-default-checkbox"
-                checked={summaryFormatDefaultDraft}
-                onChange={(event) => setSummaryFormatDefaultDraft(event.target.checked)}
-              >
-                SET DEFAULT
-              </Checkbox>
-              <div className="summary-prompt-actions">
-                <Button
-                  htmlType="button"
-                  className="summary-prompt-action-btn red-outline-btn"
-                  disabled={summaryFormats.length <= 1 || editingSummaryFormatId === null}
-                  onClick={deleteSummaryFormatAndClose}
-                >
-                  DELETE
-                </Button>
-                <Space size={8}>
-                  <Button
-                    htmlType="button"
-                    className="summary-prompt-action-btn"
-                    onClick={() => {
-                      setIsSummaryPromptEditMode(false);
-                      setSummaryFormatNameDraft(activeSummaryFormat.name);
-                      setSummaryPromptDraft(activeSummaryFormat.prompt);
-                      setSummaryFormatModelDraft(activeSummaryFormat.model ?? "");
-                      setIsNewSummaryModelDraftMode(false);
-                      setSummaryFormatDefaultDraft(activeSummaryFormat.isDefault);
-                    }}
-                  >
-                    CANCEL
-                  </Button>
-                  <Button
-                    htmlType="button"
-                    type="primary"
-                    className="summary-prompt-action-btn"
-                    onClick={() => void saveSummaryPromptAndClose()}
-                  >
-                    SAVE
-                  </Button>
-                </Space>
-              </div>
-            </div>
-          ) : transcriptViewMode === "transcript" ? (
-            <>
-              {!transcriptLoading && transcriptError ? (
-                <Text type="danger">{transcriptError}</Text>
-              ) : null}
-              {!transcriptLoading && !transcriptError ? (
-                <pre className="transcript-text">{transcriptText}</pre>
-              ) : null}
-            </>
-          ) : (
-            <>
-              {!summaryLoading && summaryError ? <Text type="danger">{summaryError}</Text> : null}
-              {!summaryLoading && !summaryError && (summaryText || summaryKeyPoints.length > 0) ? (
-                <div className="summary-content">
-                  {(() => {
-                    const pointsBlock =
-                      summaryKeyPoints.length > 0
-                        ? summaryKeyPoints.map((point) => `- ${point}`).join("\n")
-                        : "";
-                    const combined = [summaryText, pointsBlock].filter(Boolean).join("\n\n").trim();
-                    if (isAllSummaryFormatsMode) {
-                      const combinedWithTreeBlocks = preserveTreeBlocksInMarkdown(combined);
-                      return (
-                        <div className="summary-markdown summary-combined-markdown">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {combinedWithTreeBlocks}
-                          </ReactMarkdown>
-                        </div>
-                      );
-                    }
-                    const markdownMode = looksLikeMarkdown(combined);
-                    if (!markdownMode) {
-                      return (
-                        <>
-                          {summaryText ? <p className="summary-paragraph">{summaryText}</p> : null}
-                          {summaryKeyPoints.length > 0 ? (
-                            <ul className="summary-points">
-                              {summaryKeyPoints.map((point, index) => (
-                                <li key={`${index}-${point.slice(0, 24)}`}>{point}</li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </>
-                      );
-                    }
-                    return (
-                      <div className="summary-markdown">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{combined}</ReactMarkdown>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : null}
-            </>
-          )}
-        </div>
-      </Modal>
+      {transcriptVideo ? (
+        <Suspense fallback={null}>
+          <TranscriptSummaryModal
+            transcriptVideo={transcriptVideo}
+            transcriptLoading={transcriptLoading}
+            transcriptText={transcriptText}
+            transcriptError={transcriptError}
+            transcriptViewMode={transcriptViewMode}
+            isTranscriptCopied={isTranscriptCopied}
+            summaryLoading={summaryLoading}
+            summaryText={summaryText}
+            summaryKeyPoints={summaryKeyPoints}
+            summaryError={summaryError}
+            summaryModel={summaryModel}
+            isPublishingSummary={isPublishingSummary}
+            publishSummaryFeedback={publishSummaryFeedback}
+            summaryFormats={summaryFormats}
+            summaryModelPresets={summaryModelPresets}
+            activeSummaryFormat={activeSummaryFormat}
+            isAllSummaryFormatsMode={isAllSummaryFormatsMode}
+            isSummaryPromptEditMode={isSummaryPromptEditMode}
+            editingSummaryFormatId={editingSummaryFormatId}
+            summaryFormatNameDraft={summaryFormatNameDraft}
+            summaryPromptDraft={summaryPromptDraft}
+            summaryFormatModelDraft={summaryFormatModelDraft}
+            isNewSummaryModelDraftMode={isNewSummaryModelDraftMode}
+            summaryFormatDefaultDraft={summaryFormatDefaultDraft}
+            hasPublishableSummary={hasPublishableSummary}
+            isSummaryBusy={isSummaryBusy}
+            onCancel={closeTranscriptModal}
+            setSummaryFormatNameDraft={setSummaryFormatNameDraft}
+            setSummaryPromptDraft={setSummaryPromptDraft}
+            setSummaryFormatModelDraft={setSummaryFormatModelDraft}
+            setIsNewSummaryModelDraftMode={setIsNewSummaryModelDraftMode}
+            setSummaryFormatDefaultDraft={setSummaryFormatDefaultDraft}
+            setIsAllSummaryFormatsMode={setIsAllSummaryFormatsMode}
+            setActiveSummaryFormatId={setActiveSummaryFormatId}
+            setIsSummaryPromptEditMode={setIsSummaryPromptEditMode}
+            handleTranscriptViewModeChange={handleTranscriptViewModeChange}
+            copyTranscriptText={copyTranscriptText}
+            regenerateSummary={regenerateSummary}
+            publishCurrentVideoSummary={publishCurrentVideoSummary}
+            openSummaryFormatEditor={openSummaryFormatEditor}
+            moveSummaryFormat={moveSummaryFormat}
+            removeSummaryModelPreset={removeSummaryModelPreset}
+            saveSummaryPromptAndClose={saveSummaryPromptAndClose}
+            deleteSummaryFormatAndClose={deleteSummaryFormatAndClose}
+          />
+        </Suspense>
+      ) : null}
 
       <BoardColumns
         scrollRef={scrollRef}
