@@ -1026,14 +1026,11 @@ function toPersistedColumns(columns: ColumnState[]): PersistedColumnState[] {
 }
 
 function toPersistedBoards(boards: BoardState[]): PersistedBoardState[] {
-  const savedVideoIds = new Set<string>();
+  const presentVideoIds = new Set<string>();
   boards.forEach((board) => {
-    if (board.kind !== "saved") {
-      return;
-    }
     board.columns.forEach((column) => {
       column.videos.forEach((video) => {
-        savedVideoIds.add(video.videoId);
+        presentVideoIds.add(video.videoId);
       });
     });
   });
@@ -1043,7 +1040,7 @@ function toPersistedBoards(boards: BoardState[]): PersistedBoardState[] {
       name: board.name,
       kind: board.kind,
       columns: toPersistedColumns(board.columns),
-      watchedVideos: pruneWatchedVideos(board.watchedVideos, savedVideoIds),
+      watchedVideos: pruneWatchedVideos(board.watchedVideos, presentVideoIds),
       videoFilter: board.videoFilter,
       videoWindowDays: board.videoWindowDays,
       defaultPlaybackRate: board.defaultPlaybackRate

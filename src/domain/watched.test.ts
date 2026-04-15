@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  WATCHED_RETENTION_MS,
   collectMissingDurationNewVideoIds,
   isVideoMarkedWatched,
   pruneWatchedVideos,
@@ -23,25 +22,23 @@ describe("watched domain", () => {
     expect(isVideoMarkedWatched({ "Vid-1": 123 }, "vid-1")).toBe(true);
   });
 
-  it("prunes old watched entries that are not in saved lists", () => {
-    const now = 1_800_000_000_000;
+  it("prunes watched entries for videos not present anywhere", () => {
     const watchedVideos = {
-      old: now - WATCHED_RETENTION_MS - 1,
-      recent: now - WATCHED_RETENTION_MS + 1
+      missing: 1_800_000_000_000,
+      present: 1_700_000_000_000
     };
 
-    const next = pruneWatchedVideos(watchedVideos, new Set<string>(), now);
+    const next = pruneWatchedVideos(watchedVideos, new Set<string>(["present"]));
 
-    expect(next).toEqual({ recent: watchedVideos.recent });
+    expect(next).toEqual({ present: watchedVideos.present });
   });
 
-  it("keeps old watched entries for saved videos", () => {
-    const now = 1_800_000_000_000;
+  it("keeps watched entries for videos present in saved lists", () => {
     const watchedVideos = {
-      kept: now - WATCHED_RETENTION_MS - 1
+      kept: 1_600_000_000_000
     };
 
-    const next = pruneWatchedVideos(watchedVideos, new Set<string>(["kept"]), now);
+    const next = pruneWatchedVideos(watchedVideos, new Set<string>(["kept"]));
 
     expect(next).toEqual(watchedVideos);
   });

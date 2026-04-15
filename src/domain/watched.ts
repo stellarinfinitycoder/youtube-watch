@@ -1,6 +1,5 @@
 import type { VideoItem } from "../types/youtube";
 
-export const WATCHED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export type WatchedVideosMap = Record<string, number>;
 
 export function matchesVideoIdKey(storedVideoId: string, targetVideoId: string): boolean {
@@ -49,17 +48,15 @@ export function setWatchedForVideoIds(
 
 export function pruneWatchedVideos(
   watchedVideos: WatchedVideosMap,
-  savedVideoIds: Set<string>,
-  now: number = Date.now()
+  presentVideoIds: Set<string>
 ): WatchedVideosMap {
-  const cutoff = now - WATCHED_RETENTION_MS;
   return Object.fromEntries(
-    Object.entries(watchedVideos).filter(([videoId, watchedAt]) => {
-      if (savedVideoIds.has(videoId)) {
-        return true;
-      }
-      return typeof watchedAt === "number" && Number.isFinite(watchedAt) && watchedAt >= cutoff;
-    })
+    Object.entries(watchedVideos).filter(
+      ([videoId, watchedAt]) =>
+        presentVideoIds.has(videoId) &&
+        typeof watchedAt === "number" &&
+        Number.isFinite(watchedAt)
+    )
   );
 }
 
