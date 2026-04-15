@@ -2293,21 +2293,24 @@ function App() {
     bulkInputDraftRef.current = "";
   };
 
-  const fetchAllColumns = (): void => {
+  const fetchAllColumns = async (): Promise<void> => {
     if (!activeBoard || activeBoard.kind === "saved") {
       return;
     }
+    const boardId = activeBoard.id;
+    const targetColumns = activeBoard.columns.filter((column) => column.handleInput.trim().length > 0);
     triggerLogoSpin();
-    setBoard(activeBoard.id, (board) => ({
+    setBoard(boardId, (board) => ({
       ...board,
       columnScopeFilter: [COLUMN_SCOPE_ALL]
     }));
-    activeBoard.columns.forEach((column) => {
-      const rawHandle = column.handleInput.trim();
-      if (rawHandle.length > 0) {
-        runFetch(activeBoard.id, column.id, column.handleInput);
-      }
-    });
+    await Promise.allSettled(
+      targetColumns.map((column) => runFetch(boardId, column.id, column.handleInput))
+    );
+    setBoard(boardId, (board) => ({
+      ...board,
+      columnScopeFilter: [COLUMN_SCOPE_NOT_EMPTY]
+    }));
   };
 
   const openBoardDurationBackfillModal = (): void => {
