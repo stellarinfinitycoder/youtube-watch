@@ -11,7 +11,7 @@ import {
   type VideoDurationFilter,
   type VideoWindowFilter
 } from "../domain/filters";
-import { isVideoMarkedWatched } from "../domain/watched";
+import { isVideoMarkedWatched, type WatchedVideosMap } from "../domain/watched";
 
 type VideoFilter = "all" | "new" | "watched";
 
@@ -25,7 +25,7 @@ export type BoardFilterColumn = {
 export type BoardFilterBoard<TColumn extends BoardFilterColumn> = {
   kind: BoardKind;
   columns: TColumn[];
-  watchedVideos: Record<string, boolean>;
+  watchedVideos: WatchedVideosMap;
   videoFilter: VideoFilter;
   videoDurationFilter: VideoDurationFilter;
   videoWindowDays: VideoWindowFilter;

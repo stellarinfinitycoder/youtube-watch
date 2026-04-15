@@ -266,8 +266,8 @@ describe("App", () => {
 
     const persistedBoards = JSON.parse(
       window.localStorage.getItem("youtube-watch:boards:v1") ?? "[]"
-    ) as Array<{ watchedVideos?: Record<string, boolean> }>;
-    expect(persistedBoards[0]?.watchedVideos).toEqual({ "vid-1": true });
+    ) as Array<{ watchedVideos?: Record<string, number> }>;
+    expect(typeof persistedBoards[0]?.watchedVideos?.["vid-1"]).toBe("number");
   });
 
   it("shows watched videos in Watched filter and allows restoring them to New", async () => {
@@ -312,7 +312,7 @@ describe("App", () => {
 
     const persistedBoards = JSON.parse(
       window.localStorage.getItem("youtube-watch:boards:v1") ?? "[]"
-    ) as Array<{ watchedVideos?: Record<string, boolean> }>;
+    ) as Array<{ watchedVideos?: Record<string, number> }>;
     expect(persistedBoards[0]?.watchedVideos).toEqual({});
   });
 });

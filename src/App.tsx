@@ -72,7 +72,9 @@ import {
 import {
   collectMissingDurationNewVideoIds,
   isVideoMarkedWatched,
-  setWatchedForVideoIds
+  pruneWatchedVideos,
+  setWatchedForVideoIds,
+  type WatchedVideosMap
 } from "./domain/watched";
 import {
   addVideoToSavedColumn,
@@ -211,7 +213,7 @@ type BoardState = {
   kind: BoardKind;
   columns: ColumnState[];
   columnScopeFilter: string[];
-  watchedVideos: Record<string, boolean>;
+  watchedVideos: WatchedVideosMap;
   viewCountRefreshedAtByVideoId: Record<string, number>;
   videoFilter: VideoFilter;
   videoDurationFilter: VideoDurationFilter;
@@ -225,7 +227,7 @@ type PersistedBoardState = {
   kind?: BoardKind;
   columns: PersistedColumnState[];
   columnScopeFilter?: string | string[];
-  watchedVideos: Record<string, boolean>;
+  watchedVideos: WatchedVideosMap;
   viewCountRefreshedAtByVideoId?: Record<string, number>;
   videoFilter: VideoFilter;
   videoDurationFilter?: VideoDurationFilter;
@@ -421,7 +423,7 @@ function readLegacyStoredHandles(): string[] {
   }
 }
 
-function readLegacyStoredWatchedVideos(): Record<string, boolean> {
+function readLegacyStoredWatchedVideos(): WatchedVideosMap {
   if (typeof window === "undefined") {
     return {};
   }
@@ -442,10 +444,20 @@ function readLegacyStoredWatchedVideos(): Record<string, boolean> {
       return {};
     }
 
+    const now = Date.now();
     return Object.fromEntries(
-      Object.entries(parsed).filter(
-        (entry): entry is [string, boolean] => typeof entry[1] === "boolean"
-      )
+      Object.entries(parsed).flatMap((entry): Array<[string, number]> => {
+        if (typeof entry[0] !== "string") {
+          return [];
+        }
+        if (typeof entry[1] === "number" && Number.isFinite(entry[1])) {
+          return [[entry[0], entry[1]]];
+        }
+        if (entry[1] === true) {
+          return [[entry[0], now]];
+        }
+        return [];
+      })
     );
   } catch {
     return {};
@@ -475,15 +487,25 @@ function readLegacyStoredPlaybackRate(): number {
   }
 }
 
-function sanitizeWatchedVideos(raw: unknown): Record<string, boolean> {
+function sanitizeWatchedVideos(raw: unknown): WatchedVideosMap {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return {};
   }
 
+  const now = Date.now();
   return Object.fromEntries(
-    Object.entries(raw).filter(
-      (entry): entry is [string, boolean] => typeof entry[1] === "boolean"
-    )
+    Object.entries(raw).flatMap((entry): Array<[string, number]> => {
+      if (typeof entry[0] !== "string") {
+        return [];
+      }
+      if (typeof entry[1] === "number" && Number.isFinite(entry[1])) {
+        return [[entry[0], entry[1]]];
+      }
+      if (entry[1] === true) {
+        return [[entry[0], now]];
+      }
+      return [];
+    })
   );
 }
 
@@ -1004,13 +1026,24 @@ function toPersistedColumns(columns: ColumnState[]): PersistedColumnState[] {
 }
 
 function toPersistedBoards(boards: BoardState[]): PersistedBoardState[] {
+  const savedVideoIds = new Set<string>();
+  boards.forEach((board) => {
+    if (board.kind !== "saved") {
+      return;
+    }
+    board.columns.forEach((column) => {
+      column.videos.forEach((video) => {
+        savedVideoIds.add(video.videoId);
+      });
+    });
+  });
   return boards.map((board) => {
     const persisted: PersistedBoardState = {
       id: board.id,
       name: board.name,
       kind: board.kind,
       columns: toPersistedColumns(board.columns),
-      watchedVideos: board.watchedVideos,
+      watchedVideos: pruneWatchedVideos(board.watchedVideos, savedVideoIds),
       videoFilter: board.videoFilter,
       videoWindowDays: board.videoWindowDays,
       defaultPlaybackRate: board.defaultPlaybackRate
@@ -2913,8 +2946,9 @@ function App() {
         if (board.id === moveTargetBoardId) {
           const nextWatchedVideos = { ...board.watchedVideos };
           movedVideoIds.forEach((videoId) => {
-            if (watchedBySourceBoard[videoId] === true) {
-              nextWatchedVideos[videoId] = true;
+            const watchedAt = watchedBySourceBoard[videoId];
+            if (typeof watchedAt === "number" && Number.isFinite(watchedAt)) {
+              nextWatchedVideos[videoId] = watchedAt;
             }
           });
           return {
@@ -3115,7 +3149,7 @@ function App() {
       previous.map((board) => {
         const nextWatchedVideos = {
           ...board.watchedVideos,
-          [savingVideo.videoId]: true
+          [savingVideo.videoId]: now
         };
         if (board.id !== savedBoard.id) {
           return {
@@ -3913,7 +3947,7 @@ function App() {
               previous.map((board) => {
                 const nextWatchedVideos = {
                   ...board.watchedVideos,
-                  [videoId]: true
+                  [videoId]: now
                 };
                 if (board.id !== savedBoard.id) {
                   return {
