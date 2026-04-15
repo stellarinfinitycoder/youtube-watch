@@ -1977,6 +1977,7 @@ function App() {
     columnId: string,
     handle: string
   ): Promise<void> => {
+    triggerLogoSpin();
     const boardState = boards.find((board) => board.id === boardId);
     let estimatedQuotaUnits = 0;
     if (boardState?.kind === "saved") {
@@ -2296,6 +2297,11 @@ function App() {
     if (!activeBoard || activeBoard.kind === "saved") {
       return;
     }
+    triggerLogoSpin();
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      columnScopeFilter: [COLUMN_SCOPE_ALL]
+    }));
     activeBoard.columns.forEach((column) => {
       const rawHandle = column.handleInput.trim();
       if (rawHandle.length > 0) {
