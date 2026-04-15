@@ -26,7 +26,7 @@ export type ColumnScopeColumn = {
   currentHandle: string;
 };
 
-export const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowFilter = 90;
+export const DEFAULT_VIDEO_WINDOW_DAYS: VideoWindowFilter = 7;
 export const CHANNEL_VIDEO_WINDOW_OPTIONS: ChannelVideoWindowFilter[] = [
   1,
   3,
@@ -90,6 +90,16 @@ export function normalizeVideoWindowFilterForKind(
   }
   const allowed = kind === "saved" ? SAVED_VIDEO_WINDOW_OPTIONS : CHANNEL_VIDEO_WINDOW_OPTIONS;
   return allowed.includes(value) ? value : kind === "saved" ? "all" : DEFAULT_VIDEO_WINDOW_DAYS;
+}
+
+export function normalizeStoredVideoWindowFilterForKind(
+  kind: BoardKind,
+  value: unknown
+): VideoWindowFilter {
+  if (kind === "saved") {
+    return normalizeVideoWindowFilterForKind(kind, value);
+  }
+  return DEFAULT_VIDEO_WINDOW_DAYS;
 }
 
 export function matchesDurationFilter(

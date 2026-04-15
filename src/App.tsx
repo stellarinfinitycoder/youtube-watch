@@ -59,6 +59,7 @@ import {
   matchesVideoWindowFilter,
   normalizeColumnScopeFilter,
   normalizeVideoDurationFilter,
+  normalizeStoredVideoWindowFilterForKind,
   normalizeVideoWindowFilterForKind,
   resolveColumnScopeFilterSelection,
   resolveVideoDurationFilterSelection,
@@ -1111,7 +1112,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
         : "new",
     videoDurationFilter:
       normalizeVideoDurationFilter(candidate.videoDurationFilter),
-    videoWindowDays: normalizeVideoWindowFilterForKind(kind, candidate.videoWindowDays),
+    videoWindowDays: normalizeStoredVideoWindowFilterForKind(kind, candidate.videoWindowDays),
     defaultPlaybackRate:
       typeof candidate.defaultPlaybackRate === "number" &&
       Number.isFinite(candidate.defaultPlaybackRate) &&
