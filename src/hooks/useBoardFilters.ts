@@ -49,6 +49,8 @@ type BoardFilterArgs<TColumn extends BoardFilterColumn> = {
   allValue: string;
   notEmptyValue: string;
   getSourceVideos: (board: BoardFilterBoard<TColumn>, column: TColumn) => VideoItem[];
+  forceVisibleColumnIds?: ReadonlySet<string>;
+  errorVisibleColumnIds?: ReadonlySet<string>;
 };
 
 function buildColumnScopeOptions<TColumn extends BoardFilterColumn>(
@@ -116,7 +118,9 @@ export function getBoardFilterDerivedData<TColumn extends BoardFilterColumn>({
   board,
   allValue,
   notEmptyValue,
-  getSourceVideos
+  getSourceVideos,
+  forceVisibleColumnIds = new Set<string>(),
+  errorVisibleColumnIds = new Set<string>()
 }: BoardFilterArgs<TColumn>): BoardFilterDerivedData<TColumn> {
   const emptyMap = new Map<string, VideoItem[]>();
   const emptyCountMap = new Map<string, number>();
@@ -155,7 +159,14 @@ export function getBoardFilterDerivedData<TColumn extends BoardFilterColumn>({
   const visibleColumns = columnScopeFilter.includes(allValue)
     ? board.columns
     : columnScopeFilter.includes(notEmptyValue)
-      ? board.columns.filter((column) => (shownVideoCountByColumnId.get(column.id) ?? 0) > 0)
+      ? board.columns.filter((column) => {
+          const shownCount = shownVideoCountByColumnId.get(column.id) ?? 0;
+          return (
+            shownCount > 0 ||
+            forceVisibleColumnIds.has(column.id) ||
+            errorVisibleColumnIds.has(column.id)
+          );
+        })
       : board.columns.filter((column) => columnScopeFilter.includes(column.id));
 
   const shownVideosTotal = visibleColumns.reduce(
@@ -186,15 +197,24 @@ export function getBoardFilterDerivedData<TColumn extends BoardFilterColumn>({
 export function useBoardFilters<TColumn extends BoardFilterColumn>(
   args: BoardFilterArgs<TColumn>
 ): BoardFilterDerivedData<TColumn> {
-  const { board, allValue, notEmptyValue, getSourceVideos } = args;
+  const {
+    board,
+    allValue,
+    notEmptyValue,
+    getSourceVideos,
+    forceVisibleColumnIds,
+    errorVisibleColumnIds
+  } = args;
   return useMemo(
     () =>
       getBoardFilterDerivedData({
         board,
         allValue,
         notEmptyValue,
-        getSourceVideos
+        getSourceVideos,
+        forceVisibleColumnIds,
+        errorVisibleColumnIds
       }),
-    [board, allValue, notEmptyValue, getSourceVideos]
+    [board, allValue, notEmptyValue, getSourceVideos, forceVisibleColumnIds, errorVisibleColumnIds]
   );
 }

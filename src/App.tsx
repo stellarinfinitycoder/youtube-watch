@@ -1520,6 +1520,11 @@ function App() {
   const [isLogoSpinning, setIsLogoSpinning] = useState(false);
   const [errorLogs, setErrorLogs] = useState<ErrorLogEntry[]>(readStoredErrorLogs);
   const [quotaEstimate, setQuotaEstimate] = useState<QuotaEstimateState>(readStoredQuotaEstimate);
+  const [fetchAllVisibleColumnIdsByBoard, setFetchAllVisibleColumnIdsByBoard] = useState<
+    Record<string, string[]>
+  >({});
+  const [fetchAllErrorVisibleColumnIdsByBoard, setFetchAllErrorVisibleColumnIdsByBoard] =
+    useState<Record<string, string[]>>({});
   const [videoStatsBackfillInFlight, setVideoStatsBackfillInFlight] = useState<string[]>(
     []
   );
@@ -1672,6 +1677,14 @@ function App() {
       board.kind === "saved" ? sortSavedVideosByMode(column, getVideoPublishedTime) : column.videos,
     []
   );
+  const fetchAllVisibleColumnIds = useMemo(
+    () => new Set(fetchAllVisibleColumnIdsByBoard[activeBoardId] ?? []),
+    [activeBoardId, fetchAllVisibleColumnIdsByBoard]
+  );
+  const fetchAllErrorVisibleColumnIds = useMemo(
+    () => new Set(fetchAllErrorVisibleColumnIdsByBoard[activeBoardId] ?? []),
+    [activeBoardId, fetchAllErrorVisibleColumnIdsByBoard]
+  );
   const {
     columnScopeFilter,
     filteredVideosByColumnId,
@@ -1686,7 +1699,9 @@ function App() {
     board: activeBoard,
     allValue: COLUMN_SCOPE_ALL,
     notEmptyValue: COLUMN_SCOPE_NOT_EMPTY,
-    getSourceVideos: getSourceVideosForBoard
+    getSourceVideos: getSourceVideosForBoard,
+    forceVisibleColumnIds: fetchAllVisibleColumnIds,
+    errorVisibleColumnIds: fetchAllErrorVisibleColumnIds
   });
   const quotaEstimateText = `LAST Q: ${quotaEstimate.lastActionUnits} | TODAY: ${quotaEstimate.todayUnits}`;
   const topbarLastFetchLabel = activeBoard
@@ -1976,13 +1991,27 @@ function App() {
     boardId: string,
     columnId: string,
     handle: string
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     triggerLogoSpin();
+    setFetchAllErrorVisibleColumnIdsByBoard((previous) => {
+      const boardColumnIds = previous[boardId];
+      if (!boardColumnIds || !boardColumnIds.includes(columnId)) {
+        return previous;
+      }
+      const nextBoardColumnIds = boardColumnIds.filter((id) => id !== columnId);
+      const next = { ...previous };
+      if (nextBoardColumnIds.length > 0) {
+        next[boardId] = nextBoardColumnIds;
+      } else {
+        delete next[boardId];
+      }
+      return next;
+    });
     const boardState = boards.find((board) => board.id === boardId);
     let estimatedQuotaUnits = 0;
     if (boardState?.kind === "saved") {
       recordEstimatedQuotaUsage(0);
-      return;
+      return false;
     }
 
     if (fixtureMode) {
@@ -1995,7 +2024,7 @@ function App() {
           error: "Channel not found."
         }));
         recordEstimatedQuotaUsage(0);
-        return;
+        return false;
       }
       setColumn(boardId, columnId, (prev) => ({
         ...prev,
@@ -2010,7 +2039,7 @@ function App() {
         lastFetchAt: new Date().toLocaleString()
       }));
       recordEstimatedQuotaUsage(0);
-      return;
+      return true;
     }
 
     setColumn(boardId, columnId, (prev) => ({ ...prev, loading: true, error: null }));
@@ -2162,6 +2191,7 @@ function App() {
         const brokenKey = `${boardId}:${columnId}`;
         setBrokenChannelThumbnailKeys((prev) => prev.filter((key) => key !== brokenKey));
       }
+      return true;
     } catch (error) {
       const sourceMessage =
         error instanceof Error ? error.message : "Failed to fetch videos.";
@@ -2176,6 +2206,7 @@ function App() {
         loading: false,
         error: message
       }));
+      return false;
     } finally {
       recordEstimatedQuotaUsage(estimatedQuotaUnits);
     }
@@ -2298,19 +2329,28 @@ function App() {
       return;
     }
     const boardId = activeBoard.id;
-    const targetColumns = activeBoard.columns.filter((column) => column.handleInput.trim().length > 0);
+    const targetColumns = activeBoard.columns.filter(
+      (column) => column.handleInput.trim().length > 0
+    );
+    const shouldTemporarilyReveal = columnScopeFilter.includes(COLUMN_SCOPE_NOT_EMPTY);
     triggerLogoSpin();
-    setBoard(boardId, (board) => ({
-      ...board,
-      columnScopeFilter: [COLUMN_SCOPE_ALL]
-    }));
+    if (shouldTemporarilyReveal) {
+      setFetchAllVisibleColumnIdsByBoard((previous) => ({
+        ...previous,
+        [boardId]: targetColumns.map((column) => column.id)
+      }));
+      setFetchAllErrorVisibleColumnIdsByBoard((previous) => {
+        if (!(boardId in previous)) {
+          return previous;
+        }
+        const next = { ...previous };
+        delete next[boardId];
+        return next;
+      });
+    }
     await Promise.allSettled(
       targetColumns.map((column) => runFetch(boardId, column.id, column.handleInput))
     );
-    setBoard(boardId, (board) => ({
-      ...board,
-      columnScopeFilter: [COLUMN_SCOPE_NOT_EMPTY]
-    }));
   };
 
   const openBoardDurationBackfillModal = (): void => {
@@ -2463,6 +2503,150 @@ function App() {
     const merged = [...new Set([...withoutSpecial, ...newColumnIds])];
     return merged.length > 0 ? merged : [COLUMN_SCOPE_ALL];
   };
+
+  const clearFetchAllVisibilityState = useCallback((boardId?: string): void => {
+    if (boardId) {
+      setFetchAllVisibleColumnIdsByBoard((previous) => {
+        if (!(boardId in previous)) {
+          return previous;
+        }
+        const next = { ...previous };
+        delete next[boardId];
+        return next;
+      });
+      setFetchAllErrorVisibleColumnIdsByBoard((previous) => {
+        if (!(boardId in previous)) {
+          return previous;
+        }
+        const next = { ...previous };
+        delete next[boardId];
+        return next;
+      });
+      return;
+    }
+
+    setFetchAllVisibleColumnIdsByBoard((previous) =>
+      Object.keys(previous).length === 0 ? previous : {}
+    );
+    setFetchAllErrorVisibleColumnIdsByBoard((previous) =>
+      Object.keys(previous).length === 0 ? previous : {}
+    );
+  }, []);
+
+  useEffect(() => {
+    if (Object.keys(fetchAllVisibleColumnIdsByBoard).length === 0) {
+      return;
+    }
+
+    const nextVisibleByBoard: Record<string, string[]> = {};
+    let visibleChanged = false;
+    let errorChanged = false;
+    const nextErrorByBoard: Record<string, string[]> = {};
+
+    Object.entries(fetchAllErrorVisibleColumnIdsByBoard).forEach(([boardId, columnIds]) => {
+      if (columnIds.length > 0) {
+        nextErrorByBoard[boardId] = [...columnIds];
+      }
+    });
+
+    Object.entries(fetchAllVisibleColumnIdsByBoard).forEach(([boardId, columnIds]) => {
+      const board = boards.find((item) => item.id === boardId);
+      if (!board || board.kind === "saved") {
+        visibleChanged = true;
+        return;
+      }
+
+      const shownVideoCountByColumnId = getBoardFilterDerivedData({
+        board,
+        allValue: COLUMN_SCOPE_ALL,
+        notEmptyValue: COLUMN_SCOPE_NOT_EMPTY,
+        getSourceVideos: getSourceVideosForBoard
+      }).shownVideoCountByColumnId;
+
+      const remainingColumnIds = columnIds.filter((columnId) => {
+        const column = board.columns.find((item) => item.id === columnId);
+        if (!column) {
+          visibleChanged = true;
+          return false;
+        }
+        if (column.loading) {
+          return true;
+        }
+
+        const shownCount = shownVideoCountByColumnId.get(columnId) ?? 0;
+        visibleChanged = true;
+
+        if (column.error && shownCount === 0) {
+          const existing = new Set(nextErrorByBoard[boardId] ?? []);
+          if (!existing.has(columnId)) {
+            existing.add(columnId);
+            nextErrorByBoard[boardId] = [...existing];
+            errorChanged = true;
+          }
+        }
+
+        return false;
+      });
+
+      if (remainingColumnIds.length > 0) {
+        nextVisibleByBoard[boardId] = remainingColumnIds;
+      }
+    });
+
+    Object.entries(nextErrorByBoard).forEach(([boardId, columnIds]) => {
+      const board = boards.find((item) => item.id === boardId);
+      if (!board || board.kind === "saved") {
+        delete nextErrorByBoard[boardId];
+        errorChanged = true;
+        return;
+      }
+
+      const shownVideoCountByColumnId = getBoardFilterDerivedData({
+        board,
+        allValue: COLUMN_SCOPE_ALL,
+        notEmptyValue: COLUMN_SCOPE_NOT_EMPTY,
+        getSourceVideos: getSourceVideosForBoard
+      }).shownVideoCountByColumnId;
+
+      const retainedColumnIds = columnIds.filter((columnId) => {
+        const column = board.columns.find((item) => item.id === columnId);
+        if (!column || column.loading) {
+          errorChanged = true;
+          return false;
+        }
+        if (!column.error) {
+          errorChanged = true;
+          return false;
+        }
+        return (shownVideoCountByColumnId.get(columnId) ?? 0) === 0;
+      });
+
+      if (retainedColumnIds.length === 0) {
+        delete nextErrorByBoard[boardId];
+        if (columnIds.length > 0) {
+          errorChanged = true;
+        }
+        return;
+      }
+
+      if (retainedColumnIds.length !== columnIds.length) {
+        nextErrorByBoard[boardId] = retainedColumnIds;
+        errorChanged = true;
+      }
+    });
+
+    if (visibleChanged) {
+      setFetchAllVisibleColumnIdsByBoard(nextVisibleByBoard);
+    }
+    if (errorChanged) {
+      setFetchAllErrorVisibleColumnIdsByBoard(nextErrorByBoard);
+    }
+  }, [
+    boards,
+    fetchAllVisibleColumnIdsByBoard,
+    fetchAllErrorVisibleColumnIdsByBoard,
+    getSourceVideosForBoard
+  ]);
 
   const revealHiddenColumn = (columnId: string): void => {
     if (!activeBoard || activeBoard.kind === "saved") {
@@ -3001,6 +3185,7 @@ function App() {
       createBoard();
       return;
     }
+    clearFetchAllVisibilityState();
     setActiveBoardId(value);
   };
 
@@ -4059,6 +4244,7 @@ function App() {
       COLUMN_SCOPE_ALL,
       COLUMN_SCOPE_NOT_EMPTY
     );
+    clearFetchAllVisibilityState(activeBoard.id);
     setBoard(activeBoard.id, (board) => ({
       ...board,
       columnScopeFilter: resolved
@@ -4070,6 +4256,7 @@ function App() {
     if (!activeBoard) {
       return;
     }
+    clearFetchAllVisibilityState(activeBoard.id);
     setBoard(activeBoard.id, (board) => ({
       ...board,
       videoFilter: value
@@ -4081,6 +4268,7 @@ function App() {
     if (!activeBoard) {
       return;
     }
+    clearFetchAllVisibilityState(activeBoard.id);
     setBoard(activeBoard.id, (board) => ({
       ...board,
       videoWindowDays: value
@@ -4093,6 +4281,7 @@ function App() {
       return;
     }
     const next = resolveVideoDurationFilterSelection(value, videoDurationFilter);
+    clearFetchAllVisibilityState(activeBoard.id);
     setBoard(activeBoard.id, (board) => ({
       ...board,
       videoDurationFilter: next
