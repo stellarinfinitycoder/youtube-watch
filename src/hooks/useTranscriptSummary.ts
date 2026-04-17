@@ -165,7 +165,7 @@ function readStoredSummaryModelPresets(): SummaryModelPreset[] {
   );
 }
 
-function hashText(value: string): string {
+export function hashText(value: string): string {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
@@ -229,7 +229,7 @@ function readStoredSummaryFormats(): SummaryFormat[] {
   );
 }
 
-function readCachedSummary(
+export function readCachedSummaryForTranscript(
   videoId: string,
   transcriptText: string,
   promptText: string
@@ -249,7 +249,7 @@ function readCachedSummary(
   return parsed;
 }
 
-function writeCachedSummary(
+export function writeCachedSummaryForTranscript(
   videoId: string,
   transcriptText: string,
   promptText: string,
@@ -359,7 +359,7 @@ export function useTranscriptSummary() {
     promptText: string,
     modelText: string
   ): boolean => {
-    const cached = readCachedSummary(
+    const cached = readCachedSummaryForTranscript(
       videoId,
       transcriptBody,
       `${promptText}\n__MODEL__:${modelText || ""}`
@@ -484,7 +484,7 @@ export function useTranscriptSummary() {
       : activeSummaryModel;
 
     if (!options?.force) {
-      const cached = readCachedSummary(
+      const cached = readCachedSummaryForTranscript(
         transcriptVideo.videoId,
         transcriptText,
         `${promptToUse}\n__MODEL__:${modelToUse || ""}`
@@ -527,7 +527,7 @@ export function useTranscriptSummary() {
       setSummaryText(nextSummary);
       setSummaryKeyPoints(nextKeyPoints);
       setSummaryModel(payload.model);
-      writeCachedSummary(
+      writeCachedSummaryForTranscript(
         transcriptVideo.videoId,
         transcriptText,
         `${promptToUse}\n__MODEL__:${modelToUse || ""}`,

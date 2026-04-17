@@ -42,6 +42,8 @@ type AppTopbarProps = {
   onVideoDurationChange: (value: string[]) => void;
   formatDurationFilterSummary: () => string;
   videoDurationFilterOptions: Array<{ value: string; label: string }>;
+  startBoardSummaryBatch: () => void;
+  isBoardSummaryBatchRunning: boolean;
   playAllVideos: () => void;
   copyAllShownBoardLinks: () => Promise<void>;
   copiedLinkVideoId: string | null;
@@ -50,8 +52,10 @@ type AppTopbarProps = {
   openMaintenanceMenuRestore: () => void;
   openMaintenanceMenuLogs: () => void;
   openMaintenanceMenuBoardDurationBackfill: () => void;
+  openMaintenanceMenuRefreshBoardAvatars: () => void;
   openMaintenanceMenuDeleteSummaries: () => void;
   canOpenMaintenanceBoardDurationBackfill: boolean;
+  canOpenMaintenanceRefreshBoardAvatars: boolean;
   shownVideosTotal: number;
   scrollToEdge: (direction: "start" | "end") => void;
   scrollColumns: (direction: "left" | "right") => void;
@@ -89,6 +93,8 @@ function AppTopbarComponent({
   onVideoDurationChange,
   formatDurationFilterSummary,
   videoDurationFilterOptions,
+  startBoardSummaryBatch,
+  isBoardSummaryBatchRunning,
   playAllVideos,
   copyAllShownBoardLinks,
   copiedLinkVideoId,
@@ -97,8 +103,10 @@ function AppTopbarComponent({
   openMaintenanceMenuRestore,
   openMaintenanceMenuLogs,
   openMaintenanceMenuBoardDurationBackfill,
+  openMaintenanceMenuRefreshBoardAvatars,
   openMaintenanceMenuDeleteSummaries,
   canOpenMaintenanceBoardDurationBackfill,
+  canOpenMaintenanceRefreshBoardAvatars,
   shownVideosTotal,
   scrollToEdge,
   scrollColumns
@@ -111,6 +119,11 @@ function AppTopbarComponent({
       key: "board-duration",
       label: "BACKFILL METADATA",
       disabled: !canOpenMaintenanceBoardDurationBackfill
+    },
+    {
+      key: "refresh-avatars",
+      label: "REFRESH AVATARS",
+      disabled: !canOpenMaintenanceRefreshBoardAvatars
     },
     { key: "delete-summaries", label: "DELETE SUMMARIES", danger: true }
   ];
@@ -130,6 +143,10 @@ function AppTopbarComponent({
     }
     if (key === "board-duration") {
       openMaintenanceMenuBoardDurationBackfill();
+      return;
+    }
+    if (key === "refresh-avatars") {
+      openMaintenanceMenuRefreshBoardAvatars();
       return;
     }
     if (key === "delete-summaries") {
@@ -294,6 +311,16 @@ function AppTopbarComponent({
       <Text className={`topbar-video-count ${shownVideosTotal === 0 ? "is-zero" : ""}`}>
         {shownVideosTotal}
       </Text>
+      <Button
+        htmlType="button"
+        onClick={startBoardSummaryBatch}
+        aria-label="Summarize all shown videos"
+        className="nav-btn top-summary-btn"
+        disabled={shownVideosTotal === 0 || isBoardSummaryBatchRunning}
+        data-testid="topbar-summarize-all"
+      >
+        <span className="btn-icon btn-icon-transcript" aria-hidden />
+      </Button>
       <Button
         htmlType="button"
         onClick={playAllVideos}

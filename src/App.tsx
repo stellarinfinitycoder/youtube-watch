@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
+import { flushSync } from "react-dom";
 import {
   Alert,
   Button,
@@ -13,7 +14,10 @@ import {
 } from "antd";
 import type { FetchState } from "./types/youtube";
 import {
+  buildChannelAvatarProxyUrl,
   fetchPlaylistDiscoveryPage,
+  fetchSummaryByVideoInput,
+  fetchTranscriptByVideoInput,
   fetchVideoStatsByVideoIds,
   resolveChannelByInputWithThumbnail,
   resolveChannelByHandleWithThumbnail
@@ -22,6 +26,7 @@ import type { VideoItem } from "./types/youtube";
 import fixtureBoards from "./fixtures/fixture-boards.json";
 import { AppTopbar } from "./components/AppTopbar";
 import { BoardColumns } from "./components/BoardColumns";
+import { BoardSummaryBatchModal, type BoardSummaryBatchItem } from "./components/BoardSummaryBatchModal";
 const TranscriptSummaryModal = lazy(() => import("./components/TranscriptSummaryModal"));
 import { VideoPlayerModal } from "./components/VideoPlayerModal";
 import {
@@ -29,9 +34,15 @@ import {
   readStoredActiveBoardId,
   readStoredBoardsPayload
 } from "./storage/boardsStorage";
-import { SUMMARY_CACHE_KEY_PREFIX, pruneSummaryCaches } from "./storage/summariesStorage";
 import {
-  pruneTranscriptCaches
+  SUMMARY_CACHE_KEY_PREFIX,
+  pruneSummaryCaches,
+  readCachedSummary,
+} from "./storage/summariesStorage";
+import {
+  pruneTranscriptCaches,
+  readCachedTranscript,
+  writeCachedTranscript
 } from "./storage/transcriptsStorage";
 import {
   BOARD_RUNTIME_STORAGE_KEY,
@@ -90,7 +101,10 @@ import {
 } from "./domain/savedLists";
 import {
   DEFAULT_SUMMARY_PROMPT,
+  hashText,
+  readCachedSummaryForTranscript,
   useTranscriptSummary,
+  writeCachedSummaryForTranscript,
   type InlineMetaFeedback,
 } from "./hooks/useTranscriptSummary";
 import {
@@ -188,6 +202,7 @@ type ColumnState = FetchState & {
   channelId: string;
   uploadsPlaylistId: string;
   channelThumbnailUrl: string;
+  lastGoodChannelThumbnailUrl: string;
   lastFetchAt: string | null;
   savedSortMode: SavedSortMode;
   savedAddedAtByVideoId: Record<string, number>;
@@ -201,6 +216,7 @@ type PersistedColumnState = {
   channelId?: string;
   uploadsPlaylistId?: string;
   channelThumbnailUrl: string;
+  lastGoodChannelThumbnailUrl?: string;
   videos: VideoItem[];
   lastFetchAt: string | null;
   savedSortMode?: SavedSortMode;
@@ -277,6 +293,19 @@ type BoardDurationBackfillAction = {
   boardName: string;
   videoIds: string[];
   estimatedQueries: number;
+};
+
+type BoardSummaryBatchProgress = {
+  completed: number;
+  total: number;
+};
+
+type PendingBoardSummaryBatch = {
+  targets: VideoItem[];
+  promptText: string;
+  modelText: string;
+  promptCacheKey: string;
+  promptHash: string;
 };
 
 type QuotaEstimateState = {
@@ -387,6 +416,7 @@ function createColumnState(overrides?: Partial<ColumnState>): ColumnState {
     channelId: "",
     uploadsPlaylistId: "",
     channelThumbnailUrl: "",
+    lastGoodChannelThumbnailUrl: "",
     lastFetchAt: null,
     loading: false,
     error: null,
@@ -577,6 +607,7 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
     channelId?: unknown;
     uploadsPlaylistId?: unknown;
     channelThumbnailUrl?: unknown;
+    lastGoodChannelThumbnailUrl?: unknown;
     videos?: unknown;
     lastFetchAt?: unknown;
     savedSortMode?: unknown;
@@ -596,6 +627,10 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
       typeof candidate.uploadsPlaylistId === "undefined"
     ) ||
     typeof candidate.channelThumbnailUrl !== "string" ||
+    !(
+      typeof candidate.lastGoodChannelThumbnailUrl === "string" ||
+      typeof candidate.lastGoodChannelThumbnailUrl === "undefined"
+    ) ||
     !(typeof candidate.lastFetchAt === "string" || candidate.lastFetchAt === null) ||
     !Array.isArray(candidate.videos)
   ) {
@@ -687,6 +722,7 @@ function sanitizePersistedColumn(raw: unknown): PersistedColumnState | null {
     channelId: candidate.channelId ?? "",
     uploadsPlaylistId: candidate.uploadsPlaylistId ?? "",
     channelThumbnailUrl: candidate.channelThumbnailUrl,
+    lastGoodChannelThumbnailUrl: candidate.lastGoodChannelThumbnailUrl ?? "",
     videos,
     lastFetchAt: candidate.lastFetchAt,
     savedSortMode,
@@ -929,6 +965,7 @@ function createFixtureBoardsState(): { boards: BoardState[]; activeBoardId: stri
       channelId: channel.channelId,
       uploadsPlaylistId: channel.uploadsPlaylistId,
       channelThumbnailUrl: channel.channelThumbnailUrl,
+      lastGoodChannelThumbnailUrl: channel.channelThumbnailUrl,
       videos: [],
       lastFetchAt: null
     })
@@ -955,6 +992,7 @@ function createFixtureBoardsState(): { boards: BoardState[]; activeBoardId: stri
       channelId: "",
       uploadsPlaylistId: "",
       channelThumbnailUrl: "",
+      lastGoodChannelThumbnailUrl: "",
       videos: list.videos.map(cloneVideo),
       savedSortMode: DEFAULT_SAVED_SORT_MODE,
       savedAddedAtByVideoId: Object.fromEntries(
@@ -1002,6 +1040,7 @@ function toPersistedColumns(columns: ColumnState[]): PersistedColumnState[] {
       handleInput: column.handleInput,
       currentHandle: column.currentHandle,
       channelThumbnailUrl: column.channelThumbnailUrl,
+      lastGoodChannelThumbnailUrl: column.lastGoodChannelThumbnailUrl,
       videos: column.videos.map(normalizePersistedVideo),
       lastFetchAt: column.lastFetchAt
     };
@@ -1131,6 +1170,7 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
       channelId: column.channelId ?? "",
       uploadsPlaylistId: column.uploadsPlaylistId ?? "",
       channelThumbnailUrl: column.channelThumbnailUrl,
+      lastGoodChannelThumbnailUrl: column.lastGoodChannelThumbnailUrl ?? "",
       videos: column.videos,
       lastFetchAt: column.lastFetchAt,
       savedSortMode: column.savedSortMode ?? DEFAULT_SAVED_SORT_MODE,
@@ -1215,6 +1255,7 @@ function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string 
         channelId: legacyColumns[index]?.channelId ?? "",
         uploadsPlaylistId: legacyColumns[index]?.uploadsPlaylistId ?? "",
         channelThumbnailUrl: legacyColumns[index]?.channelThumbnailUrl ?? "",
+        lastGoodChannelThumbnailUrl: legacyColumns[index]?.lastGoodChannelThumbnailUrl ?? "",
         videos: legacyColumns[index]?.videos ?? [],
         lastFetchAt: legacyColumns[index]?.lastFetchAt ?? null,
         savedSortMode: legacyColumns[index]?.savedSortMode ?? DEFAULT_SAVED_SORT_MODE,
@@ -1230,6 +1271,37 @@ function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string 
   });
 
   return { boards: ensureSavedBoard([board]), activeBoardId: board.id };
+}
+
+function columnNeedsAvatarRecovery(
+  column: Pick<ColumnState, "id" | "handleInput" | "channelThumbnailUrl" | "lastGoodChannelThumbnailUrl">,
+  brokenChannelThumbnailKeySet: Set<string>,
+  boardId: string
+): boolean {
+  if (column.handleInput.trim().length === 0) {
+    return false;
+  }
+  if (column.lastGoodChannelThumbnailUrl.trim().length > 0) {
+    return false;
+  }
+  const brokenKey = `${boardId}:${column.id}`;
+  return (
+    column.channelThumbnailUrl.trim().length === 0 ||
+    brokenChannelThumbnailKeySet.has(brokenKey)
+  );
+}
+
+function buildSummaryPromptCacheKey(prompt: string, model: string): string {
+  return `${prompt}\n__MODEL__:${model || ""}`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function formatViewCount(viewCount: number | null): string {
@@ -1470,6 +1542,7 @@ function App() {
   const transcriptRequestIdRef = useRef(0);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
   const linkCopyFeedbackTimeoutRef = useRef<number | null>(null);
+  const boardSummaryCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const activeLogoSpinCountRef = useRef(0);
   const initialBoardsState = fixtureMode ? createFixtureBoardsState() : getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
@@ -1501,6 +1574,16 @@ function App() {
   const [boardDurationBackfillError, setBoardDurationBackfillError] = useState<string | null>(
     null
   );
+  const [isBoardSummaryBatchRunning, setIsBoardSummaryBatchRunning] = useState(false);
+  const [boardSummaryBatchProgress, setBoardSummaryBatchProgress] = useState<BoardSummaryBatchProgress>({
+    completed: 0,
+    total: 0
+  });
+  const [boardSummaryBatchItems, setBoardSummaryBatchItems] = useState<BoardSummaryBatchItem[]>([]);
+  const [isBoardSummaryBatchPreparing, setIsBoardSummaryBatchPreparing] = useState(false);
+  const [isBoardSummaryBatchModalOpen, setIsBoardSummaryBatchModalOpen] = useState(false);
+  const [isBoardSummaryBatchCopied, setIsBoardSummaryBatchCopied] = useState(false);
+  const [pendingBoardSummaryBatch, setPendingBoardSummaryBatch] = useState<PendingBoardSummaryBatch | null>(null);
   const [bulkWatchColumnAction, setBulkWatchColumnAction] =
     useState<BulkWatchColumnAction | null>(null);
   const [moveSavedVideoTargetColumnId, setMoveSavedVideoTargetColumnId] =
@@ -1724,6 +1807,16 @@ function App() {
     : "-";
   const getShownVideosForColumn = (column: ColumnState, _now?: number): VideoItem[] =>
     filteredVideosByColumnId.get(column.id) ?? [];
+  const shownVideosInBoardOrder = useMemo(
+    () =>
+      visibleColumns.flatMap((column) =>
+        (filteredVideosByColumnId.get(column.id) ?? []).map((video) => ({
+          video,
+          column
+        }))
+      ),
+    [visibleColumns, filteredVideosByColumnId]
+  );
   const channelScopeDropdownListHeight =
     Math.min(columnScopeOptions.length, CHANNEL_SCOPE_DROPDOWN_MAX_VISIBLE) *
       BOARD_DROPDOWN_ITEM_HEIGHT +
@@ -1731,6 +1824,14 @@ function App() {
   const activeBoardDurationBackfillIds = activeBoard
     ? collectBoardMissingDurationNewVideoIds(activeBoard)
     : [];
+  const activeBoardAvatarRefreshIds =
+    activeBoard && activeBoard.kind === "channels"
+      ? activeBoard.columns
+          .filter((column) =>
+            columnNeedsAvatarRecovery(column, new Set(brokenChannelThumbnailKeys), activeBoard.id)
+          )
+          .map((column) => column.id)
+      : [];
   const activeBoardDurationBackfillEstimatedQueries = Math.ceil(
     activeBoardDurationBackfillIds.length / 50
   );
@@ -1989,7 +2090,8 @@ function App() {
   const runFetch = async (
     boardId: string,
     columnId: string,
-    handle: string
+    handle: string,
+    options?: { forceRefreshMetadata?: boolean }
   ): Promise<boolean> => {
     startLogoSpin();
     setFetchAllErrorVisibleColumnIdsByBoard((previous) => {
@@ -2034,6 +2136,7 @@ function App() {
         channelId: fixtureChannel.channelId,
         uploadsPlaylistId: fixtureChannel.uploadsPlaylistId,
         channelThumbnailUrl: fixtureChannel.channelThumbnailUrl,
+        lastGoodChannelThumbnailUrl: fixtureChannel.channelThumbnailUrl,
         videos: fixtureChannel.videos.map(cloneVideo),
         lastFetchAt: new Date().toLocaleString()
       }));
@@ -2059,6 +2162,10 @@ function App() {
       if (!currentColumn) {
         throw new Error("Column not found.");
       }
+      const brokenKey = `${boardId}:${columnId}`;
+      const shouldForceRefreshMetadata =
+        options?.forceRefreshMetadata === true ||
+        columnNeedsAvatarRecovery(currentColumn, new Set(brokenChannelThumbnailKeys), boardId);
       const cutoffTime = getWindowCutoffTime(STORAGE_VIDEO_WINDOW_DAYS);
       const isChannelSwitch = currentColumn.currentHandle !== normalized;
       const previousVideosById = isChannelSwitch
@@ -2075,22 +2182,27 @@ function App() {
       let channelId = currentColumn.channelId;
       let uploadsPlaylistId = currentColumn.uploadsPlaylistId;
       let nextChannelThumbnailUrl = currentColumn.channelThumbnailUrl;
+      let previousLastGoodChannelThumbnailUrl = currentColumn.lastGoodChannelThumbnailUrl;
       if (resolvedFromInput) {
         channelId = resolvedFromInput.channelId;
         uploadsPlaylistId = resolvedFromInput.uploadsPlaylistId;
-        nextChannelThumbnailUrl =
-          resolvedFromInput.channelThumbnailUrl || nextChannelThumbnailUrl;
+        nextChannelThumbnailUrl = resolvedFromInput.channelThumbnailUrl;
       }
 
       if (
         !resolvedFromInput &&
-        (!channelId || !uploadsPlaylistId || currentColumn.currentHandle !== normalized)
+        (
+          !channelId ||
+          !uploadsPlaylistId ||
+          currentColumn.currentHandle !== normalized ||
+          shouldForceRefreshMetadata
+        )
       ) {
         estimatedQuotaUnits += 1; // channels.list for handle resolve + uploads playlist
         const lookup = await resolveChannelByHandleWithThumbnail(normalized);
         channelId = lookup.channelId;
         uploadsPlaylistId = lookup.uploadsPlaylistId;
-        nextChannelThumbnailUrl = lookup.channelThumbnailUrl || nextChannelThumbnailUrl;
+        nextChannelThumbnailUrl = lookup.channelThumbnailUrl;
       }
 
       const discoveredNewVideos: VideoItem[] = [];
@@ -2171,7 +2283,8 @@ function App() {
         currentHandle: normalized,
         channelId: channelId || prev.channelId,
         uploadsPlaylistId: uploadsPlaylistId || prev.uploadsPlaylistId,
-        channelThumbnailUrl: nextChannelThumbnailUrl || prev.channelThumbnailUrl || "",
+        channelThumbnailUrl: nextChannelThumbnailUrl,
+        lastGoodChannelThumbnailUrl: isChannelSwitch ? "" : prev.lastGoodChannelThumbnailUrl,
         lastFetchAt: new Date().toLocaleString()
       }));
       if (discoveredNewVideos.length > 0) {
@@ -2187,12 +2300,19 @@ function App() {
         }));
       }
       if (nextChannelThumbnailUrl) {
-        const brokenKey = `${boardId}:${columnId}`;
-        const shouldRestoreChannelThumbnail = brokenChannelThumbnailKeys.includes(brokenKey);
-        if (!shouldRestoreChannelThumbnail) {
+        const normalizedNextChannelThumbnailUrl = nextChannelThumbnailUrl.trim();
+        if (
+          normalizedNextChannelThumbnailUrl &&
+          normalizedNextChannelThumbnailUrl === previousLastGoodChannelThumbnailUrl
+        ) {
           setBrokenChannelThumbnailKeys((prev) => prev.filter((key) => key !== brokenKey));
           setChannelThumbnailRetryAttemptedKeys((prev) => prev.filter((key) => key !== brokenKey));
-        } else if (await preloadImage(nextChannelThumbnailUrl)) {
+        } else if (await preloadImage(buildChannelAvatarProxyUrl(normalizedNextChannelThumbnailUrl))) {
+          setColumn(boardId, columnId, (prev) => ({
+            ...prev,
+            lastGoodChannelThumbnailUrl: normalizedNextChannelThumbnailUrl
+          }));
+          previousLastGoodChannelThumbnailUrl = normalizedNextChannelThumbnailUrl;
           setBrokenChannelThumbnailKeys((prev) => prev.filter((key) => key !== brokenKey));
           setChannelThumbnailRetryAttemptedKeys((prev) => prev.filter((key) => key !== brokenKey));
         }
@@ -2362,6 +2482,313 @@ function App() {
     } finally {
       stopLogoSpin();
     }
+  };
+
+  const refreshBoardAvatars = async (): Promise<void> => {
+    if (!activeBoard || activeBoard.kind === "saved") {
+      return;
+    }
+    const brokenKeySet = new Set(brokenChannelThumbnailKeys);
+    const targetColumns = activeBoard.columns.filter((column) =>
+      columnNeedsAvatarRecovery(column, brokenKeySet, activeBoard.id)
+    );
+    if (targetColumns.length === 0) {
+      return;
+    }
+    startLogoSpin();
+    try {
+      await Promise.allSettled(
+        targetColumns.map((column) =>
+          runFetch(activeBoard.id, column.id, column.handleInput, { forceRefreshMetadata: true })
+        )
+      );
+    } finally {
+      stopLogoSpin();
+    }
+  };
+
+  const startBoardSummaryBatch = (): void => {
+    if (shownVideosInBoardOrder.length === 0 || isBoardSummaryBatchRunning) {
+      return;
+    }
+
+    const promptText = activeSummaryFormat.prompt.trim() || DEFAULT_SUMMARY_PROMPT;
+    const modelText = (activeSummaryFormat.model ?? "").trim();
+    const promptCacheKey = buildSummaryPromptCacheKey(promptText, modelText);
+    const promptHash = hashText(promptCacheKey);
+
+    flushSync(() => {
+      setIsBoardSummaryBatchRunning(true);
+      setBoardSummaryBatchProgress({ completed: 0, total: shownVideosInBoardOrder.length });
+      setBoardSummaryBatchItems([]);
+      setIsBoardSummaryBatchPreparing(true);
+      setPendingBoardSummaryBatch({
+        targets: shownVideosInBoardOrder.map(({ video }) => video),
+        promptText,
+        modelText,
+        promptCacheKey,
+        promptHash
+      });
+      setIsBoardSummaryBatchModalOpen(true);
+    });
+  };
+
+  const handleBoardSummaryBatchModalOpenChange = (open: boolean): void => {
+    if (!open || !pendingBoardSummaryBatch) {
+      return;
+    }
+
+    const { targets, promptText, modelText, promptCacheKey, promptHash } = pendingBoardSummaryBatch;
+    setPendingBoardSummaryBatch(null);
+
+    const initialItems: BoardSummaryBatchItem[] = targets.map((video) => ({
+      videoId: video.videoId,
+      title: video.title,
+      status: "loading",
+      summary: "",
+      keyPoints: [],
+      error: null
+    }));
+    setBoardSummaryBatchItems(initialItems);
+    setIsBoardSummaryBatchPreparing(false);
+
+    const concurrency = 2;
+    let nextIndex = 0;
+    let completed = 0;
+    const yieldToBrowser = (): Promise<void> =>
+      new Promise((resolve) => {
+        window.setTimeout(resolve, 0);
+      });
+
+    const updateBatchItem = (
+      index: number,
+      next: Partial<BoardSummaryBatchItem> & Pick<BoardSummaryBatchItem, "status">
+    ): void => {
+      setBoardSummaryBatchItems((previous) =>
+        previous.map((item, itemIndex) =>
+          itemIndex === index
+            ? {
+                ...item,
+                ...next
+              }
+            : item
+        )
+      );
+    };
+
+    const runSingle = async (video: VideoItem, index: number): Promise<void> => {
+      try {
+        const directCachedSummary = readCachedSummary(video.videoId, promptHash);
+        if (directCachedSummary) {
+          updateBatchItem(index, {
+            status: "done",
+            summary: directCachedSummary.summary,
+            keyPoints: directCachedSummary.keyPoints,
+            error: null
+          });
+          return;
+        }
+
+        let transcriptText = readCachedTranscript(video.videoId) ?? "";
+        if (!transcriptText) {
+          const transcriptPayload = await fetchTranscriptByVideoInput({
+            videoId: video.videoId,
+            videoUrl: video.videoUrl
+          });
+          transcriptText = transcriptPayload.text.trim();
+          if (!transcriptText) {
+            throw new Error("Transcript unavailable.");
+          }
+          writeCachedTranscript(video.videoId, transcriptText);
+        }
+
+        const cached = readCachedSummaryForTranscript(video.videoId, transcriptText, promptCacheKey);
+        if (cached) {
+          updateBatchItem(index, {
+            status: "done",
+            summary: cached.summary,
+            keyPoints: cached.keyPoints,
+            error: null
+          });
+          return;
+        }
+
+        updateBatchItem(index, {
+          status: "summarizing",
+          error: null
+        });
+
+        const payload = await fetchSummaryByVideoInput({
+          videoId: video.videoId,
+          videoUrl: video.videoUrl,
+          transcriptText,
+          mode: "short",
+          prompt: promptText,
+          model: modelText || undefined
+        });
+        const nextSummary = payload.summary.trim();
+        const nextKeyPoints = payload.keyPoints
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0);
+        if (!nextSummary && nextKeyPoints.length === 0) {
+          throw new Error("No summary.");
+        }
+
+        writeCachedSummaryForTranscript(video.videoId, transcriptText, promptCacheKey, {
+          summary: nextSummary,
+          keyPoints: nextKeyPoints,
+          model: payload.model
+        });
+        updateBatchItem(index, {
+          status: "done",
+          summary: nextSummary,
+          keyPoints: nextKeyPoints,
+          error: null
+        });
+      } catch (error) {
+        updateBatchItem(index, {
+          status: "error",
+          summary: "",
+          keyPoints: [],
+          error: error instanceof Error ? error.message : "Summary failed."
+        });
+      } finally {
+        completed += 1;
+        setBoardSummaryBatchProgress({ completed, total: targets.length });
+      }
+    };
+
+    void (async () => {
+      try {
+        const workers = Array.from({ length: Math.min(concurrency, targets.length) }, async () => {
+          while (true) {
+            const current = nextIndex;
+            nextIndex += 1;
+            if (current >= targets.length) {
+              return;
+            }
+            await runSingle(targets[current], current);
+            await yieldToBrowser();
+          }
+        });
+        await Promise.all(workers);
+      } finally {
+        setIsBoardSummaryBatchPreparing(false);
+        setIsBoardSummaryBatchRunning(false);
+      }
+    })();
+  };
+
+  const copyBoardSummaryBatchToClipboard = async (): Promise<void> => {
+    const normalizedItems = boardSummaryBatchItems
+      .map((item) => {
+        const keyPoints = item.keyPoints
+          .map((point) => point.trim())
+          .filter((point) => point.length > 0);
+        const textBody =
+          item.status === "loading"
+            ? "LOADING..."
+            : item.status === "summarizing"
+              ? "SUMMARIZING..."
+              : item.error
+                ? item.error
+                : [item.summary.trim(), keyPoints.map((point) => `- ${point}`).join("\n")]
+                    .filter(Boolean)
+                    .join("\n\n")
+                    .trim();
+        return {
+          title: item.title.toUpperCase(),
+          status: item.status,
+          summary: item.summary.trim(),
+          keyPoints,
+          error: item.error,
+          textBody
+        };
+      })
+      .filter((item) => item.textBody.length > 0);
+
+    const text = normalizedItems
+      .map((item) => `${item.title}\n\n${item.textBody}`.trim())
+      .join("\n\n\n");
+
+    const htmlBlocks = normalizedItems.map((item) => {
+        if (item.status === "loading" || item.status === "summarizing") {
+          return [
+            '<div>',
+            `<h3 style="margin:0 0 8px;font-size:16px;font-weight:700;">${escapeHtml(item.title)}</h3>`,
+            `<p style="margin:0;">${escapeHtml(item.textBody)}</p>`,
+            "</div>"
+          ].join("");
+        }
+        if (item.error) {
+          return [
+            '<div>',
+            `<h3 style="margin:0 0 8px;font-size:16px;font-weight:700;">${escapeHtml(item.title)}</h3>`,
+            `<p style="margin:0;color:#c96c7e;">${escapeHtml(item.error)}</p>`,
+            "</div>"
+          ].join("");
+        }
+        const summaryHtml = item.summary
+          ? `<p style="margin:0 0 10px;">${escapeHtml(item.summary).replace(/\n/g, "<br />")}</p>`
+          : "";
+        const keyPointsHtml =
+          item.keyPoints.length > 0
+            ? `<ul style="margin:0;padding-left:20px;">${item.keyPoints
+                .map((point) => `<li>${escapeHtml(point)}</li>`)
+                .join("")}</ul>`
+            : "";
+        return [
+          '<div>',
+          `<h3 style="margin:0 0 8px;font-size:16px;font-weight:700;">${escapeHtml(item.title)}</h3>`,
+          summaryHtml,
+          keyPointsHtml,
+          "</div>"
+        ].join("");
+      });
+
+    const html = `<div>${htmlBlocks.join('<div style="height:24px;"><br /></div>')}</div>`;
+
+    if (!text) {
+      return;
+    }
+
+    try {
+      if (
+        navigator.clipboard &&
+        typeof navigator.clipboard.write === "function" &&
+        typeof ClipboardItem !== "undefined"
+      ) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([text], { type: "text/plain" }),
+            "text/html": new Blob([html], { type: "text/html" })
+          })
+        ]);
+      } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard API unavailable.");
+      }
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "true");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+
+    setIsBoardSummaryBatchCopied(true);
+    if (boardSummaryCopyFeedbackTimeoutRef.current) {
+      window.clearTimeout(boardSummaryCopyFeedbackTimeoutRef.current);
+    }
+    boardSummaryCopyFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setIsBoardSummaryBatchCopied(false);
+      boardSummaryCopyFeedbackTimeoutRef.current = null;
+    }, 1000);
   };
 
   const openBoardDurationBackfillModal = (): void => {
@@ -4371,14 +4798,28 @@ function App() {
     blurActiveTopbarControl();
   };
 
-  const handleBrokenChannelThumbnail = async (boardId: string, columnId: string): Promise<void> => {
+  const handleBrokenChannelThumbnail = async (
+    boardId: string,
+    columnId: string,
+    src: string
+  ): Promise<void> => {
     const brokenKey = `${boardId}:${columnId}`;
+    const board = boards.find((item) => item.id === boardId);
+    const column = board?.columns.find((item) => item.id === columnId);
+    const normalizedSrc = src.trim();
+    const lastGoodChannelThumbnailUrl = column?.lastGoodChannelThumbnailUrl.trim() ?? "";
+
+    if (normalizedSrc && lastGoodChannelThumbnailUrl && normalizedSrc === lastGoodChannelThumbnailUrl) {
+      setColumn(boardId, columnId, (prev) => ({
+        ...prev,
+        lastGoodChannelThumbnailUrl: ""
+      }));
+    }
+
     if (brokenChannelThumbnailKeys.includes(brokenKey)) {
       return;
     }
 
-    const board = boards.find((item) => item.id === boardId);
-    const column = board?.columns.find((item) => item.id === columnId);
     const channelThumbnailUrl = column?.channelThumbnailUrl.trim() ?? "";
 
     if (
@@ -4388,7 +4829,7 @@ function App() {
       setChannelThumbnailRetryAttemptedKeys((prev) =>
         prev.includes(brokenKey) ? prev : [...prev, brokenKey]
       );
-      if (await preloadImage(channelThumbnailUrl)) {
+      if (await preloadImage(buildChannelAvatarProxyUrl(channelThumbnailUrl))) {
         setChannelThumbnailRetryAttemptedKeys((prev) =>
           prev.filter((key) => key !== brokenKey)
         );
@@ -4397,6 +4838,24 @@ function App() {
     }
 
     setBrokenChannelThumbnailKeys((prev) => (prev.includes(brokenKey) ? prev : [...prev, brokenKey]));
+  };
+
+  const handleLoadedChannelThumbnail = (boardId: string, columnId: string, src: string): void => {
+    const normalizedSrc = src.trim();
+    if (!normalizedSrc) {
+      return;
+    }
+    setColumn(boardId, columnId, (prev) =>
+      prev.lastGoodChannelThumbnailUrl === normalizedSrc
+        ? prev
+        : {
+            ...prev,
+            lastGoodChannelThumbnailUrl: normalizedSrc
+          }
+    );
+    const brokenKey = `${boardId}:${columnId}`;
+    setBrokenChannelThumbnailKeys((prev) => prev.filter((key) => key !== brokenKey));
+    setChannelThumbnailRetryAttemptedKeys((prev) => prev.filter((key) => key !== brokenKey));
   };
 
   const handleSetSavedSortMode = (columnId: string, value: string): void => {
@@ -4448,6 +4907,8 @@ function App() {
         onVideoDurationChange={handleVideoDurationSelect}
         formatDurationFilterSummary={() => formatDurationFilterSummary(videoDurationFilter)}
         videoDurationFilterOptions={VIDEO_DURATION_FILTER_OPTIONS}
+        startBoardSummaryBatch={startBoardSummaryBatch}
+        isBoardSummaryBatchRunning={isBoardSummaryBatchRunning}
         playAllVideos={playAllVideos}
         copyAllShownBoardLinks={copyAllShownBoardLinks}
         copiedLinkVideoId={copiedLinkVideoId}
@@ -4456,8 +4917,10 @@ function App() {
         openMaintenanceMenuRestore={() => importInputRef.current?.click()}
         openMaintenanceMenuLogs={() => setIsLogsModalOpen(true)}
         openMaintenanceMenuBoardDurationBackfill={openBoardDurationBackfillModal}
+        openMaintenanceMenuRefreshBoardAvatars={() => void refreshBoardAvatars()}
         openMaintenanceMenuDeleteSummaries={() => setIsDeleteSummariesModalOpen(true)}
         canOpenMaintenanceBoardDurationBackfill={activeBoardDurationBackfillIds.length > 0}
+        canOpenMaintenanceRefreshBoardAvatars={activeBoardAvatarRefreshIds.length > 0}
         shownVideosTotal={shownVideosTotal}
         scrollToEdge={scrollToEdge}
         scrollColumns={scrollColumns}
@@ -4513,6 +4976,17 @@ function App() {
         isSavedBoardActive={isSavedBoardActive}
         playlistOrderLabel={playlistOrderLabel}
         openActiveVideoOnYouTube={openActiveVideoOnYouTube}
+      />
+
+      <BoardSummaryBatchModal
+        open={isBoardSummaryBatchModalOpen}
+        boardName={activeBoard?.name ?? "BOARD"}
+        isPreparing={isBoardSummaryBatchPreparing}
+        isCopied={isBoardSummaryBatchCopied}
+        items={boardSummaryBatchItems}
+        onCopyAll={copyBoardSummaryBatchToClipboard}
+        onAfterOpenChange={handleBoardSummaryBatchModalOpenChange}
+        onCancel={() => setIsBoardSummaryBatchModalOpen(false)}
       />
 
       {transcriptVideo ? (
@@ -4612,6 +5086,7 @@ function App() {
         setDeletingSavedVideo={setDeletingSavedVideo}
         moveSavedVideoInManualOrder={moveSavedVideoInManualOrder}
         addColumn={addColumn}
+        onLoadedChannelThumbnail={handleLoadedChannelThumbnail}
         onBrokenChannelThumbnail={handleBrokenChannelThumbnail}
       />
       <input

@@ -442,24 +442,24 @@ body {
 }
 
 .columns-nav .maintenance-menu-btn.ant-btn {
-  order: 13;
+  order: 14;
   margin-left: auto;
 }
 
 .columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to first"] {
-  order: 14;
-}
-
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns left"] {
   order: 15;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] {
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns left"] {
   order: 16;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] {
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] {
   order: 17;
+}
+
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] {
+  order: 18;
 }
 
 .columns-nav [aria-label="Board selector"] {
@@ -488,19 +488,23 @@ body {
 }
 
 .columns-nav [aria-label="Play all videos"] {
+  order: 11;
+}
+
+.columns-nav .top-summary-btn.ant-btn {
   order: 10;
 }
 
 .columns-nav [aria-label="Copy all shown links on board"] {
-  order: 11;
-}
-
-.columns-nav .top-wa-btn.ant-btn {
   order: 12;
 }
 
-.columns-nav [aria-label="Bulk add channels"] {
+.columns-nav .top-wa-btn.ant-btn {
   order: 13;
+}
+
+.columns-nav [aria-label="Bulk add channels"] {
+  order: 14;
 }
 
 .topbar-video-count.ant-typography {
@@ -529,6 +533,7 @@ body {
 }
 
 .columns-nav [aria-label="Play all videos"],
+.columns-nav .top-summary-btn.ant-btn,
 .columns-nav [aria-label="Copy all shown links on board"],
 .columns-nav .top-wa-btn.ant-btn,
 .columns-nav [aria-label="Bulk add channels"],
@@ -542,9 +547,9 @@ body {
 
 .maintenance-menu-dropdown .ant-dropdown-menu {
   border-radius: 0 !important;
-  border: 1px solid var(--amber-soft);
-  background: #0b0b0d;
-  box-shadow: none;
+  border: 1px solid var(--amber);
+  background: var(--surface) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   padding: 4px 0;
 }
 
@@ -557,6 +562,7 @@ body {
   letter-spacing: 0.04em;
   line-height: 1.2;
   padding: 10px 12px;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
 
 .maintenance-menu-dropdown .ant-dropdown-menu-title-content,
@@ -566,8 +572,19 @@ body {
 
 .maintenance-menu-dropdown .ant-dropdown-menu-item:hover,
 .maintenance-menu-dropdown .ant-dropdown-menu-item-active {
-  background: rgba(255, 143, 31, 0.08);
+  background: rgba(255, 143, 31, 0.12) !important;
   color: var(--text-strong) !important;
+  box-shadow: none;
+}
+
+.maintenance-menu-dropdown .ant-dropdown-menu-item-danger:hover,
+.maintenance-menu-dropdown .ant-dropdown-menu-item-danger.ant-dropdown-menu-item-active {
+  color: rgba(226, 128, 128, 0.86) !important;
+}
+
+.maintenance-menu-dropdown .ant-dropdown-menu-item-disabled:hover,
+.maintenance-menu-dropdown .ant-dropdown-menu-item-disabled.ant-dropdown-menu-item-active {
+  color: rgba(176, 139, 94, 0.45) !important;
 }
 
 .maintenance-menu-dropdown .ant-dropdown-menu-item-danger {
@@ -1924,6 +1941,121 @@ body {
   line-height: 1.5;
 }
 
+.board-summary-batch-modal .ant-modal-body {
+  max-height: min(72vh, 820px);
+  overflow: auto;
+  padding-top: 30px;
+  padding-right: 28px;
+  scrollbar-gutter: stable;
+}
+
+.board-summary-copy-btn {
+  position: absolute !important;
+  top: 10px;
+  left: 24px;
+  z-index: 2;
+  min-width: 36px;
+}
+
+.board-summary-close-btn {
+  position: absolute !important;
+  top: 10px;
+  left: 58px;
+  z-index: 2;
+  min-width: 36px;
+}
+
+.board-summary-close-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 18px;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.board-summary-batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.board-summary-batch-preparing {
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 228, 181, 0.82);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.board-summary-batch-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(91, 58, 18, 0.28);
+}
+
+.board-summary-batch-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.board-summary-batch-title {
+  margin: 0;
+  color: var(--amber);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.board-summary-batch-error.ant-typography {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.board-summary-batch-status.ant-typography {
+  display: block;
+  margin: 0;
+  color: rgba(255, 228, 181, 0.82);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.board-summary-batch-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.board-summary-batch-paragraph {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.board-summary-batch-points {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.board-summary-batch-points li + li {
+  margin-top: 6px;
+}
+
 .summary-markdown h2 {
   margin: 0 0 10px;
   color: var(--amber);
@@ -2065,6 +2197,7 @@ body {
   .video-filter-select .ant-select-selector,
   .columns-nav .video-filter-select.ant-select,
   .columns-nav [aria-label="Play all videos"],
+  .columns-nav .top-summary-btn.ant-btn,
   .columns-nav [aria-label="Copy all shown links on board"],
   .columns-nav .top-wa-btn.ant-btn,
   .columns-nav [aria-label="Bulk add channels"],
@@ -2076,6 +2209,7 @@ body {
 
   .top-bar-logo,
   .columns-nav [aria-label="Play all videos"],
+  .columns-nav .top-summary-btn.ant-btn,
   .columns-nav [aria-label="Copy all shown links on board"],
   .columns-nav .top-wa-btn.ant-btn,
   .columns-nav [aria-label="Bulk add channels"],
@@ -2114,53 +2248,58 @@ body {
     order: 4;
   }
 
-  .columns-nav [aria-label="Play all videos"] {
+  .columns-nav .top-summary-btn.ant-btn {
     order: 5;
     display: inline-flex !important;
   }
 
-  .columns-nav [aria-label="Copy all shown links on board"] {
+  .columns-nav [aria-label="Play all videos"] {
     order: 6;
     display: inline-flex !important;
   }
 
-  .columns-nav .top-wa-btn.ant-btn {
+  .columns-nav [aria-label="Copy all shown links on board"] {
     order: 7;
     display: inline-flex !important;
   }
 
-  .columns-nav [aria-label="Bulk add channels"] {
+  .columns-nav .top-wa-btn.ant-btn {
     order: 8;
+    display: inline-flex !important;
+  }
+
+  .columns-nav [aria-label="Bulk add channels"] {
+    order: 9;
   }
 
   .columns-nav .maintenance-menu-btn.ant-btn {
-    order: 9;
+    order: 10;
     margin-left: 0;
     display: inline-flex !important;
   }
 
   .columns-nav [aria-label="Board selector"] {
-    order: 10;
-  }
-
-  .columns-nav [aria-label="Channel scope filter"] {
     order: 11;
   }
 
-  .columns-nav [aria-label="Video filter"] {
+  .columns-nav [aria-label="Channel scope filter"] {
     order: 12;
   }
 
-  .columns-nav [aria-label="Video age window"] {
+  .columns-nav [aria-label="Video filter"] {
     order: 13;
   }
 
-  .columns-nav [aria-label="Video duration filter"] {
+  .columns-nav [aria-label="Video age window"] {
     order: 14;
   }
 
-  .columns-nav [aria-label="Default playback speed"] {
+  .columns-nav [aria-label="Video duration filter"] {
     order: 15;
+  }
+
+  .columns-nav [aria-label="Default playback speed"] {
+    order: 16;
   }
 
   .columns-nav [aria-label="Scroll columns to first"],
