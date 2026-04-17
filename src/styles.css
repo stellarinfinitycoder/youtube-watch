@@ -438,20 +438,20 @@ body {
 }
 
 .columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to first"] {
-  order: 12;
+  order: 13;
   margin-left: auto;
 }
 
 .columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns left"] {
-  order: 13;
-}
-
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] {
   order: 14;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] {
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] {
   order: 15;
+}
+
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] {
+  order: 16;
 }
 
 .columns-nav [aria-label="Board selector"] {
@@ -484,19 +484,19 @@ body {
 }
 
 .columns-nav [aria-label="Play all videos"] {
-  order: 9;
-}
-
-.columns-nav .top-wa-btn.ant-btn {
   order: 10;
 }
 
-.columns-nav [aria-label="Bulk add channels"] {
+.columns-nav .top-wa-btn.ant-btn {
   order: 11;
 }
 
+.columns-nav [aria-label="Bulk add channels"] {
+  order: 12;
+}
+
 .topbar-video-count.ant-typography {
-  order: 2;
+  order: 9;
   margin-bottom: 0;
   width: 32px;
   min-width: 32px;
@@ -2058,25 +2058,21 @@ body {
   }
 
   .columns-nav .topbar-video-count.ant-typography {
-    order: 3;
-  }
-
-  .columns-nav [aria-label="Bulk add channels"] {
     order: 4;
   }
 
   .columns-nav [aria-label="Play all videos"] {
-    order: 4;
-    display: inline-flex !important;
-  }
-
-  .columns-nav .top-wa-btn.ant-btn {
     order: 5;
     display: inline-flex !important;
   }
 
-  .columns-nav [aria-label="Bulk add channels"] {
+  .columns-nav .top-wa-btn.ant-btn {
     order: 6;
+    display: inline-flex !important;
+  }
+
+  .columns-nav [aria-label="Bulk add channels"] {
+    order: 7;
   }
 
   .columns-nav [aria-label="Board selector"] {

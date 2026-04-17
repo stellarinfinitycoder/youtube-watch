@@ -256,6 +256,9 @@ function AppTopbarComponent({
         showSearch={false}
         options={videoDurationFilterOptions}
       />
+      <Text className={`topbar-video-count ${shownVideosTotal === 0 ? "is-zero" : ""}`}>
+        {shownVideosTotal}
+      </Text>
       <Button
         htmlType="button"
         onClick={playAllVideos}
@@ -281,9 +284,6 @@ function AppTopbarComponent({
           )}
         </Button>
       ) : null}
-      <Text className={`topbar-video-count ${shownVideosTotal === 0 ? "is-zero" : ""}`}>
-        {shownVideosTotal}
-      </Text>
       <Button
         htmlType="button"
         onClick={() => scrollToEdge("start")}
