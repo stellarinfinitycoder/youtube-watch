@@ -65,15 +65,12 @@ body {
 }
 
 .top-bar-logo.is-spinning {
-  animation: logo-spin-inertia 920ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+  animation: logo-spin-linear 900ms linear infinite;
 }
 
-@keyframes logo-spin-inertia {
+@keyframes logo-spin-linear {
   0% {
     transform: rotate(0deg);
-  }
-  72% {
-    transform: rotate(392deg);
   }
   100% {
     transform: rotate(360deg);

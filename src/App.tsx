@@ -1470,7 +1470,7 @@ function App() {
   const transcriptRequestIdRef = useRef(0);
   const videoMetaFeedbackTimeoutsRef = useRef<Record<string, number>>({});
   const linkCopyFeedbackTimeoutRef = useRef<number | null>(null);
-  const logoSpinTimeoutRef = useRef<number | null>(null);
+  const activeLogoSpinCountRef = useRef(0);
   const initialBoardsState = fixtureMode ? createFixtureBoardsState() : getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
   const [activeBoardId, setActiveBoardId] = useState<string>(
@@ -1805,9 +1805,7 @@ function App() {
       if (linkCopyFeedbackTimeoutRef.current) {
         window.clearTimeout(linkCopyFeedbackTimeoutRef.current);
       }
-      if (logoSpinTimeoutRef.current) {
-        window.clearTimeout(logoSpinTimeoutRef.current);
-      }
+      activeLogoSpinCountRef.current = 0;
     };
   }, []);
 
@@ -1992,7 +1990,7 @@ function App() {
     columnId: string,
     handle: string
   ): Promise<boolean> => {
-    triggerLogoSpin();
+    startLogoSpin();
     setFetchAllErrorVisibleColumnIdsByBoard((previous) => {
       const boardColumnIds = previous[boardId];
       if (!boardColumnIds || !boardColumnIds.includes(columnId)) {
@@ -2213,6 +2211,7 @@ function App() {
       }));
       return false;
     } finally {
+      stopLogoSpin();
       recordEstimatedQuotaUsage(estimatedQuotaUnits);
     }
   };
@@ -2338,7 +2337,7 @@ function App() {
       (column) => column.handleInput.trim().length > 0
     );
     const shouldTemporarilyReveal = columnScopeFilter.includes(COLUMN_SCOPE_NOT_EMPTY);
-    triggerLogoSpin();
+    startLogoSpin();
     if (shouldTemporarilyReveal) {
       setFetchAllVisibleColumnIdsByBoard((previous) => ({
         ...previous,
@@ -2353,9 +2352,13 @@ function App() {
         return next;
       });
     }
-    await Promise.allSettled(
-      targetColumns.map((column) => runFetch(boardId, column.id, column.handleInput))
-    );
+    try {
+      await Promise.allSettled(
+        targetColumns.map((column) => runFetch(boardId, column.id, column.handleInput))
+      );
+    } finally {
+      stopLogoSpin();
+    }
   };
 
   const openBoardDurationBackfillModal = (): void => {
@@ -3542,18 +3545,23 @@ function App() {
     });
   };
 
-  const triggerLogoSpin = (): void => {
-    setIsLogoSpinning(false);
-    window.requestAnimationFrame(() => {
+  const startLogoSpin = (): void => {
+    activeLogoSpinCountRef.current += 1;
+    if (activeLogoSpinCountRef.current === 1) {
       setIsLogoSpinning(true);
-      if (logoSpinTimeoutRef.current) {
-        window.clearTimeout(logoSpinTimeoutRef.current);
-      }
-      logoSpinTimeoutRef.current = window.setTimeout(() => {
-        setIsLogoSpinning(false);
-        logoSpinTimeoutRef.current = null;
-      }, 920);
-    });
+    }
+  };
+
+  const stopLogoSpin = (): void => {
+    if (activeLogoSpinCountRef.current <= 0) {
+      activeLogoSpinCountRef.current = 0;
+      setIsLogoSpinning(false);
+      return;
+    }
+    activeLogoSpinCountRef.current -= 1;
+    if (activeLogoSpinCountRef.current === 0) {
+      setIsLogoSpinning(false);
+    }
   };
 
   const preloadImage = useCallback((src: string): Promise<boolean> => {
@@ -4329,7 +4337,6 @@ function App() {
         quotaEstimateText={quotaEstimateText}
         topBarLogoSrc={TOP_BAR_LOGO_SRC}
         isLogoSpinning={isLogoSpinning}
-        triggerLogoSpin={triggerLogoSpin}
         isSavedBoardActive={isSavedBoardActive}
         topbarLastFetchLabel={topbarLastFetchLabel}
         fetchAllColumns={fetchAllColumns}
