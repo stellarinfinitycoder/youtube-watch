@@ -1863,6 +1863,19 @@ body {
   border-color: var(--amber) !important;
 }
 
+.transcript-copy-btn.ant-btn:active:not(:disabled):not(.is-copied),
+.transcript-copy-btn.ant-btn.ant-btn-default:active:not(:disabled):not(.is-copied) {
+  background: #0b0b0d !important;
+  color: var(--text) !important;
+  border-color: var(--amber-soft) !important;
+  transform: none !important;
+}
+
+.transcript-copy-btn.ant-btn::before,
+.transcript-copy-btn.ant-btn::after {
+  display: none !important;
+}
+
 .transcript-copy-btn .btn-icon-check {
   animation: transcript-copy-check-pop 220ms ease-out;
 }
@@ -1942,38 +1955,38 @@ body {
 }
 
 .board-summary-batch-modal .ant-modal-body {
+  display: flex;
+  flex-direction: column;
   max-height: min(72vh, 820px);
-  overflow: auto;
-  padding-top: 30px;
-  padding-right: 28px;
+  padding: 12px 24px 24px;
+}
+
+.board-summary-batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 228, 181, 0.1);
+}
+
+.board-summary-batch-scroll-content {
+  flex: 1 1 auto;
+  max-height: min(72vh, 820px);
+  overflow-y: auto;
+  margin-right: -24px;
+  padding: 16px 28px 0 0;
   scrollbar-gutter: stable;
 }
 
 .board-summary-copy-btn {
-  position: absolute !important;
-  top: 10px;
-  left: 24px;
-  z-index: 2;
   min-width: 36px;
 }
 
-.board-summary-close-btn {
-  position: absolute !important;
-  top: 10px;
-  left: 58px;
-  z-index: 2;
-  min-width: 36px;
-}
-
-.board-summary-close-glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  font-size: 18px;
-  line-height: 1;
-  transform: translateY(-1px);
+.board-summary-copy-btn.ant-btn.is-copied {
+  background: #0b0b0d !important;
+  color: var(--text) !important;
+  border-color: var(--amber-soft) !important;
 }
 
 .board-summary-batch-list {
@@ -2025,7 +2038,7 @@ body {
   display: block;
   margin: 0;
   color: rgba(255, 228, 181, 0.82);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
@@ -2039,7 +2052,7 @@ body {
 .board-summary-batch-paragraph {
   margin: 0;
   color: var(--text);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.65;
   white-space: pre-wrap;
 }
@@ -2048,7 +2061,7 @@ body {
   margin: 0;
   padding-left: 18px;
   color: var(--text);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.65;
 }
 
