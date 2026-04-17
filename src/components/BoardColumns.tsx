@@ -198,11 +198,12 @@ function BoardColumnsComponent({
                       : column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
                     const rawName = column.currentHandle.trim() || column.handleInput.trim();
                     const displayName = rawName ? (rawName.startsWith("@") ? rawName : `@${rawName}`) : `CHANNEL ${index + 1}`;
+                    const hiddenThumbClassName = `hidden-channel-thumb${column.loading ? " is-fetching" : ""}`;
                     return (
                       <button
                         type="button"
                         key={column.id}
-                        className="hidden-channel-thumb"
+                        className={hiddenThumbClassName}
                         title={displayName.toUpperCase()}
                         aria-label={`Hidden ${displayName}`}
                         onClick={() => revealHiddenColumn(column.id)}

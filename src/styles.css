@@ -627,6 +627,25 @@ body {
   cursor: pointer;
 }
 
+.hidden-channel-thumb.is-fetching {
+  position: relative;
+  overflow: visible;
+}
+
+.hidden-channel-thumb.is-fetching::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 2px solid rgba(70, 217, 255, 0.96);
+  box-shadow:
+    0 0 0 1px rgba(70, 217, 255, 0.28),
+    0 0 10px rgba(70, 217, 255, 0.68),
+    0 0 18px rgba(70, 217, 255, 0.36);
+  opacity: 0;
+  pointer-events: none;
+  animation: thumbnail-fetch-ring 1050ms ease-out infinite;
+}
+
 .hidden-channel-thumb:hover,
 .hidden-channel-thumb:focus-visible {
   border-color: var(--amber);
@@ -996,12 +1015,36 @@ body {
 }
 
 .channel-avatar-toggle-btn {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: block;
   border: 0;
   background: transparent;
   padding: 0;
   margin: 0;
   line-height: 0;
   cursor: pointer;
+}
+
+.channel-avatar-toggle-btn.is-fetching {
+  position: relative;
+  overflow: visible;
+  animation: thumbnail-fetch-breathe 1050ms ease-in-out infinite;
+}
+
+.channel-avatar-toggle-btn.is-fetching::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 2px solid rgba(70, 217, 255, 0.96);
+  box-shadow:
+    0 0 0 1px rgba(70, 217, 255, 0.28),
+    0 0 10px rgba(70, 217, 255, 0.68),
+    0 0 18px rgba(70, 217, 255, 0.36);
+  opacity: 0;
+  pointer-events: none;
+  animation: thumbnail-fetch-ring 1050ms ease-out infinite;
 }
 
 .channel-avatar-placeholder {
@@ -1025,6 +1068,43 @@ body {
   object-fit: contain;
   filter: brightness(0) saturate(100%) invert(63%) sepia(76%) saturate(1718%)
     hue-rotate(348deg) brightness(102%) contrast(103%);
+}
+
+@keyframes thumbnail-fetch-breathe {
+  0%,
+  100% {
+    filter: brightness(1) saturate(1);
+  }
+  50% {
+    filter: brightness(1.18) saturate(1.18);
+  }
+}
+
+@keyframes thumbnail-fetch-ring {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.16);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .channel-avatar-toggle-btn.is-fetching {
+    animation: none;
+  }
+
+  .channel-avatar-toggle-btn.is-fetching::after,
+  .hidden-channel-thumb.is-fetching::after {
+    animation: none;
+    opacity: 0.65;
+    transform: none;
+  }
 }
 
 .remove-column-btn.ant-btn {

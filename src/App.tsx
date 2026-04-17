@@ -2189,7 +2189,12 @@ function App() {
       }
       if (nextChannelThumbnailUrl) {
         const brokenKey = `${boardId}:${columnId}`;
-        setBrokenChannelThumbnailKeys((prev) => prev.filter((key) => key !== brokenKey));
+        const shouldRestoreChannelThumbnail = brokenChannelThumbnailKeys.includes(brokenKey);
+        if (!shouldRestoreChannelThumbnail) {
+          setBrokenChannelThumbnailKeys((prev) => prev.filter((key) => key !== brokenKey));
+        } else if (await preloadImage(nextChannelThumbnailUrl)) {
+          setBrokenChannelThumbnailKeys((prev) => prev.filter((key) => key !== brokenKey));
+        }
       }
       return true;
     } catch (error) {
@@ -3550,6 +3555,22 @@ function App() {
       }, 920);
     });
   };
+
+  const preloadImage = useCallback((src: string): Promise<boolean> => {
+    if (typeof window === "undefined" || typeof Image === "undefined") {
+      return Promise.resolve(true);
+    }
+    const normalized = src.trim();
+    if (!normalized) {
+      return Promise.resolve(false);
+    }
+    return new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => resolve(true);
+      image.onerror = () => resolve(false);
+      image.src = normalized;
+    });
+  }, []);
 
   const agentModeEnabled =
     typeof window !== "undefined" &&

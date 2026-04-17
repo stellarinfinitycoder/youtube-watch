@@ -86,6 +86,7 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
     : column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
   const hasHandleInput = column.handleInput.trim().length > 0;
   const hasChannelPlaylistVideos = filteredVideos.length > 0;
+  const avatarToggleClassName = `channel-avatar-toggle-btn${column.loading ? " is-fetching" : ""}`;
 
   const videoItems = useMemo(
     () =>
@@ -247,7 +248,7 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
         <div className="column-header">
           <button
             type="button"
-            className="channel-avatar-toggle-btn"
+            className={avatarToggleClassName}
             aria-label={`Hide ${column.handleInput || column.currentHandle || `channel ${columnIndex + 1}`}`}
             onClick={() => hideVisibleColumn(column.id)}
           >
@@ -259,7 +260,10 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
                 onError={() => onBrokenChannelThumbnail(activeBoardId, column.id)}
               />
             ) : (
-              <div className="channel-avatar channel-avatar-placeholder" aria-label={`Channel ${columnIndex + 1} placeholder`}>
+              <div
+                className="channel-avatar channel-avatar-placeholder"
+                aria-label={`Channel ${columnIndex + 1} placeholder`}
+              >
                 <img src={channelPlaceholderIcon} alt="" className="channel-avatar-placeholder-icon" />
               </div>
             )}
