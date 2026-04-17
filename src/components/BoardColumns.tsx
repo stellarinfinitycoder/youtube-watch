@@ -1,5 +1,6 @@
 import { Button } from "antd";
 import { memo } from "react";
+import { buildChannelAvatarProxyUrl } from "../api/youtube";
 import type { VideoItem } from "../types/youtube";
 import type { ColumnStateLike, InlineMetaFeedback } from "./boardColumnsShared";
 import { ChannelColumn } from "./ChannelColumn";
@@ -32,7 +33,12 @@ type BoardColumnsProps = {
   moveColumnById: (columnId: string, direction: "left" | "right") => void;
   openMoveColumnModal: (columnId: string) => void;
   setSavedSortMode: (columnId: string, value: string) => void;
-  runFetch: (boardId: string, columnId: string, handle: string) => void;
+  runFetch: (
+    boardId: string,
+    columnId: string,
+    handle: string,
+    options?: { forceRefreshMetadata?: boolean }
+  ) => void;
   playChannelVideos: (column: ColumnStateLike) => void;
   copyAllVideoLinks: (columnId: string, videos: VideoItem[]) => Promise<void>;
   openRemoveAllSavedColumnModal: (column: ColumnStateLike) => void;
@@ -51,7 +57,8 @@ type BoardColumnsProps = {
   setDeletingSavedVideo: (value: { columnId: string; videoId: string }) => void;
   moveSavedVideoInManualOrder: (columnId: string, videoId: string, direction: "up" | "down") => void;
   addColumn: () => void;
-  onBrokenChannelThumbnail: (boardId: string, columnId: string) => Promise<void>;
+  onLoadedChannelThumbnail: (boardId: string, columnId: string, src: string) => void;
+  onBrokenChannelThumbnail: (boardId: string, columnId: string, src: string) => Promise<void>;
 };
 
 function BoardColumnsComponent({
@@ -100,6 +107,7 @@ function BoardColumnsComponent({
   setDeletingSavedVideo,
   moveSavedVideoInManualOrder,
   addColumn,
+  onLoadedChannelThumbnail,
   onBrokenChannelThumbnail
 }: BoardColumnsProps) {
   return (
@@ -179,6 +187,7 @@ function BoardColumnsComponent({
                 openSaveVideoModal={openSaveVideoModal}
                 toggleWatched={toggleWatched}
                 openVideo={openVideo}
+                onLoadedChannelThumbnail={onLoadedChannelThumbnail}
                 onBrokenChannelThumbnail={onBrokenChannelThumbnail}
                 videoFilter={videoFilter}
               />
@@ -193,9 +202,12 @@ function BoardColumnsComponent({
                 <div className="hidden-channel-thumbs">
                   {hiddenColumns.map((column, index) => {
                     const brokenKey = `${activeBoardId}:${column.id}`;
-                    const thumbnailUrl = brokenChannelThumbnailKeys.includes(brokenKey)
-                      ? ""
-                      : column.channelThumbnailUrl || "";
+                    const rawThumbnailUrl =
+                      column.lastGoodChannelThumbnailUrl ||
+                      (brokenChannelThumbnailKeys.includes(brokenKey)
+                        ? ""
+                        : column.channelThumbnailUrl || "");
+                    const thumbnailUrl = buildChannelAvatarProxyUrl(rawThumbnailUrl);
                     const rawName = column.currentHandle.trim() || column.handleInput.trim();
                     const displayName = rawName ? (rawName.startsWith("@") ? rawName : `@${rawName}`) : `CHANNEL ${index + 1}`;
                     const hiddenThumbClassName = `hidden-channel-thumb${column.loading ? " is-fetching" : ""}`;
@@ -213,7 +225,20 @@ function BoardColumnsComponent({
                             src={thumbnailUrl}
                             alt={displayName}
                             className="hidden-channel-thumb-image"
-                            onError={() => void onBrokenChannelThumbnail(activeBoardId, column.id)}
+                            onLoad={() =>
+                              onLoadedChannelThumbnail(
+                                activeBoardId,
+                                column.id,
+                                rawThumbnailUrl
+                              )
+                            }
+                            onError={(event) =>
+                              void onBrokenChannelThumbnail(
+                                activeBoardId,
+                                column.id,
+                                rawThumbnailUrl || event.currentTarget.currentSrc || event.currentTarget.src
+                              )
+                            }
                           />
                         ) : (
                           <div className="hidden-channel-thumb-placeholder">

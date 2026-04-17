@@ -36,7 +36,7 @@ type SavedListColumnProps = {
   openMoveSavedVideoModal: (columnId: string, videoId: string) => void;
   setDeletingSavedVideo: (value: { columnId: string; videoId: string }) => void;
   moveSavedVideoInManualOrder: (columnId: string, videoId: string, direction: "up" | "down") => void;
-  onBrokenChannelThumbnail: (boardId: string, columnId: string) => void;
+  onBrokenChannelThumbnail: (boardId: string, columnId: string, src: string) => void;
 };
 
 function SavedListColumnComponent(props: SavedListColumnProps) {
@@ -219,7 +219,13 @@ function SavedListColumnComponent(props: SavedListColumnProps) {
               src={channelThumbToShow}
               alt={`Channel ${columnIndex + 1}`}
               className="channel-avatar"
-              onError={() => onBrokenChannelThumbnail(activeBoardId, column.id)}
+              onError={(event) =>
+                onBrokenChannelThumbnail(
+                  activeBoardId,
+                  column.id,
+                  event.currentTarget.currentSrc || event.currentTarget.src
+                )
+              }
             />
           ) : (
             <div className="channel-avatar channel-avatar-placeholder" aria-label={`Channel ${columnIndex + 1} placeholder`}>

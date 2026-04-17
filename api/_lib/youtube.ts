@@ -205,14 +205,6 @@ function normalizeImageUrl(url: string): string {
   return trimmed;
 }
 
-function buildHandleAvatarUrl(handleLike: string): string {
-  const trimmed = handleLike.trim().replace(/^@/, "");
-  if (!/^[A-Za-z0-9._-]{3,30}$/.test(trimmed)) {
-    return "";
-  }
-  return `https://unavatar.io/youtube/${encodeURIComponent(trimmed)}`;
-}
-
 function mapPlaylistItemToVideoItem(item: PlaylistItem): VideoItem | null {
   const snippet = item.snippet;
   const videoId = snippet?.resourceId?.videoId;
@@ -322,7 +314,7 @@ export async function resolveChannelByHandleWithThumbnail(
   const normalizedThumbnailUrl = normalizeImageUrl(channelThumbnailUrl);
   return {
     channelId,
-    channelThumbnailUrl: normalizedThumbnailUrl || buildHandleAvatarUrl(normalized),
+    channelThumbnailUrl: normalizedThumbnailUrl,
     uploadsPlaylistId
   };
 }
@@ -456,7 +448,7 @@ export async function resolveChannelByInputWithThumbnail(input: string): Promise
   return {
     normalizedHandle,
     channelId,
-    channelThumbnailUrl: channelThumbnailUrl || buildHandleAvatarUrl(normalizedHandle),
+    channelThumbnailUrl,
     uploadsPlaylistId,
     resolutionType: "video"
   };

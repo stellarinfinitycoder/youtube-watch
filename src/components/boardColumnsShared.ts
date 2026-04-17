@@ -5,6 +5,7 @@ export type ColumnStateLike = {
   handleInput: string;
   currentHandle: string;
   channelThumbnailUrl: string;
+  lastGoodChannelThumbnailUrl: string;
   videos: VideoItem[];
   loading: boolean;
   error: string | null;

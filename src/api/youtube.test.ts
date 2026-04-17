@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  buildChannelAvatarProxyUrl,
   fetchLatestVideos,
   fetchViewCountsByVideoIds,
   getLatestVideosByHandle,
@@ -85,6 +86,13 @@ describe("youtube api client", () => {
     const result = await getLatestVideosAndChannelByHandle("@test", 25);
     expect(result.channelThumbnailUrl).toContain("img.test/channel.jpg");
     expect(result.videos).toEqual([]);
+  });
+
+  it("builds a proxied channel avatar url", () => {
+    expect(buildChannelAvatarProxyUrl("https://yt3.ggpht.com/avatar=s88")).toBe(
+      "/api/youtube/channel-avatar?url=https%3A%2F%2Fyt3.ggpht.com%2Favatar%3Ds88"
+    );
+    expect(buildChannelAvatarProxyUrl("")).toBe("");
   });
 
   it("posts video ids for view-count backfill", async () => {

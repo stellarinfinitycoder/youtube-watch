@@ -359,7 +359,7 @@ export default function PublisherAdminPage() {
         ) : (
           <Space direction="vertical" className="full-width" size={10}>
             {items.map((item) => (
-              <div key={item.id} className="column-card" style={{ width: "100%" }}>
+              <div key={item.id} className="column-card publisher-post-card" style={{ width: "100%" }}>
                 <Space direction="vertical" className="full-width" size={8}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                     <Text style={{ color: "var(--muted)" }}>
@@ -408,7 +408,7 @@ export default function PublisherAdminPage() {
                   <Link href={item.videoUrl} target="_blank" rel="noreferrer" style={{ width: "100%" }}>
                     <Title
                       level={5}
-                      style={{ margin: 0, color: "var(--text-strong)", textTransform: "uppercase" }}
+                      style={{ margin: 0, color: "var(--amber)", textTransform: "uppercase" }}
                     >
                       {item.title}
                     </Title>

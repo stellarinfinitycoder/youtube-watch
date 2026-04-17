@@ -1,5 +1,6 @@
 import { Alert, Button, Empty, Form, Input, List, Skeleton, Space, Spin, Typography } from "antd";
 import { memo, useMemo } from "react";
+import { buildChannelAvatarProxyUrl } from "../api/youtube";
 import type { VideoItem } from "../types/youtube";
 import { LazyRender } from "./LazyRender";
 import type { ColumnStateLike, InlineMetaFeedback } from "./boardColumnsShared";
@@ -27,7 +28,12 @@ type ChannelColumnProps = {
   handleVideoThumbnailError: (video: VideoItem) => void;
   moveColumnById: (columnId: string, direction: "left" | "right") => void;
   openMoveColumnModal: (columnId: string) => void;
-  runFetch: (boardId: string, columnId: string, handle: string) => void;
+  runFetch: (
+    boardId: string,
+    columnId: string,
+    handle: string,
+    options?: { forceRefreshMetadata?: boolean }
+  ) => void;
   playChannelVideos: (column: ColumnStateLike) => void;
   copyAllVideoLinks: (columnId: string, videos: VideoItem[]) => Promise<void>;
   openBulkWatchColumnAction: (column: ColumnStateLike, videoIds: string[], watched: boolean) => void;
@@ -39,7 +45,8 @@ type ChannelColumnProps = {
   openSaveVideoModal: (video: VideoItem) => void;
   toggleWatched: (videoId: string) => void;
   openVideo: (video: VideoItem) => void;
-  onBrokenChannelThumbnail: (boardId: string, columnId: string) => Promise<void>;
+  onLoadedChannelThumbnail: (boardId: string, columnId: string, src: string) => void;
+  onBrokenChannelThumbnail: (boardId: string, columnId: string, src: string) => Promise<void>;
   videoFilter: "all" | "new" | "watched";
 };
 
@@ -76,14 +83,16 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
     openSaveVideoModal,
     toggleWatched,
     openVideo,
+    onLoadedChannelThumbnail,
     onBrokenChannelThumbnail,
     videoFilter
   } = props;
 
   const brokenThumbKey = `${activeBoardId}:${column.id}`;
-  const channelThumbToShow = brokenChannelThumbnailKeys.includes(brokenThumbKey)
-    ? ""
-    : column.channelThumbnailUrl || "";
+  const rawChannelThumbToShow =
+    column.lastGoodChannelThumbnailUrl ||
+    (brokenChannelThumbnailKeys.includes(brokenThumbKey) ? "" : column.channelThumbnailUrl || "");
+  const channelThumbToShow = buildChannelAvatarProxyUrl(rawChannelThumbToShow);
   const hasHandleInput = column.handleInput.trim().length > 0;
   const hasChannelPlaylistVideos = filteredVideos.length > 0;
   const avatarToggleClassName = `channel-avatar-toggle-btn${column.loading ? " is-fetching" : ""}`;
@@ -257,7 +266,14 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
                 src={channelThumbToShow}
                 alt={`Channel ${columnIndex + 1}`}
                 className="channel-avatar"
-                onError={() => void onBrokenChannelThumbnail(activeBoardId, column.id)}
+                onLoad={() => onLoadedChannelThumbnail(activeBoardId, column.id, rawChannelThumbToShow)}
+                onError={(event) =>
+                  void onBrokenChannelThumbnail(
+                    activeBoardId,
+                    column.id,
+                    rawChannelThumbToShow || event.currentTarget.currentSrc || event.currentTarget.src
+                  )
+                }
               />
             ) : (
               <div

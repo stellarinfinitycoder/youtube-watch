@@ -47,6 +47,14 @@ function buildInternalUrl(path: string, params?: Record<string, string | number>
   return `${url.pathname}${url.search}`;
 }
 
+export function buildChannelAvatarProxyUrl(sourceUrl: string): string {
+  const normalized = sourceUrl.trim();
+  if (!normalized) {
+    return "";
+  }
+  return buildInternalUrl("/api/youtube/channel-avatar", { url: normalized });
+}
+
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   const url = new URL(input, window.location.origin);
   apiRequestListener?.({
