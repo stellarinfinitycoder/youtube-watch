@@ -43,6 +43,8 @@ type AppTopbarProps = {
   formatDurationFilterSummary: () => string;
   videoDurationFilterOptions: Array<{ value: string; label: string }>;
   playAllVideos: () => void;
+  copyAllShownBoardLinks: () => Promise<void>;
+  copiedLinkVideoId: string | null;
   openBulkWatchBoardAction: () => void;
   openMaintenanceMenuExport: () => void;
   openMaintenanceMenuRestore: () => void;
@@ -88,6 +90,8 @@ function AppTopbarComponent({
   formatDurationFilterSummary,
   videoDurationFilterOptions,
   playAllVideos,
+  copyAllShownBoardLinks,
+  copiedLinkVideoId,
   openBulkWatchBoardAction,
   openMaintenanceMenuExport,
   openMaintenanceMenuRestore,
@@ -298,6 +302,18 @@ function AppTopbarComponent({
         data-testid="topbar-play-all"
       >
         <span className="btn-icon btn-icon-play" aria-hidden />
+      </Button>
+      <Button
+        htmlType="button"
+        onClick={() => void copyAllShownBoardLinks()}
+        aria-label="Copy all shown links on board"
+        className={`nav-btn link-copy-btn ${
+          copiedLinkVideoId === `board-links:${activeBoardId}` ? "is-copied" : ""
+        }`}
+        disabled={shownVideosTotal === 0}
+        data-testid="topbar-copy-all-links"
+      >
+        <span className="btn-icon btn-icon-link" aria-hidden />
       </Button>
       {!isSavedBoardActive ? (
         <Button

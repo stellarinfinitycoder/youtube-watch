@@ -491,12 +491,16 @@ body {
   order: 10;
 }
 
-.columns-nav .top-wa-btn.ant-btn {
+.columns-nav [aria-label="Copy all shown links on board"] {
   order: 11;
 }
 
-.columns-nav [aria-label="Bulk add channels"] {
+.columns-nav .top-wa-btn.ant-btn {
   order: 12;
+}
+
+.columns-nav [aria-label="Bulk add channels"] {
+  order: 13;
 }
 
 .topbar-video-count.ant-typography {
@@ -525,6 +529,7 @@ body {
 }
 
 .columns-nav [aria-label="Play all videos"],
+.columns-nav [aria-label="Copy all shown links on board"],
 .columns-nav .top-wa-btn.ant-btn,
 .columns-nav [aria-label="Bulk add channels"],
 .columns-nav .maintenance-menu-btn.ant-btn {
@@ -2060,6 +2065,7 @@ body {
   .video-filter-select .ant-select-selector,
   .columns-nav .video-filter-select.ant-select,
   .columns-nav [aria-label="Play all videos"],
+  .columns-nav [aria-label="Copy all shown links on board"],
   .columns-nav .top-wa-btn.ant-btn,
   .columns-nav [aria-label="Bulk add channels"],
   .scroll-btn.ant-btn,
@@ -2070,6 +2076,7 @@ body {
 
   .top-bar-logo,
   .columns-nav [aria-label="Play all videos"],
+  .columns-nav [aria-label="Copy all shown links on board"],
   .columns-nav .top-wa-btn.ant-btn,
   .columns-nav [aria-label="Bulk add channels"],
   .columns-nav .maintenance-menu-btn.ant-btn,
@@ -2112,17 +2119,22 @@ body {
     display: inline-flex !important;
   }
 
-  .columns-nav .top-wa-btn.ant-btn {
+  .columns-nav [aria-label="Copy all shown links on board"] {
     order: 6;
     display: inline-flex !important;
   }
 
-  .columns-nav [aria-label="Bulk add channels"] {
+  .columns-nav .top-wa-btn.ant-btn {
     order: 7;
+    display: inline-flex !important;
+  }
+
+  .columns-nav [aria-label="Bulk add channels"] {
+    order: 8;
   }
 
   .columns-nav .maintenance-menu-btn.ant-btn {
-    order: 8;
+    order: 9;
     margin-left: 0;
     display: inline-flex !important;
   }

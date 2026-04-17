@@ -2981,6 +2981,45 @@ function App() {
     }, 1000);
   };
 
+  const copyAllShownBoardLinks = async (): Promise<void> => {
+    if (!activeBoardId) {
+      return;
+    }
+    const shownVideos = visibleColumns.flatMap(
+      (column) => filteredVideosByColumnId.get(column.id) ?? []
+    );
+    if (shownVideos.length === 0) {
+      return;
+    }
+    const text = shownVideos.map((video) => video.videoUrl).join("\n");
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard API unavailable.");
+      }
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "true");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+    const feedbackId = `board-links:${activeBoardId}`;
+    setCopiedLinkVideoId(feedbackId);
+    if (linkCopyFeedbackTimeoutRef.current) {
+      window.clearTimeout(linkCopyFeedbackTimeoutRef.current);
+    }
+    linkCopyFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setCopiedLinkVideoId((previous) => (previous === feedbackId ? null : previous));
+      linkCopyFeedbackTimeoutRef.current = null;
+    }, 1000);
+  };
+
   const openBulkWatchColumnAction = (
     column: ColumnState,
     videoIds: string[],
@@ -4410,7 +4449,15 @@ function App() {
         formatDurationFilterSummary={() => formatDurationFilterSummary(videoDurationFilter)}
         videoDurationFilterOptions={VIDEO_DURATION_FILTER_OPTIONS}
         playAllVideos={playAllVideos}
+        copyAllShownBoardLinks={copyAllShownBoardLinks}
+        copiedLinkVideoId={copiedLinkVideoId}
         openBulkWatchBoardAction={openBulkWatchBoardAction}
+        openMaintenanceMenuExport={handleExportBackup}
+        openMaintenanceMenuRestore={() => importInputRef.current?.click()}
+        openMaintenanceMenuLogs={() => setIsLogsModalOpen(true)}
+        openMaintenanceMenuBoardDurationBackfill={openBoardDurationBackfillModal}
+        openMaintenanceMenuDeleteSummaries={() => setIsDeleteSummariesModalOpen(true)}
+        canOpenMaintenanceBoardDurationBackfill={activeBoardDurationBackfillIds.length > 0}
         shownVideosTotal={shownVideosTotal}
         scrollToEdge={scrollToEdge}
         scrollColumns={scrollColumns}
@@ -4567,56 +4614,13 @@ function App() {
         addColumn={addColumn}
         onBrokenChannelThumbnail={handleBrokenChannelThumbnail}
       />
-      <div className="backup-actions">
-        <Button
-          htmlType="button"
-          onClick={handleExportBackup}
-          aria-label="Backup data"
-          className="backup-btn"
-        >
-          <span className="btn-icon btn-icon-backup" aria-hidden />
-        </Button>
-        <Button
-          htmlType="button"
-          onClick={() => importInputRef.current?.click()}
-          aria-label="Restore data"
-          className="backup-btn"
-        >
-          <span className="btn-icon btn-icon-restore" aria-hidden />
-        </Button>
-        <Button
-          htmlType="button"
-          onClick={() => setIsLogsModalOpen(true)}
-          aria-label="Open logs"
-          className="backup-btn"
-        >
-          <span className="btn-icon btn-icon-logs" aria-hidden />
-        </Button>
-        <Button
-          htmlType="button"
-          onClick={openBoardDurationBackfillModal}
-          aria-label="Backfill board duration"
-          className="backup-btn"
-          disabled={activeBoardDurationBackfillIds.length === 0}
-        >
-          BD
-        </Button>
-        <Button
-          htmlType="button"
-          onClick={() => setIsDeleteSummariesModalOpen(true)}
-          aria-label="Delete cached summaries"
-          className="backup-btn backup-btn-text red-outline-btn"
-        >
-          DS
-        </Button>
-        <input
-          ref={importInputRef}
-          type="file"
-          accept="application/json"
-          className="backup-file-input"
-          onChange={handleImportBackup}
-        />
-      </div>
+      <input
+        ref={importInputRef}
+        type="file"
+        accept="application/json"
+        className="backup-file-input"
+        onChange={handleImportBackup}
+      />
 
       <Modal
         title="Logs"
