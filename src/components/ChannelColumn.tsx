@@ -39,7 +39,7 @@ type ChannelColumnProps = {
   openSaveVideoModal: (video: VideoItem) => void;
   toggleWatched: (videoId: string) => void;
   openVideo: (video: VideoItem) => void;
-  onBrokenChannelThumbnail: (boardId: string, columnId: string) => void;
+  onBrokenChannelThumbnail: (boardId: string, columnId: string) => Promise<void>;
   videoFilter: "all" | "new" | "watched";
 };
 
@@ -82,8 +82,8 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
 
   const brokenThumbKey = `${activeBoardId}:${column.id}`;
   const channelThumbToShow = brokenChannelThumbnailKeys.includes(brokenThumbKey)
-    ? column.videos[0]?.thumbnailUrl ?? ""
-    : column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
+    ? ""
+    : column.channelThumbnailUrl || "";
   const hasHandleInput = column.handleInput.trim().length > 0;
   const hasChannelPlaylistVideos = filteredVideos.length > 0;
   const avatarToggleClassName = `channel-avatar-toggle-btn${column.loading ? " is-fetching" : ""}`;
@@ -257,7 +257,7 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
                 src={channelThumbToShow}
                 alt={`Channel ${columnIndex + 1}`}
                 className="channel-avatar"
-                onError={() => onBrokenChannelThumbnail(activeBoardId, column.id)}
+                onError={() => void onBrokenChannelThumbnail(activeBoardId, column.id)}
               />
             ) : (
               <div

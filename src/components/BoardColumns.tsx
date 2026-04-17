@@ -51,7 +51,7 @@ type BoardColumnsProps = {
   setDeletingSavedVideo: (value: { columnId: string; videoId: string }) => void;
   moveSavedVideoInManualOrder: (columnId: string, videoId: string, direction: "up" | "down") => void;
   addColumn: () => void;
-  onBrokenChannelThumbnail: (boardId: string, columnId: string) => void;
+  onBrokenChannelThumbnail: (boardId: string, columnId: string) => Promise<void>;
 };
 
 function BoardColumnsComponent({
@@ -194,8 +194,8 @@ function BoardColumnsComponent({
                   {hiddenColumns.map((column, index) => {
                     const brokenKey = `${activeBoardId}:${column.id}`;
                     const thumbnailUrl = brokenChannelThumbnailKeys.includes(brokenKey)
-                      ? column.videos[0]?.thumbnailUrl ?? ""
-                      : column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
+                      ? ""
+                      : column.channelThumbnailUrl || "";
                     const rawName = column.currentHandle.trim() || column.handleInput.trim();
                     const displayName = rawName ? (rawName.startsWith("@") ? rawName : `@${rawName}`) : `CHANNEL ${index + 1}`;
                     const hiddenThumbClassName = `hidden-channel-thumb${column.loading ? " is-fetching" : ""}`;
@@ -213,7 +213,7 @@ function BoardColumnsComponent({
                             src={thumbnailUrl}
                             alt={displayName}
                             className="hidden-channel-thumb-image"
-                            onError={() => onBrokenChannelThumbnail(activeBoardId, column.id)}
+                            onError={() => void onBrokenChannelThumbnail(activeBoardId, column.id)}
                           />
                         ) : (
                           <div className="hidden-channel-thumb-placeholder">

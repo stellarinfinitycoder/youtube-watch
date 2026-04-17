@@ -1597,6 +1597,8 @@ function App() {
   const [brokenChannelThumbnailKeys, setBrokenChannelThumbnailKeys] = useState<string[]>(
     []
   );
+  const [channelThumbnailRetryAttemptedKeys, setChannelThumbnailRetryAttemptedKeys] =
+    useState<string[]>([]);
   const [pendingBulkFetch, setPendingBulkFetch] = useState<
     Array<{ boardId: string; id: string; handle: string }>
   >([]);
@@ -1703,7 +1705,6 @@ function App() {
     forceVisibleColumnIds: fetchAllVisibleColumnIds,
     errorVisibleColumnIds: fetchAllErrorVisibleColumnIds
   });
-  const quotaEstimateText = `LAST Q: ${quotaEstimate.lastActionUnits} | TODAY: ${quotaEstimate.todayUnits}`;
   const topbarLastFetchLabel = activeBoard
     ? formatLastFetchTooltipLabel(
         activeBoard.columns.reduce<number | null>((latest, column) => {
@@ -2190,8 +2191,10 @@ function App() {
         const shouldRestoreChannelThumbnail = brokenChannelThumbnailKeys.includes(brokenKey);
         if (!shouldRestoreChannelThumbnail) {
           setBrokenChannelThumbnailKeys((prev) => prev.filter((key) => key !== brokenKey));
+          setChannelThumbnailRetryAttemptedKeys((prev) => prev.filter((key) => key !== brokenKey));
         } else if (await preloadImage(nextChannelThumbnailUrl)) {
           setBrokenChannelThumbnailKeys((prev) => prev.filter((key) => key !== brokenKey));
+          setChannelThumbnailRetryAttemptedKeys((prev) => prev.filter((key) => key !== brokenKey));
         }
       }
       return true;
@@ -2455,6 +2458,14 @@ function App() {
       if (activeVideo || event.defaultPrevented) {
         return;
       }
+      if (event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        void fetchAllColumns();
+        return;
+      }
       if (event.metaKey || event.ctrlKey || event.altKey) {
         return;
       }
@@ -2490,7 +2501,7 @@ function App() {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [activeVideo]);
+  }, [activeVideo, fetchAllColumns]);
 
   const includeNewColumnsInScope = (board: BoardState, newColumnIds: string[]): string[] => {
     const normalizedScope = normalizeColumnScopeFilter(
@@ -3160,6 +3171,9 @@ function App() {
       })
     );
     setBrokenChannelThumbnailKeys((previous) =>
+      previous.filter((key) => !key.endsWith(`:${movingId}`))
+    );
+    setChannelThumbnailRetryAttemptedKeys((previous) =>
       previous.filter((key) => !key.endsWith(`:${movingId}`))
     );
     setMovingColumnId(null);
@@ -4318,8 +4332,31 @@ function App() {
     blurActiveTopbarControl();
   };
 
-  const handleBrokenChannelThumbnail = (boardId: string, columnId: string): void => {
+  const handleBrokenChannelThumbnail = async (boardId: string, columnId: string): Promise<void> => {
     const brokenKey = `${boardId}:${columnId}`;
+    if (brokenChannelThumbnailKeys.includes(brokenKey)) {
+      return;
+    }
+
+    const board = boards.find((item) => item.id === boardId);
+    const column = board?.columns.find((item) => item.id === columnId);
+    const channelThumbnailUrl = column?.channelThumbnailUrl.trim() ?? "";
+
+    if (
+      channelThumbnailUrl &&
+      !channelThumbnailRetryAttemptedKeys.includes(brokenKey)
+    ) {
+      setChannelThumbnailRetryAttemptedKeys((prev) =>
+        prev.includes(brokenKey) ? prev : [...prev, brokenKey]
+      );
+      if (await preloadImage(channelThumbnailUrl)) {
+        setChannelThumbnailRetryAttemptedKeys((prev) =>
+          prev.filter((key) => key !== brokenKey)
+        );
+        return;
+      }
+    }
+
     setBrokenChannelThumbnailKeys((prev) => (prev.includes(brokenKey) ? prev : [...prev, brokenKey]));
   };
 
@@ -4334,7 +4371,8 @@ function App() {
     <main className="app-shell">
       <AppTopbar
         buildInfoLabel={BUILD_INFO_LABEL}
-        quotaEstimateText={quotaEstimateText}
+        lastApiQueryUnits={quotaEstimate.lastActionUnits}
+        totalApiQueryUnits={quotaEstimate.todayUnits}
         topBarLogoSrc={TOP_BAR_LOGO_SRC}
         isLogoSpinning={isLogoSpinning}
         isSavedBoardActive={isSavedBoardActive}
