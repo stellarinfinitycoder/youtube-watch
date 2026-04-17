@@ -102,10 +102,10 @@ function AppTopbarComponent({
   const maintenanceMenuItems: MenuProps["items"] = [
     { key: "backup", label: "BACKUP" },
     { key: "restore", label: "RESTORE" },
-    { key: "logs", label: "LOGS" },
+    { key: "logs", label: "OPEN LOGS" },
     {
       key: "board-duration",
-      label: "BACKFILL",
+      label: "BACKFILL METADATA",
       disabled: !canOpenMaintenanceBoardDurationBackfill
     },
     { key: "delete-summaries", label: "DELETE SUMMARIES", danger: true }
