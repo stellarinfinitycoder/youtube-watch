@@ -1,5 +1,6 @@
 import { memo } from "react";
-import { Button, Select, Tooltip, Typography } from "antd";
+import { Button, Dropdown, Select, Tooltip, Typography } from "antd";
+import type { MenuProps } from "antd";
 
 const { Text } = Typography;
 
@@ -11,10 +12,10 @@ type BoardOption = {
 
 type AppTopbarProps = {
   buildInfoLabel: string;
-  quotaEstimateText: string;
+  lastApiQueryUnits: number;
+  totalApiQueryUnits: number;
   topBarLogoSrc: string;
   isLogoSpinning: boolean;
-  triggerLogoSpin: () => void;
   isSavedBoardActive: boolean;
   topbarLastFetchLabel: string;
   fetchAllColumns: () => void;
@@ -43,6 +44,12 @@ type AppTopbarProps = {
   videoDurationFilterOptions: Array<{ value: string; label: string }>;
   playAllVideos: () => void;
   openBulkWatchBoardAction: () => void;
+  openMaintenanceMenuExport: () => void;
+  openMaintenanceMenuRestore: () => void;
+  openMaintenanceMenuLogs: () => void;
+  openMaintenanceMenuBoardDurationBackfill: () => void;
+  openMaintenanceMenuDeleteSummaries: () => void;
+  canOpenMaintenanceBoardDurationBackfill: boolean;
   shownVideosTotal: number;
   scrollToEdge: (direction: "start" | "end") => void;
   scrollColumns: (direction: "left" | "right") => void;
@@ -50,10 +57,10 @@ type AppTopbarProps = {
 
 function AppTopbarComponent({
   buildInfoLabel,
-  quotaEstimateText,
+  lastApiQueryUnits,
+  totalApiQueryUnits,
   topBarLogoSrc,
   isLogoSpinning,
-  triggerLogoSpin,
   isSavedBoardActive,
   topbarLastFetchLabel,
   fetchAllColumns,
@@ -82,19 +89,66 @@ function AppTopbarComponent({
   videoDurationFilterOptions,
   playAllVideos,
   openBulkWatchBoardAction,
+  openMaintenanceMenuExport,
+  openMaintenanceMenuRestore,
+  openMaintenanceMenuLogs,
+  openMaintenanceMenuBoardDurationBackfill,
+  openMaintenanceMenuDeleteSummaries,
+  canOpenMaintenanceBoardDurationBackfill,
   shownVideosTotal,
   scrollToEdge,
   scrollColumns
 }: AppTopbarProps) {
+  const maintenanceMenuItems: MenuProps["items"] = [
+    { key: "backup", label: "BACKUP" },
+    { key: "restore", label: "RESTORE" },
+    { key: "logs", label: "LOGS" },
+    {
+      key: "board-duration",
+      label: "BACKFILL",
+      disabled: !canOpenMaintenanceBoardDurationBackfill
+    },
+    { key: "delete-summaries", label: "DELETE SUMMARIES", danger: true }
+  ];
+
+  const handleMaintenanceMenuClick: MenuProps["onClick"] = ({ key }) => {
+    if (key === "backup") {
+      openMaintenanceMenuExport();
+      return;
+    }
+    if (key === "restore") {
+      openMaintenanceMenuRestore();
+      return;
+    }
+    if (key === "logs") {
+      openMaintenanceMenuLogs();
+      return;
+    }
+    if (key === "board-duration") {
+      openMaintenanceMenuBoardDurationBackfill();
+      return;
+    }
+    if (key === "delete-summaries") {
+      openMaintenanceMenuDeleteSummaries();
+    }
+  };
+
   return (
     <div className="columns-nav">
       <Tooltip
         title={
           <>
-            <div>{buildInfoLabel}</div>
-            <div>{quotaEstimateText}</div>
+            <div>FETCH ALL NEW VIDEOS FOR THIS BOARD.</div>
+            <div style={{ height: 8 }} />
+            <div>LAST FETCH: {topbarLastFetchLabel}</div>
+            <div>LAST API QUERY: {lastApiQueryUnits}</div>
+            <div>TOTAL API QUERIES TODAY: {totalApiQueryUnits}</div>
+            <div style={{ height: 8 }} />
             <div>MAX FETCHED VIDEO AGE: 90 DAYS</div>
+            <div>MAX WATCHED VIDEO AGE: 90 DAYS</div>
             <div>MAX SAVED VIDEO AGE: UNLIMITED</div>
+            <div style={{ height: 8 }} />
+            <div>VERSION: {buildInfoLabel}</div>
           </>
         }
         placement="bottom"
@@ -104,33 +158,10 @@ function AppTopbarComponent({
           src={topBarLogoSrc}
           alt="Logo"
           className={`top-bar-logo ${isLogoSpinning ? "is-spinning" : ""}`}
-          onClick={triggerLogoSpin}
+          onClick={fetchAllColumns}
           data-testid="topbar-logo"
         />
       </Tooltip>
-      {!isSavedBoardActive ? (
-        <Tooltip
-          title={
-            <>
-              <div>Fetch all new videos for all channels.</div>
-              <div>Last: {topbarLastFetchLabel}</div>
-            </>
-          }
-          placement="bottom"
-          overlayClassName="fetch-all-tooltip"
-        >
-          <Button
-            type="primary"
-            htmlType="button"
-            onClick={fetchAllColumns}
-            aria-label="Fetch all channels"
-            className="nav-btn"
-            data-testid="topbar-fetch-all"
-          >
-            <span className="btn-icon btn-icon-fetch" aria-hidden />
-          </Button>
-        </Tooltip>
-      ) : null}
       <Select<string>
         value={activeBoardId}
         onChange={(value) => {
@@ -284,6 +315,20 @@ function AppTopbarComponent({
           )}
         </Button>
       ) : null}
+      <Dropdown
+        menu={{ items: maintenanceMenuItems, onClick: handleMaintenanceMenuClick }}
+        trigger={["click"]}
+        placement="bottomRight"
+        overlayClassName="maintenance-menu-dropdown"
+      >
+        <Button
+          htmlType="button"
+          aria-label="Open maintenance menu"
+          className="nav-btn maintenance-menu-btn"
+        >
+          <span className="btn-icon btn-icon-settings" aria-hidden />
+        </Button>
+      </Dropdown>
       <Button
         htmlType="button"
         onClick={() => scrollToEdge("start")}

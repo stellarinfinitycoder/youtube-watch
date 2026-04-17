@@ -62,6 +62,13 @@ body {
   flex: 0 0 32px;
   cursor: pointer;
   transform-origin: 50% 50%;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.top-bar-logo:hover,
+.top-bar-logo:active {
+  opacity: 0.95;
+  transform: translateY(-1px);
 }
 
 .top-bar-logo.is-spinning {
@@ -434,21 +441,25 @@ body {
   letter-spacing: 0;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to first"] {
+.columns-nav .maintenance-menu-btn.ant-btn {
   order: 13;
   margin-left: auto;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns left"] {
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to first"] {
   order: 14;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] {
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns left"] {
   order: 15;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] {
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] {
   order: 16;
+}
+
+.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] {
+  order: 17;
 }
 
 .columns-nav [aria-label="Board selector"] {
@@ -474,10 +485,6 @@ body {
 
 .columns-nav [aria-label="Default playback speed"] {
   order: 8;
-}
-
-.columns-nav [aria-label="Fetch all channels"] {
-  order: 1;
 }
 
 .columns-nav [aria-label="Play all videos"] {
@@ -517,15 +524,57 @@ body {
   box-shadow: inset 0 0 4px rgba(70, 217, 255, 0.08);
 }
 
-.columns-nav [aria-label="Fetch all channels"],
 .columns-nav [aria-label="Play all videos"],
 .columns-nav .top-wa-btn.ant-btn,
-.columns-nav [aria-label="Bulk add channels"] {
+.columns-nav [aria-label="Bulk add channels"],
+.columns-nav .maintenance-menu-btn.ant-btn {
   width: 32px;
   min-width: 32px;
   height: 32px !important;
   padding: 0 !important;
   justify-content: center;
+}
+
+.maintenance-menu-dropdown .ant-dropdown-menu {
+  border-radius: 0 !important;
+  border: 1px solid var(--amber-soft);
+  background: #0b0b0d;
+  box-shadow: none;
+  padding: 4px 0;
+}
+
+.maintenance-menu-dropdown .ant-dropdown-menu-item {
+  min-width: 120px;
+  color: var(--text) !important;
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  padding: 10px 12px;
+}
+
+.maintenance-menu-dropdown .ant-dropdown-menu-title-content,
+.maintenance-menu-dropdown .ant-dropdown-menu-item .ant-dropdown-menu-title-content {
+  color: inherit !important;
+}
+
+.maintenance-menu-dropdown .ant-dropdown-menu-item:hover,
+.maintenance-menu-dropdown .ant-dropdown-menu-item-active {
+  background: rgba(255, 143, 31, 0.08);
+  color: var(--text-strong) !important;
+}
+
+.maintenance-menu-dropdown .ant-dropdown-menu-item-danger {
+  color: rgba(226, 128, 128, 0.86) !important;
+}
+
+.maintenance-menu-dropdown .ant-dropdown-menu-item-disabled {
+  color: rgba(176, 139, 94, 0.45) !important;
+}
+
+.maintenance-menu-dropdown .ant-dropdown-menu-item-disabled .ant-dropdown-menu-title-content {
+  color: inherit !important;
 }
 
 .columns-scroll {
@@ -821,6 +870,11 @@ body {
 .btn-icon-play {
   -webkit-mask: url("/svg/btn-play.svg") center / contain no-repeat;
   mask: url("/svg/btn-play.svg") center / contain no-repeat;
+}
+
+.btn-icon-settings {
+  -webkit-mask: url("/svg/btn-settings.svg") center / contain no-repeat;
+  mask: url("/svg/btn-settings.svg") center / contain no-repeat;
 }
 
 .btn-icon-delete {
@@ -2005,7 +2059,6 @@ body {
   .columns-nav .nav-btn.ant-btn,
   .video-filter-select .ant-select-selector,
   .columns-nav .video-filter-select.ant-select,
-  .columns-nav [aria-label="Fetch all channels"],
   .columns-nav [aria-label="Play all videos"],
   .columns-nav .top-wa-btn.ant-btn,
   .columns-nav [aria-label="Bulk add channels"],
@@ -2016,10 +2069,10 @@ body {
   }
 
   .top-bar-logo,
-  .columns-nav [aria-label="Fetch all channels"],
   .columns-nav [aria-label="Play all videos"],
   .columns-nav .top-wa-btn.ant-btn,
   .columns-nav [aria-label="Bulk add channels"],
+  .columns-nav .maintenance-menu-btn.ant-btn,
   .scroll-btn.ant-btn {
     width: 44px;
     min-width: 44px;
@@ -2050,10 +2103,6 @@ body {
     order: 1;
   }
 
-  .columns-nav [aria-label="Fetch all channels"] {
-    order: 2;
-  }
-
   .columns-nav .topbar-video-count.ant-typography {
     order: 4;
   }
@@ -2070,6 +2119,12 @@ body {
 
   .columns-nav [aria-label="Bulk add channels"] {
     order: 7;
+  }
+
+  .columns-nav .maintenance-menu-btn.ant-btn {
+    order: 8;
+    margin-left: 0;
+    display: inline-flex !important;
   }
 
   .columns-nav [aria-label="Board selector"] {
