@@ -101,6 +101,7 @@ import {
 } from "./domain/savedLists";
 import {
   DEFAULT_SUMMARY_PROMPT,
+  getDefaultSummaryFormat,
   hashText,
   readCachedSummaryForTranscript,
   useTranscriptSummary,
@@ -2512,8 +2513,9 @@ function App() {
       return;
     }
 
-    const promptText = activeSummaryFormat.prompt.trim() || DEFAULT_SUMMARY_PROMPT;
-    const modelText = (activeSummaryFormat.model ?? "").trim();
+    const defaultSummaryFormat = getDefaultSummaryFormat(summaryFormats);
+    const promptText = defaultSummaryFormat.prompt.trim() || DEFAULT_SUMMARY_PROMPT;
+    const modelText = (defaultSummaryFormat.model ?? "").trim();
     const promptCacheKey = buildSummaryPromptCacheKey(promptText, modelText);
     const promptHash = hashText(promptCacheKey);
 
