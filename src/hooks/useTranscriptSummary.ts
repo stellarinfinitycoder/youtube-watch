@@ -315,11 +315,26 @@ export function useTranscriptSummary() {
   );
   const [isSummaryPromptEditMode, setIsSummaryPromptEditMode] = useState(false);
   const [editingSummaryFormatId, setEditingSummaryFormatId] = useState<string | null>(null);
-  const [summaryFormatNameDraft, setSummaryFormatNameDraft] = useState("");
-  const [summaryPromptDraft, setSummaryPromptDraft] = useState("");
-  const [summaryFormatModelDraft, setSummaryFormatModelDraft] = useState("");
+  const [summaryFormatNameDraft, setSummaryFormatNameDraftState] = useState("");
+  const [summaryPromptDraft, setSummaryPromptDraftState] = useState("");
+  const [summaryFormatModelDraft, setSummaryFormatModelDraftState] = useState("");
   const [isNewSummaryModelDraftMode, setIsNewSummaryModelDraftMode] = useState(false);
   const [summaryFormatDefaultDraft, setSummaryFormatDefaultDraft] = useState(false);
+
+  const setSummaryFormatNameDraft = (value: string): void => {
+    summaryFormatNameDraftRef.current = value;
+    setSummaryFormatNameDraftState(value);
+  };
+
+  const setSummaryPromptDraft = (value: string): void => {
+    summaryPromptDraftRef.current = value;
+    setSummaryPromptDraftState(value);
+  };
+
+  const setSummaryFormatModelDraft = (value: string): void => {
+    summaryFormatModelDraftRef.current = value;
+    setSummaryFormatModelDraftState(value);
+  };
 
   const activeSummaryFormat = useMemo(
     () =>
