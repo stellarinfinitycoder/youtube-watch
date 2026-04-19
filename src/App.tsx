@@ -26,7 +26,7 @@ import type { VideoItem } from "./types/youtube";
 import fixtureBoards from "./fixtures/fixture-boards.json";
 import { AppTopbar } from "./components/AppTopbar";
 import { BoardColumns } from "./components/BoardColumns";
-import { BoardSummaryBatchModal, type BoardSummaryBatchItem } from "./components/BoardSummaryBatchModal";
+import { BoardSummaryBatchPage, type BoardSummaryBatchItem } from "./components/BoardSummaryBatchModal";
 const TranscriptSummaryModal = lazy(() => import("./components/TranscriptSummaryModal"));
 import { VideoPlayerModal } from "./components/VideoPlayerModal";
 import {
@@ -127,6 +127,8 @@ const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 const LEGACY_WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
 const LEGACY_PLAYBACK_RATE_STORAGE_KEY = "youtube-watch:playback-rate:v1";
 const BOARDS_PERSIST_DEBOUNCE_MS = 400;
+const APP_ROOT_PATH = "/";
+const BOARD_SUMMARIES_PATH = "/summaries";
 
 type VideoFilter = "all" | "new" | "watched";
 type PlaylistScope = "all" | "channel";
@@ -301,8 +303,13 @@ type BoardSummaryBatchProgress = {
   total: number;
 };
 
+type BoardSummaryBatchTarget = {
+  video: VideoItem;
+  column: ColumnState;
+};
+
 type PendingBoardSummaryBatch = {
-  targets: VideoItem[];
+  targets: BoardSummaryBatchTarget[];
   promptText: string;
   modelText: string;
   promptCacheKey: string;
@@ -1220,6 +1227,10 @@ function isFixtureModeEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("fixture") === "1";
 }
 
+function normalizeAppPath(pathname: string): string {
+  return pathname === BOARD_SUMMARIES_PATH ? BOARD_SUMMARIES_PATH : APP_ROOT_PATH;
+}
+
 function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string } {
   const storedBoards = readStoredBoards();
   if (storedBoards.length > 0) {
@@ -1547,6 +1558,9 @@ function App() {
   const activeLogoSpinCountRef = useRef(0);
   const initialBoardsState = fixtureMode ? createFixtureBoardsState() : getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
+  const [appPath, setAppPath] = useState<string>(() =>
+    typeof window === "undefined" ? APP_ROOT_PATH : normalizeAppPath(window.location.pathname)
+  );
   const [activeBoardId, setActiveBoardId] = useState<string>(
     initialBoardsState.activeBoardId
   );
@@ -1582,7 +1596,6 @@ function App() {
   });
   const [boardSummaryBatchItems, setBoardSummaryBatchItems] = useState<BoardSummaryBatchItem[]>([]);
   const [isBoardSummaryBatchPreparing, setIsBoardSummaryBatchPreparing] = useState(false);
-  const [isBoardSummaryBatchModalOpen, setIsBoardSummaryBatchModalOpen] = useState(false);
   const [isBoardSummaryBatchCopied, setIsBoardSummaryBatchCopied] = useState(false);
   const [pendingBoardSummaryBatch, setPendingBoardSummaryBatch] = useState<PendingBoardSummaryBatch | null>(null);
   const [bulkWatchColumnAction, setBulkWatchColumnAction] =
@@ -1695,6 +1708,21 @@ function App() {
   const savedBoard = boards.find((board) => board.kind === "saved") ?? null;
   const isSavedBoardActive = activeBoard?.kind === "saved";
   const savedBoardColumns = savedBoard?.columns ?? [];
+  const isBoardSummariesPage = appPath === BOARD_SUMMARIES_PATH;
+  const navigateToAppPath = useCallback((nextPath: string, replace = false): void => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const normalizedPath = normalizeAppPath(nextPath);
+    const nextUrl = `${normalizedPath}${window.location.search}${window.location.hash}`;
+    if (replace) {
+      window.history.replaceState({ appPath: normalizedPath }, "", nextUrl);
+    } else if (window.location.pathname !== normalizedPath) {
+      window.history.pushState({ appPath: normalizedPath }, "", nextUrl);
+    }
+    setAppPath(normalizedPath);
+  }, []);
+
   const editingBoard =
     (editingBoardId
       ? boards.find((board) => board.id === editingBoardId)
@@ -1822,6 +1850,27 @@ function App() {
     Math.min(columnScopeOptions.length, CHANNEL_SCOPE_DROPDOWN_MAX_VISIBLE) *
       BOARD_DROPDOWN_ITEM_HEIGHT +
     BOARD_DROPDOWN_PADDING;
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const nextUrl = `${appPath}${window.location.search}${window.location.hash}`;
+    window.history.replaceState({ appPath }, "", nextUrl);
+  }, [appPath]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handlePopState = (): void => {
+      setAppPath(normalizeAppPath(window.location.pathname));
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
+
   const activeBoardDurationBackfillIds = activeBoard
     ? collectBoardMissingDurationNewVideoIds(activeBoard)
     : [];
@@ -2525,27 +2574,28 @@ function App() {
       setBoardSummaryBatchItems([]);
       setIsBoardSummaryBatchPreparing(true);
       setPendingBoardSummaryBatch({
-        targets: shownVideosInBoardOrder.map(({ video }) => video),
+        targets: shownVideosInBoardOrder.map(({ video, column }) => ({ video, column })),
         promptText,
         modelText,
         promptCacheKey,
         promptHash
       });
-      setIsBoardSummaryBatchModalOpen(true);
     });
+    navigateToAppPath(BOARD_SUMMARIES_PATH);
   };
 
-  const handleBoardSummaryBatchModalOpenChange = (open: boolean): void => {
-    if (!open || !pendingBoardSummaryBatch) {
+  useEffect(() => {
+    if (!isBoardSummariesPage || !pendingBoardSummaryBatch) {
       return;
     }
 
     const { targets, promptText, modelText, promptCacheKey, promptHash } = pendingBoardSummaryBatch;
     setPendingBoardSummaryBatch(null);
 
-    const initialItems: BoardSummaryBatchItem[] = targets.map((video) => ({
+    const initialItems: BoardSummaryBatchItem[] = targets.map(({ video, column }) => ({
       videoId: video.videoId,
-      title: video.title,
+      video,
+      column,
       status: "loading",
       summary: "",
       keyPoints: [],
@@ -2578,7 +2628,8 @@ function App() {
       );
     };
 
-    const runSingle = async (video: VideoItem, index: number): Promise<void> => {
+    const runSingle = async (target: BoardSummaryBatchTarget, index: number): Promise<void> => {
+      const { video } = target;
       try {
         const directCachedSummary = readCachedSummary(video.videoId, promptHash);
         if (directCachedSummary) {
@@ -2679,7 +2730,7 @@ function App() {
         setIsBoardSummaryBatchRunning(false);
       }
     })();
-  };
+  }, [isBoardSummariesPage, pendingBoardSummaryBatch]);
 
   const copyBoardSummaryBatchToClipboard = async (): Promise<void> => {
     const normalizedItems = boardSummaryBatchItems
@@ -2699,7 +2750,7 @@ function App() {
                     .join("\n\n")
                     .trim();
         return {
-          title: item.title.toUpperCase(),
+          title: item.video.title.toUpperCase(),
           status: item.status,
           summary: item.summary.trim(),
           keyPoints,
@@ -4869,95 +4920,128 @@ function App() {
 
   return (
     <main className="app-shell">
-      <AppTopbar
-        buildInfoLabel={BUILD_INFO_LABEL}
-        lastApiQueryUnits={quotaEstimate.lastActionUnits}
-        totalApiQueryUnits={quotaEstimate.todayUnits}
-        topBarLogoSrc={TOP_BAR_LOGO_SRC}
-        isLogoSpinning={isLogoSpinning}
-        isSavedBoardActive={isSavedBoardActive}
-        topbarLastFetchLabel={topbarLastFetchLabel}
-        fetchAllColumns={fetchAllColumns}
-        activeBoardId={activeBoard?.id}
-        displayedBoards={displayedBoards}
-        newBoardOptionValue={NEW_BOARD_OPTION_VALUE}
-        boardDropdownListHeight={boardDropdownListHeight}
-        handleBoardSelectChange={handleBoardSelectChange}
-        blurActiveTopbarControl={blurActiveTopbarControl}
-        moveBoard={moveBoard}
-        openRenameBoardModal={openRenameBoardModal}
-        columnScopeFilter={columnScopeFilter}
-        columnScopeDropdownListHeight={channelScopeDropdownListHeight}
-        formatColumnScopeSummary={() =>
-          formatColumnScopeSummary(
-            columnScopeFilter,
-            isSavedBoardActive,
-            columns,
-            COLUMN_SCOPE_ALL,
-            COLUMN_SCOPE_NOT_EMPTY
-          )
-        }
-        columnScopeOptions={columnScopeOptions}
-        onColumnScopeChange={handleColumnScopeChange}
-        videoFilter={videoFilter}
-        onVideoFilterChange={handleVideoFilterSelect}
-        videoWindowDays={videoWindowDays}
-        onVideoWindowChange={(value) => handleVideoWindowSelect(value as VideoWindowFilter)}
-        savedVideoWindowSelectOptions={SAVED_VIDEO_WINDOW_SELECT_OPTIONS}
-        channelVideoWindowSelectOptions={CHANNEL_VIDEO_WINDOW_SELECT_OPTIONS}
-        videoDurationFilter={videoDurationFilter}
-        onVideoDurationChange={handleVideoDurationSelect}
-        formatDurationFilterSummary={() => formatDurationFilterSummary(videoDurationFilter)}
-        videoDurationFilterOptions={VIDEO_DURATION_FILTER_OPTIONS}
-        startBoardSummaryBatch={startBoardSummaryBatch}
-        isBoardSummaryBatchRunning={isBoardSummaryBatchRunning}
-        playAllVideos={playAllVideos}
-        copyAllShownBoardLinks={copyAllShownBoardLinks}
-        copiedLinkVideoId={copiedLinkVideoId}
-        openBulkWatchBoardAction={openBulkWatchBoardAction}
-        openMaintenanceMenuExport={handleExportBackup}
-        openMaintenanceMenuRestore={() => importInputRef.current?.click()}
-        openMaintenanceMenuLogs={() => setIsLogsModalOpen(true)}
-        openMaintenanceMenuBoardDurationBackfill={openBoardDurationBackfillModal}
-        openMaintenanceMenuRefreshBoardAvatars={() => void refreshBoardAvatars()}
-        openMaintenanceMenuDeleteSummaries={() => setIsDeleteSummariesModalOpen(true)}
-        canOpenMaintenanceBoardDurationBackfill={activeBoardDurationBackfillIds.length > 0}
-        canOpenMaintenanceRefreshBoardAvatars={activeBoardAvatarRefreshIds.length > 0}
-        shownVideosTotal={shownVideosTotal}
-        scrollToEdge={scrollToEdge}
-        scrollColumns={scrollColumns}
-      />
-
-      <Modal
-        title={isSavedBoardActive ? "Add Lists" : "Add Channels"}
-        open={isBulkModalOpen}
-        onCancel={() => {
-          setIsBulkModalOpen(false);
-          bulkInputDraftRef.current = bulkInput;
-        }}
-        onOk={handleBulkAddConfirm}
-        afterOpenChange={(open) => {
-          if (open) {
-            focusBulkModalInput();
-          }
-        }}
-        okText="Add"
-        className="add-channels-modal"
-      >
-        <Input.TextArea
-          key={`bulk-input-${isBulkModalOpen ? "open" : "closed"}-${activeBoardId}`}
-          defaultValue={bulkInput}
-          onChange={(event) => {
-            bulkInputDraftRef.current = event.target.value;
-          }}
-          autoSize={{ minRows: 6, maxRows: 12 }}
-          placeholder={
-            isSavedBoardActive
-              ? "List One\nList Two\nList Three"
-              : "@channelOne\n@channelTwo\n@channelThree"
-          }
+      {isBoardSummariesPage ? (
+        <BoardSummaryBatchPage
+          open={isBoardSummariesPage}
+          isPreparing={isBoardSummaryBatchPreparing}
+          isCopied={isBoardSummaryBatchCopied}
+          items={boardSummaryBatchItems}
+          onCopyAll={copyBoardSummaryBatchToClipboard}
+          activeBoardId={activeBoardId}
+          isSavedBoardActive={isSavedBoardActive}
+          copiedLinkVideoId={copiedLinkVideoId}
+          saveDestinationColumnsLength={saveDestinationColumns.length}
+          savedBoardColumnsLength={savedBoardColumns.length}
+          filteredVideosByColumnId={filteredVideosByColumnId}
+          isVideoMarkedWatched={(videoId) => isVideoMarkedWatched(watchedVideos, videoId)}
+          videoStatsBackfillInFlight={videoStatsBackfillInFlight}
+          videoMetaFeedbackById={videoMetaFeedbackById}
+          formatVideoMeta={formatVideoMeta}
+          backfillVideoStats={backfillVideoStats}
+          getVideoThumbnailSrc={getVideoThumbnailSrc}
+          onHandleVideoThumbnailError={handleVideoThumbnailError}
+          onOpenTranscript={openTranscript}
+          onCopyVideoLink={copyVideoLink}
+          onOpenMoveSavedVideoModal={openMoveSavedVideoModal}
+          onSetDeletingSavedVideo={setDeletingSavedVideo}
+          onMoveSavedVideoInManualOrder={moveSavedVideoInManualOrder}
+          onOpenSaveVideoModal={openSaveVideoModal}
+          onToggleWatched={toggleWatched}
+          onOpenVideo={openVideo}
         />
-      </Modal>
+      ) : (
+        <>
+          <AppTopbar
+            buildInfoLabel={BUILD_INFO_LABEL}
+            lastApiQueryUnits={quotaEstimate.lastActionUnits}
+            totalApiQueryUnits={quotaEstimate.todayUnits}
+            topBarLogoSrc={TOP_BAR_LOGO_SRC}
+            isLogoSpinning={isLogoSpinning}
+            isSavedBoardActive={isSavedBoardActive}
+            topbarLastFetchLabel={topbarLastFetchLabel}
+            fetchAllColumns={fetchAllColumns}
+            activeBoardId={activeBoard?.id}
+            displayedBoards={displayedBoards}
+            newBoardOptionValue={NEW_BOARD_OPTION_VALUE}
+            boardDropdownListHeight={boardDropdownListHeight}
+            handleBoardSelectChange={handleBoardSelectChange}
+            blurActiveTopbarControl={blurActiveTopbarControl}
+            moveBoard={moveBoard}
+            openRenameBoardModal={openRenameBoardModal}
+            columnScopeFilter={columnScopeFilter}
+            columnScopeDropdownListHeight={channelScopeDropdownListHeight}
+            formatColumnScopeSummary={() =>
+              formatColumnScopeSummary(
+                columnScopeFilter,
+                isSavedBoardActive,
+                columns,
+                COLUMN_SCOPE_ALL,
+                COLUMN_SCOPE_NOT_EMPTY
+              )
+            }
+            columnScopeOptions={columnScopeOptions}
+            onColumnScopeChange={handleColumnScopeChange}
+            videoFilter={videoFilter}
+            onVideoFilterChange={handleVideoFilterSelect}
+            videoWindowDays={videoWindowDays}
+            onVideoWindowChange={(value) => handleVideoWindowSelect(value as VideoWindowFilter)}
+            savedVideoWindowSelectOptions={SAVED_VIDEO_WINDOW_SELECT_OPTIONS}
+            channelVideoWindowSelectOptions={CHANNEL_VIDEO_WINDOW_SELECT_OPTIONS}
+            videoDurationFilter={videoDurationFilter}
+            onVideoDurationChange={handleVideoDurationSelect}
+            formatDurationFilterSummary={() => formatDurationFilterSummary(videoDurationFilter)}
+            videoDurationFilterOptions={VIDEO_DURATION_FILTER_OPTIONS}
+            startBoardSummaryBatch={startBoardSummaryBatch}
+            isBoardSummaryBatchRunning={isBoardSummaryBatchRunning}
+            playAllVideos={playAllVideos}
+            copyAllShownBoardLinks={copyAllShownBoardLinks}
+            copiedLinkVideoId={copiedLinkVideoId}
+            openBulkWatchBoardAction={openBulkWatchBoardAction}
+            openMaintenanceMenuExport={handleExportBackup}
+            openMaintenanceMenuRestore={() => importInputRef.current?.click()}
+            openMaintenanceMenuLogs={() => setIsLogsModalOpen(true)}
+            openMaintenanceMenuBoardDurationBackfill={openBoardDurationBackfillModal}
+            openMaintenanceMenuRefreshBoardAvatars={() => void refreshBoardAvatars()}
+            openMaintenanceMenuDeleteSummaries={() => setIsDeleteSummariesModalOpen(true)}
+            canOpenMaintenanceBoardDurationBackfill={activeBoardDurationBackfillIds.length > 0}
+            canOpenMaintenanceRefreshBoardAvatars={activeBoardAvatarRefreshIds.length > 0}
+            shownVideosTotal={shownVideosTotal}
+            scrollToEdge={scrollToEdge}
+            scrollColumns={scrollColumns}
+          />
+
+          <Modal
+            title={isSavedBoardActive ? "Add Lists" : "Add Channels"}
+            open={isBulkModalOpen}
+            onCancel={() => {
+              setIsBulkModalOpen(false);
+              bulkInputDraftRef.current = bulkInput;
+            }}
+            onOk={handleBulkAddConfirm}
+            afterOpenChange={(open) => {
+              if (open) {
+                focusBulkModalInput();
+              }
+            }}
+            okText="Add"
+            className="add-channels-modal"
+          >
+            <Input.TextArea
+              key={`bulk-input-${isBulkModalOpen ? "open" : "closed"}-${activeBoardId}`}
+              defaultValue={bulkInput}
+              onChange={(event) => {
+                bulkInputDraftRef.current = event.target.value;
+              }}
+              autoSize={{ minRows: 6, maxRows: 12 }}
+              placeholder={
+                isSavedBoardActive
+                  ? "List One\nList Two\nList Three"
+                  : "@channelOne\n@channelTwo\n@channelThree"
+              }
+            />
+          </Modal>
+        </>
+      )}
 
       <VideoPlayerModal
         activeVideo={activeVideo}
@@ -4978,17 +5062,6 @@ function App() {
         isSavedBoardActive={isSavedBoardActive}
         playlistOrderLabel={playlistOrderLabel}
         openActiveVideoOnYouTube={openActiveVideoOnYouTube}
-      />
-
-      <BoardSummaryBatchModal
-        open={isBoardSummaryBatchModalOpen}
-        boardName={activeBoard?.name ?? "BOARD"}
-        isPreparing={isBoardSummaryBatchPreparing}
-        isCopied={isBoardSummaryBatchCopied}
-        items={boardSummaryBatchItems}
-        onCopyAll={copyBoardSummaryBatchToClipboard}
-        onAfterOpenChange={handleBoardSummaryBatchModalOpenChange}
-        onCancel={() => setIsBoardSummaryBatchModalOpen(false)}
       />
 
       {transcriptVideo ? (
@@ -5040,57 +5113,59 @@ function App() {
         </Suspense>
       ) : null}
 
-      <BoardColumns
-        scrollRef={scrollRef}
-        activeBoardId={activeBoardId}
-        isSavedBoardActive={isSavedBoardActive}
-        columns={columns}
-        visibleColumns={visibleColumns}
-        hiddenColumns={hiddenColumns}
-        hiddenColumnIdSet={hiddenColumnIdSet}
-        brokenChannelThumbnailKeys={brokenChannelThumbnailKeys}
-        savedListPlaceholderIcon={SAVED_LIST_PLACEHOLDER_ICON}
-        channelPlaceholderIcon={CHANNEL_PLACEHOLDER_ICON}
-        copiedLinkVideoId={copiedLinkVideoId}
-        videoFilter={videoFilter}
-        saveDestinationColumnsLength={saveDestinationColumns.length}
-        moveDestinationBoardsLength={moveDestinationBoards.length}
-        savedBoardColumnsLength={savedBoardColumns.length}
-        filteredVideosByColumnId={filteredVideosByColumnId}
-        isVideoMarkedWatched={(videoId) => isVideoMarkedWatched(watchedVideos, videoId)}
-        videoStatsBackfillInFlight={videoStatsBackfillInFlight}
-        videoMetaFeedbackById={videoMetaFeedbackById}
-        formatVideoMeta={formatVideoMeta}
-        backfillVideoStats={backfillVideoStats}
-        getVideoThumbnailSrc={getVideoThumbnailSrc}
-        handleVideoThumbnailError={handleVideoThumbnailError}
-        moveColumnById={moveColumnById}
-        openMoveColumnModal={openMoveColumnModal}
-        setSavedSortMode={handleSetSavedSortMode}
-        runFetch={runFetch}
-        playChannelVideos={(column) => playChannelVideos(column as ColumnState)}
-        copyAllVideoLinks={copyAllVideoLinks}
-        openRemoveAllSavedColumnModal={(column) => openRemoveAllSavedColumnModal(column as ColumnState)}
-        openBulkWatchColumnAction={(column, videoIds, watched) =>
-          openBulkWatchColumnAction(column as ColumnState, videoIds, watched)
-        }
-        setDeletingColumnId={setDeletingColumnId}
-        hideVisibleColumn={hideVisibleColumn}
-        revealHiddenColumn={revealHiddenColumn}
-        openEditSavedListModal={(column) => openEditSavedListModal(column as ColumnState)}
-        openEditChannelModal={(column) => openEditChannelModal(column as ColumnState)}
-        openTranscript={openTranscript}
-        copyVideoLink={copyVideoLink}
-        openSaveVideoModal={openSaveVideoModal}
-        toggleWatched={toggleWatched}
-        openVideo={openVideo}
-        openMoveSavedVideoModal={openMoveSavedVideoModal}
-        setDeletingSavedVideo={setDeletingSavedVideo}
-        moveSavedVideoInManualOrder={moveSavedVideoInManualOrder}
-        addColumn={addColumn}
-        onLoadedChannelThumbnail={handleLoadedChannelThumbnail}
-        onBrokenChannelThumbnail={handleBrokenChannelThumbnail}
-      />
+      {!isBoardSummariesPage ? (
+        <BoardColumns
+          scrollRef={scrollRef}
+          activeBoardId={activeBoardId}
+          isSavedBoardActive={isSavedBoardActive}
+          columns={columns}
+          visibleColumns={visibleColumns}
+          hiddenColumns={hiddenColumns}
+          hiddenColumnIdSet={hiddenColumnIdSet}
+          brokenChannelThumbnailKeys={brokenChannelThumbnailKeys}
+          savedListPlaceholderIcon={SAVED_LIST_PLACEHOLDER_ICON}
+          channelPlaceholderIcon={CHANNEL_PLACEHOLDER_ICON}
+          copiedLinkVideoId={copiedLinkVideoId}
+          videoFilter={videoFilter}
+          saveDestinationColumnsLength={saveDestinationColumns.length}
+          moveDestinationBoardsLength={moveDestinationBoards.length}
+          savedBoardColumnsLength={savedBoardColumns.length}
+          filteredVideosByColumnId={filteredVideosByColumnId}
+          isVideoMarkedWatched={(videoId) => isVideoMarkedWatched(watchedVideos, videoId)}
+          videoStatsBackfillInFlight={videoStatsBackfillInFlight}
+          videoMetaFeedbackById={videoMetaFeedbackById}
+          formatVideoMeta={formatVideoMeta}
+          backfillVideoStats={backfillVideoStats}
+          getVideoThumbnailSrc={getVideoThumbnailSrc}
+          handleVideoThumbnailError={handleVideoThumbnailError}
+          moveColumnById={moveColumnById}
+          openMoveColumnModal={openMoveColumnModal}
+          setSavedSortMode={handleSetSavedSortMode}
+          runFetch={runFetch}
+          playChannelVideos={(column) => playChannelVideos(column as ColumnState)}
+          copyAllVideoLinks={copyAllVideoLinks}
+          openRemoveAllSavedColumnModal={(column) => openRemoveAllSavedColumnModal(column as ColumnState)}
+          openBulkWatchColumnAction={(column, videoIds, watched) =>
+            openBulkWatchColumnAction(column as ColumnState, videoIds, watched)
+          }
+          setDeletingColumnId={setDeletingColumnId}
+          hideVisibleColumn={hideVisibleColumn}
+          revealHiddenColumn={revealHiddenColumn}
+          openEditSavedListModal={(column) => openEditSavedListModal(column as ColumnState)}
+          openEditChannelModal={(column) => openEditChannelModal(column as ColumnState)}
+          openTranscript={openTranscript}
+          copyVideoLink={copyVideoLink}
+          openSaveVideoModal={openSaveVideoModal}
+          toggleWatched={toggleWatched}
+          openVideo={openVideo}
+          openMoveSavedVideoModal={openMoveSavedVideoModal}
+          setDeletingSavedVideo={setDeletingSavedVideo}
+          moveSavedVideoInManualOrder={moveSavedVideoInManualOrder}
+          addColumn={addColumn}
+          onLoadedChannelThumbnail={handleLoadedChannelThumbnail}
+          onBrokenChannelThumbnail={handleBrokenChannelThumbnail}
+        />
+      ) : null}
       <input
         ref={importInputRef}
         type="file"
