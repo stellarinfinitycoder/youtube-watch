@@ -22,7 +22,6 @@ type VideoPlayerModalProps = {
   playlistChannelLabel: string;
   isSavedBoardActive: boolean;
   playlistOrderLabel: string;
-  openActiveVideoOnYouTube: () => void;
 };
 
 function VideoPlayerModalComponent({
@@ -42,8 +41,7 @@ function VideoPlayerModalComponent({
   playlistScope,
   playlistChannelLabel,
   isSavedBoardActive,
-  playlistOrderLabel,
-  openActiveVideoOnYouTube
+  playlistOrderLabel
 }: VideoPlayerModalProps) {
   const embedUrl = activeVideo
     ? `https://www.youtube.com/embed/${activeVideo.videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
@@ -84,14 +82,6 @@ function VideoPlayerModalComponent({
                 onClick={toggleVideoFullscreen}
               >
                 <span className="btn-icon btn-icon-fullscreen" aria-hidden />
-              </Button>
-              <Button
-                htmlType="button"
-                className="column-move-btn link-copy-btn"
-                aria-label="Open on YouTube"
-                onClick={openActiveVideoOnYouTube}
-              >
-                YT
               </Button>
               <Button
                 htmlType="button"

@@ -2075,13 +2075,6 @@ function App() {
     setPendingBulkFetch([]);
   }, [pendingBulkFetch]);
 
-  const openActiveVideoOnYouTube = (): void => {
-    if (!activeVideo || typeof window === "undefined") {
-      return;
-    }
-    window.open(activeVideo.videoUrl, "_blank", "noopener,noreferrer");
-  };
-
   const setBoard = (
     boardId: string,
     updater: (state: BoardState) => BoardState
@@ -5061,7 +5054,6 @@ function App() {
         playlistChannelLabel={playlistChannelLabel}
         isSavedBoardActive={isSavedBoardActive}
         playlistOrderLabel={playlistOrderLabel}
-        openActiveVideoOnYouTube={openActiveVideoOnYouTube}
       />
 
       {transcriptVideo ? (
