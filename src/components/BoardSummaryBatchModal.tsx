@@ -1,8 +1,9 @@
-import { Button, Typography } from "antd";
+import { Button, Select, Typography } from "antd";
 import { memo, useEffect, useState } from "react";
 import type { VideoItem } from "../types/youtube";
 import { VideoTile } from "./VideoTile";
 import type { ColumnStateLike, InlineMetaFeedback } from "./boardColumnsShared";
+import type { SummaryFormat } from "../hooks/useTranscriptSummary";
 
 const { Text } = Typography;
 const BOARD_SUMMARY_BATCH_PAGE_SIZE = 5;
@@ -117,10 +118,13 @@ type BoardSummaryBatchPageProps = {
   timeFilterLabel: string;
   lengthFilterLabel: string;
   shownVideosLabel: string;
+  summaryFormats: SummaryFormat[];
+  selectedSummaryFormatId: string;
   isPreparing: boolean;
   isCopied: boolean;
   items: BoardSummaryBatchItem[];
   onCopyAll: () => Promise<void>;
+  onSummaryFormatChange: (formatId: string) => void;
   activeBoardId: string;
   isSavedBoardActive: boolean;
   copiedLinkVideoId: string | null;
@@ -156,10 +160,13 @@ function BoardSummaryBatchPageComponent({
   timeFilterLabel,
   lengthFilterLabel,
   shownVideosLabel,
+  summaryFormats,
+  selectedSummaryFormatId,
   isPreparing,
   isCopied,
   items,
   onCopyAll,
+  onSummaryFormatChange,
   activeBoardId,
   isSavedBoardActive,
   copiedLinkVideoId,
@@ -259,21 +266,41 @@ function BoardSummaryBatchPageComponent({
     <section className="board-summary-page">
       <div className="board-summary-page-header">
         <h1 className="board-summary-page-title">{pageTitle}</h1>
-        <Button
-          htmlType="button"
-          className={`column-move-btn transcript-copy-btn board-summary-copy-btn ${
-            isCopied ? "is-copied" : ""
-          }`}
-          aria-label="Copy all board summaries"
-          onClick={() => void onCopyAll()}
-          disabled={items.length === 0}
-        >
-          {isCopied ? (
-            <span className="btn-icon btn-icon-check" aria-hidden />
-          ) : (
-            <span className="btn-icon btn-icon-copy" aria-hidden />
-          )}
-        </Button>
+        <div className="board-summary-page-actions">
+          <Select<string>
+            value={selectedSummaryFormatId}
+            onChange={onSummaryFormatChange}
+            aria-label="Board summaries format"
+            className="video-filter-select board-summary-format-select"
+            popupClassName="summary-format-dropdown"
+            popupMatchSelectWidth={false}
+            optionLabelProp="title"
+            showSearch={false}
+          >
+            {summaryFormats.map((format) => (
+              <Select.Option key={format.id} value={format.id} title={format.name.toUpperCase()}>
+                <div className="board-option-row">
+                  <span className="board-option-name">{format.name.toUpperCase()}</span>
+                </div>
+              </Select.Option>
+            ))}
+          </Select>
+          <Button
+            htmlType="button"
+            className={`column-move-btn transcript-copy-btn board-summary-copy-btn ${
+              isCopied ? "is-copied" : ""
+            }`}
+            aria-label="Copy all board summaries"
+            onClick={() => void onCopyAll()}
+            disabled={items.length === 0}
+          >
+            {isCopied ? (
+              <span className="btn-icon btn-icon-check" aria-hidden />
+            ) : (
+              <span className="btn-icon btn-icon-copy" aria-hidden />
+            )}
+          </Button>
+        </div>
       </div>
 
       <div className="board-summary-page-panel">

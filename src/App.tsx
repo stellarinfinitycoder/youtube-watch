@@ -106,6 +106,7 @@ import {
   readCachedSummaryForTranscript,
   useTranscriptSummary,
   writeCachedSummaryForTranscript,
+  type SummaryFormat,
   type InlineMetaFeedback,
 } from "./hooks/useTranscriptSummary";
 import {
@@ -238,6 +239,7 @@ type BoardState = {
   name: string;
   kind: BoardKind;
   columns: ColumnState[];
+  boardSummaryFormatId: string;
   columnScopeFilter: string[];
   watchedVideos: WatchedVideosMap;
   viewCountRefreshedAtByVideoId: Record<string, number>;
@@ -252,6 +254,7 @@ type PersistedBoardState = {
   name: string;
   kind?: BoardKind;
   columns: PersistedColumnState[];
+  boardSummaryFormatId?: string;
   columnScopeFilter?: string | string[];
   watchedVideos: WatchedVideosMap;
   viewCountRefreshedAtByVideoId?: Record<string, number>;
@@ -897,6 +900,7 @@ function createBoardState(
     name,
     kind: "channels",
     columns: Array.from({ length: initialColumnCount }, () => createColumnState()),
+    boardSummaryFormatId: "",
     columnScopeFilter: [COLUMN_SCOPE_ALL],
     watchedVideos: {},
     viewCountRefreshedAtByVideoId: {},
@@ -1102,6 +1106,9 @@ function toPersistedBoards(boards: BoardState[]): PersistedBoardState[] {
       defaultPlaybackRate: board.defaultPlaybackRate
     };
 
+    if (board.boardSummaryFormatId.trim().length > 0) {
+      persisted.boardSummaryFormatId = board.boardSummaryFormatId.trim();
+    }
     if (!(board.columnScopeFilter.length === 1 && board.columnScopeFilter[0] === COLUMN_SCOPE_ALL)) {
       persisted.columnScopeFilter = board.columnScopeFilter;
     }
@@ -1123,6 +1130,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     name?: unknown;
     kind?: unknown;
     columns?: unknown;
+    boardSummaryFormatId?: unknown;
     columnScopeFilter?: unknown;
     watchedVideos?: unknown;
     viewCountRefreshedAtByVideoId?: unknown;
@@ -1150,6 +1158,8 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     name: candidate.name,
     kind,
     columns,
+    boardSummaryFormatId:
+      typeof candidate.boardSummaryFormatId === "string" ? candidate.boardSummaryFormatId : "",
     columnScopeFilter:
       typeof candidate.columnScopeFilter === "string" ||
       Array.isArray(candidate.columnScopeFilter)
@@ -1199,6 +1209,7 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
     id: board.id,
     kind: board.kind === "saved" ? "saved" : "channels",
     columns: restoredColumns,
+    boardSummaryFormatId: board.boardSummaryFormatId ?? "",
     columnScopeFilter: normalizeColumnScopeFilter(
       board.columnScopeFilter,
       restoredColumns,
@@ -1313,6 +1324,16 @@ function columnNeedsAvatarRecovery(
 
 function buildSummaryPromptCacheKey(prompt: string, model: string): string {
   return `${prompt}\n__MODEL__:${model || ""}`;
+}
+
+function resolveBoardSummaryFormat(
+  formats: SummaryFormat[],
+  preferredFormatId: string
+): SummaryFormat {
+  const preferred = preferredFormatId.trim()
+    ? formats.find((item) => item.id === preferredFormatId.trim()) ?? null
+    : null;
+  return preferred ?? getDefaultSummaryFormat(formats);
 }
 
 function escapeHtml(value: string): string {
@@ -1606,6 +1627,7 @@ function App() {
   const [isBoardSummaryBatchPreparing, setIsBoardSummaryBatchPreparing] = useState(false);
   const [isBoardSummaryBatchCopied, setIsBoardSummaryBatchCopied] = useState(false);
   const [pendingBoardSummaryBatch, setPendingBoardSummaryBatch] = useState<PendingBoardSummaryBatch | null>(null);
+  const boardSummaryBatchRunIdRef = useRef(0);
   const [pendingSummarySaveRemovalVideoId, setPendingSummarySaveRemovalVideoId] = useState<string | null>(null);
   const [bulkWatchColumnAction, setBulkWatchColumnAction] =
     useState<BulkWatchColumnAction | null>(null);
@@ -1842,6 +1864,10 @@ function App() {
     )?.label ?? String(videoWindowDays)
   );
   const boardSummaryShownVideosLabel = String(shownVideosTotal);
+  const boardSummarySelectedFormat = useMemo(
+    () => resolveBoardSummaryFormat(summaryFormats, activeBoard?.boardSummaryFormatId ?? ""),
+    [activeBoard?.boardSummaryFormatId, summaryFormats]
+  );
   const topbarLastFetchLabel = activeBoard
     ? formatLastFetchTooltipLabel(
         activeBoard.columns.reduce<number | null>((latest, column) => {
@@ -2576,16 +2602,19 @@ function App() {
     }
   };
 
-  const startBoardSummaryBatch = (): void => {
-    if (shownVideosInBoardOrder.length === 0 || isBoardSummaryBatchRunning) {
+  const launchBoardSummaryBatch = (
+    format: SummaryFormat,
+    options?: { navigate?: boolean }
+  ): void => {
+    if (shownVideosInBoardOrder.length === 0) {
       return;
     }
 
-    const defaultSummaryFormat = getDefaultSummaryFormat(summaryFormats);
-    const promptText = defaultSummaryFormat.prompt.trim() || DEFAULT_SUMMARY_PROMPT;
-    const modelText = (defaultSummaryFormat.model ?? "").trim();
+    const promptText = format.prompt.trim() || DEFAULT_SUMMARY_PROMPT;
+    const modelText = (format.model ?? "").trim();
     const promptCacheKey = buildSummaryPromptCacheKey(promptText, modelText);
     const promptHash = hashText(promptCacheKey);
+    boardSummaryBatchRunIdRef.current += 1;
 
     flushSync(() => {
       setIsBoardSummaryBatchRunning(true);
@@ -2600,7 +2629,37 @@ function App() {
         promptHash
       });
     });
-    navigateToAppPath(BOARD_SUMMARIES_PATH);
+    if (options?.navigate !== false) {
+      navigateToAppPath(BOARD_SUMMARIES_PATH);
+    }
+  };
+
+  const startBoardSummaryBatch = (): void => {
+    if (shownVideosInBoardOrder.length === 0 || isBoardSummaryBatchRunning || !activeBoard) {
+      return;
+    }
+
+    const resolvedSummaryFormat = resolveBoardSummaryFormat(
+      summaryFormats,
+      activeBoard.boardSummaryFormatId
+    );
+    launchBoardSummaryBatch(resolvedSummaryFormat);
+  };
+
+  const changeBoardSummaryFormat = (formatId: string): void => {
+    if (!activeBoard) {
+      return;
+    }
+    const nextFormat = summaryFormats.find((item) => item.id === formatId);
+    if (!nextFormat) {
+      return;
+    }
+
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      boardSummaryFormatId: formatId
+    }));
+    launchBoardSummaryBatch(nextFormat, { navigate: false });
   };
 
   useEffect(() => {
@@ -2608,6 +2667,7 @@ function App() {
       return;
     }
 
+    const runId = boardSummaryBatchRunIdRef.current;
     const { targets, promptText, modelText, promptCacheKey, promptHash } = pendingBoardSummaryBatch;
     setPendingBoardSummaryBatch(null);
 
@@ -2635,6 +2695,9 @@ function App() {
       index: number,
       next: Partial<BoardSummaryBatchItem> & Pick<BoardSummaryBatchItem, "status">
     ): void => {
+      if (boardSummaryBatchRunIdRef.current !== runId) {
+        return;
+      }
       setBoardSummaryBatchItems((previous) =>
         previous.map((item, itemIndex) =>
           itemIndex === index
@@ -2726,7 +2789,9 @@ function App() {
         });
       } finally {
         completed += 1;
-        setBoardSummaryBatchProgress({ completed, total: targets.length });
+        if (boardSummaryBatchRunIdRef.current === runId) {
+          setBoardSummaryBatchProgress({ completed, total: targets.length });
+        }
       }
     };
 
@@ -2745,8 +2810,10 @@ function App() {
         });
         await Promise.all(workers);
       } finally {
-        setIsBoardSummaryBatchPreparing(false);
-        setIsBoardSummaryBatchRunning(false);
+        if (boardSummaryBatchRunIdRef.current === runId) {
+          setIsBoardSummaryBatchPreparing(false);
+          setIsBoardSummaryBatchRunning(false);
+        }
       }
     })();
   }, [isBoardSummariesPage, pendingBoardSummaryBatch]);
@@ -5066,10 +5133,13 @@ function App() {
           timeFilterLabel={boardSummaryTimeFilterLabel}
           lengthFilterLabel={formatDurationFilterSummary(videoDurationFilter)}
           shownVideosLabel={boardSummaryShownVideosLabel}
+          summaryFormats={summaryFormats}
+          selectedSummaryFormatId={boardSummarySelectedFormat.id}
           isPreparing={isBoardSummaryBatchPreparing}
           isCopied={isBoardSummaryBatchCopied}
           items={boardSummaryBatchItems}
           onCopyAll={copyBoardSummaryBatchToClipboard}
+          onSummaryFormatChange={changeBoardSummaryFormat}
           activeBoardId={activeBoardId}
           isSavedBoardActive={isSavedBoardActive}
           copiedLinkVideoId={copiedLinkVideoId}

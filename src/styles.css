@@ -1730,6 +1730,22 @@ body {
   width: 100%;
 }
 
+.summary-format-dropdown .rc-virtual-list-scrollbar {
+  width: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.summary-format-dropdown .rc-virtual-list-holder {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.summary-format-dropdown .rc-virtual-list-holder::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 .transcript-prompt-btn.is-active {
   background: var(--amber) !important;
   color: #18110a !important;
@@ -1981,6 +1997,18 @@ body {
   letter-spacing: 0.04em;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.board-summary-page-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.board-summary-format-select {
+  min-width: 180px;
 }
 
 .board-summary-page-panel {
