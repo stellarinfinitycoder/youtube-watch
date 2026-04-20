@@ -46,6 +46,14 @@ function VideoPlayerModalComponent({
   const embedUrl = activeVideo
     ? `https://www.youtube.com/embed/${activeVideo.videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
     : "";
+  const isEmbedBlocked = activeVideo?.embeddable === false;
+
+  const openVideoOnYouTube = (): void => {
+    if (!activeVideo || typeof window === "undefined") {
+      return;
+    }
+    window.open(activeVideo.videoUrl, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <Modal
@@ -64,14 +72,30 @@ function VideoPlayerModalComponent({
       {activeVideo ? (
         <Space direction="vertical" size="middle" className="full-width">
           <div ref={videoModalWrapRef} className="video-modal-wrap" tabIndex={0}>
-            <iframe
-              className="video-modal-frame"
-              src={embedUrl}
-              title={activeVideo.title}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              referrerPolicy="strict-origin-when-cross-origin"
-            />
+            {isEmbedBlocked ? (
+              <div className="video-modal-fallback">
+                <Text className="video-modal-fallback-title">Playback is blocked in embeds</Text>
+                <Text className="video-modal-fallback-copy">
+                  This video still plays on YouTube, but the uploader has disabled embedded playback.
+                </Text>
+                <Button
+                  htmlType="button"
+                  className="video-watch-btn modal-save-btn"
+                  onClick={openVideoOnYouTube}
+                >
+                  Watch on YouTube
+                </Button>
+              </div>
+            ) : (
+              <iframe
+                className="video-modal-frame"
+                src={embedUrl}
+                title={activeVideo.title}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+            )}
           </div>
           <div className="speed-controls">
             <div className="speed-controls-left">

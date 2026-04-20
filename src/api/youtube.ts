@@ -4,7 +4,12 @@ import { normalizeHandle } from "../utils/handle";
 const DEFAULT_LIMIT = 25;
 type VideoStatsMap = Record<
   string,
-  { viewCount?: number; durationSeconds?: number; thumbnailUrl?: string }
+  {
+    viewCount?: number;
+    durationSeconds?: number;
+    thumbnailUrl?: string;
+    embeddable?: boolean;
+  }
 >;
 
 export type ChannelLookupResult = {

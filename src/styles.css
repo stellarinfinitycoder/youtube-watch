@@ -2221,6 +2221,37 @@ body {
   border: 0;
 }
 
+.video-modal-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  background:
+    radial-gradient(circle at top, rgba(212, 171, 78, 0.18), transparent 54%),
+    linear-gradient(180deg, rgba(13, 15, 20, 0.94), rgba(8, 10, 14, 0.98));
+}
+
+.video-modal-fallback-title,
+.video-modal-fallback-copy {
+  max-width: 520px;
+}
+
+.video-modal-fallback-title {
+  color: var(--sand);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.video-modal-fallback-copy {
+  color: var(--sand-muted);
+}
+
 .video-player-status-row {
   display: flex;
   align-items: center;

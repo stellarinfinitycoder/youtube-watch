@@ -3,6 +3,7 @@ export type VideoItem = {
   title: string;
   publishedAt: string;
   durationSeconds?: number | null;
+  embeddable?: boolean;
   thumbnailUrl: string;
   channelTitle: string;
   videoUrl: string;
@@ -118,6 +119,9 @@ type VideoMetadataResponse = {
         default?: { url?: string };
       };
     };
+    status?: {
+      embeddable?: boolean;
+    };
   }>;
 };
 
@@ -134,7 +138,12 @@ type VideoSnippet = {
 type ViewCountMap = Record<string, number>;
 type VideoMetadataMap = Record<
   string,
-  { viewCount?: number; durationSeconds?: number; thumbnailUrl?: string }
+  {
+    viewCount?: number;
+    durationSeconds?: number;
+    thumbnailUrl?: string;
+    embeddable?: boolean;
+  }
 >;
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
@@ -498,7 +507,7 @@ export async function fetchVideoStatsByVideoIds(videoIds: string[]): Promise<Vid
     }
 
     const metadataUrl = buildUrl("/videos", {
-      part: "statistics,contentDetails,snippet",
+      part: "statistics,contentDetails,snippet,status",
       id: chunk.join(","),
       key: apiKey
     });
@@ -511,12 +520,14 @@ export async function fetchVideoStatsByVideoIds(videoIds: string[]): Promise<Vid
       const parsedViewCount = Number(item.statistics?.viewCount ?? "");
       const parsedDurationSeconds = parseIsoDurationToSeconds(item.contentDetails?.duration);
       const parsedThumbnailUrl = normalizeImageUrl(pickVideoSnippetThumbnailUrl(item.snippet));
+      const embeddable = item.status?.embeddable;
       result[item.id] = {
         ...(Number.isFinite(parsedViewCount) ? { viewCount: parsedViewCount } : {}),
         ...(typeof parsedDurationSeconds === "number"
           ? { durationSeconds: parsedDurationSeconds }
           : {}),
-        ...(parsedThumbnailUrl ? { thumbnailUrl: parsedThumbnailUrl } : {})
+        ...(parsedThumbnailUrl ? { thumbnailUrl: parsedThumbnailUrl } : {}),
+        ...(typeof embeddable === "boolean" ? { embeddable } : {})
       };
     }
   }

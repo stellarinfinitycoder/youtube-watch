@@ -129,6 +129,12 @@ const LEGACY_PLAYBACK_RATE_STORAGE_KEY = "youtube-watch:playback-rate:v1";
 const BOARDS_PERSIST_DEBOUNCE_MS = 400;
 const APP_ROOT_PATH = "/";
 const BOARD_SUMMARIES_PATH = "/summaries";
+type VideoStatsPatch = {
+  viewCount?: number | null;
+  durationSeconds?: number | null;
+  thumbnailUrl?: string;
+  embeddable?: boolean;
+};
 
 type VideoFilter = "all" | "new" | "watched";
 type PlaylistScope = "all" | "channel";
@@ -2318,7 +2324,8 @@ function App() {
             mergedById.set(video.videoId, {
               ...video,
               viewCount: stats?.viewCount ?? video.viewCount,
-              durationSeconds: stats?.durationSeconds ?? video.durationSeconds ?? null
+              durationSeconds: stats?.durationSeconds ?? video.durationSeconds ?? null,
+              embeddable: stats?.embeddable ?? video.embeddable
             });
           });
 
@@ -3291,6 +3298,68 @@ function App() {
     return videoThumbnailFallbackUrlById[video.videoId] || video.thumbnailUrl;
   };
 
+  const applyVideoStatsPatch = (videoId: string, patch: VideoStatsPatch): void => {
+    if (Object.keys(patch).length === 0) {
+      return;
+    }
+
+    setBoards((previous) =>
+      previous.map((board) => ({
+        ...board,
+        columns: board.columns.map((column) => ({
+          ...column,
+          videos: column.videos.map((video) =>
+            video.videoId !== videoId
+              ? video
+              : {
+                  ...video,
+                  viewCount: patch.viewCount ?? video.viewCount,
+                  durationSeconds: patch.durationSeconds ?? video.durationSeconds ?? null,
+                  thumbnailUrl: patch.thumbnailUrl ?? video.thumbnailUrl,
+                  embeddable: patch.embeddable ?? video.embeddable
+                }
+          )
+        }))
+      }))
+    );
+    setActiveVideo((previous) =>
+      previous && previous.videoId === videoId
+        ? {
+            ...previous,
+            viewCount: patch.viewCount ?? previous.viewCount,
+            durationSeconds: patch.durationSeconds ?? previous.durationSeconds ?? null,
+            thumbnailUrl: patch.thumbnailUrl ?? previous.thumbnailUrl,
+            embeddable: patch.embeddable ?? previous.embeddable
+          }
+        : previous
+    );
+  };
+
+  useEffect(() => {
+    if (!activeVideo || typeof activeVideo.embeddable === "boolean") {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const stats = await fetchVideoStatsByVideoIds([activeVideo.videoId]);
+        const nextStats = stats[activeVideo.videoId];
+        if (!nextStats || cancelled) {
+          return;
+        }
+        applyVideoStatsPatch(activeVideo.videoId, nextStats);
+      } catch {
+        // Leave unknown embeddability videos on the normal iframe path.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeVideo]);
+
   const handleVideoThumbnailError = (video: VideoItem): void => {
     setVideoThumbnailFallbackUrlById((previous) => {
       if (previous[video.videoId]) {
@@ -3379,22 +3448,15 @@ function App() {
           : nextStats.durationSeconds ?? null;
       const nextViewCount = nextStats.viewCount ?? previousVideo?.viewCount;
       const nextThumbnailUrl = nextStats.thumbnailUrl ?? previousVideo?.thumbnailUrl;
+      applyVideoStatsPatch(videoId, {
+        viewCount: nextViewCount,
+        durationSeconds: nextDurationSeconds,
+        thumbnailUrl: nextThumbnailUrl,
+        embeddable: nextStats.embeddable
+      });
       setBoards((previous) =>
         previous.map((board) => ({
           ...board,
-          columns: board.columns.map((column) => ({
-            ...column,
-            videos: column.videos.map((video) =>
-              video.videoId !== videoId
-                ? video
-                : {
-                    ...video,
-                    viewCount: nextViewCount ?? video.viewCount,
-                    durationSeconds: nextDurationSeconds,
-                    thumbnailUrl: nextThumbnailUrl ?? video.thumbnailUrl
-                  }
-            )
-          })),
           viewCountRefreshedAtByVideoId: {
             ...board.viewCountRefreshedAtByVideoId,
             [videoId]: refreshedAt
@@ -3414,7 +3476,8 @@ function App() {
       const didChange =
         previousVideo?.viewCount !== nextViewCount ||
         previousVideo?.durationSeconds !== nextDurationSeconds ||
-        previousVideo?.thumbnailUrl !== nextThumbnailUrl;
+        previousVideo?.thumbnailUrl !== nextThumbnailUrl ||
+        previousVideo?.embeddable !== nextStats.embeddable;
       setInlineMetaFeedback(
         didChange ? "success" : typeof nextStats.durationSeconds === "number" ? "info" : "error",
         didChange

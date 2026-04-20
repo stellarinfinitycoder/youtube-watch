@@ -3,6 +3,7 @@ export type VideoItem = {
   title: string;
   publishedAt: string;
   durationSeconds?: number | null;
+  embeddable?: boolean;
   thumbnailUrl: string;
   channelTitle: string;
   videoUrl: string;
