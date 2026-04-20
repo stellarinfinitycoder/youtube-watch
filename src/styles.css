@@ -1647,6 +1647,43 @@ body {
   overflow-x: hidden;
 }
 
+.board-summary-aggregate-modal .transcript-modal-body {
+  margin-right: -24px;
+  padding: 0 36px 0 0;
+  scrollbar-gutter: stable;
+}
+
+.board-summary-aggregate-modal .transcript-modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.board-summary-aggregate-modal .transcript-modal-body::-webkit-scrollbar-track {
+  background: rgba(255, 143, 31, 0.08);
+  border-radius: 999px;
+}
+
+.board-summary-aggregate-modal .transcript-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 143, 31, 0.55);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.board-summary-aggregate-modal .transcript-modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 143, 31, 0.72);
+  background-clip: padding-box;
+}
+
+.board-summary-aggregate-modal .transcript-modal-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 143, 31, 0.55) rgba(255, 143, 31, 0.08);
+}
+
+.board-summary-aggregate-modal .transcript-modal-header-row {
+  padding-right: 0;
+  box-sizing: border-box;
+}
+
 .transcript-copy-btn {
   min-width: 42px;
 }

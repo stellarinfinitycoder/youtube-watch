@@ -124,6 +124,8 @@ type BoardSummaryBatchPageProps = {
   isCopied: boolean;
   items: BoardSummaryBatchItem[];
   onCopyAll: () => Promise<void>;
+  onSummarizeShown: (items: BoardSummaryBatchItem[]) => Promise<void>;
+  isSummarizingShown: boolean;
   onSummaryFormatChange: (formatId: string) => void;
   activeBoardId: string;
   isSavedBoardActive: boolean;
@@ -166,6 +168,8 @@ function BoardSummaryBatchPageComponent({
   isCopied,
   items,
   onCopyAll,
+  onSummarizeShown,
+  isSummarizingShown,
   onSummaryFormatChange,
   activeBoardId,
   isSavedBoardActive,
@@ -213,6 +217,11 @@ function BoardSummaryBatchPageComponent({
   const visibleItems = items.slice(0, visibleCount);
   const hasMoreItems = visibleCount < items.length;
   const isEmpty = !isPreparing && items.length === 0;
+  const hasSummarizableVisibleItems = visibleItems.some(
+    (item) =>
+      item.status === "done" &&
+      (item.summary.trim().length > 0 || item.keyPoints.some((point) => point.trim().length > 0))
+  );
 
   const copySummaryRow = async (item: BoardSummaryBatchItem): Promise<void> => {
     const text = formatBoardSummaryRowCopyText(item);
@@ -299,6 +308,18 @@ function BoardSummaryBatchPageComponent({
             ) : (
               <span className="btn-icon btn-icon-copy" aria-hidden />
             )}
+          </Button>
+          <Button
+            htmlType="button"
+            className="column-move-btn board-summary-copy-btn"
+            aria-label="Summarize shown summaries"
+            onClick={() => void onSummarizeShown(visibleItems)}
+            disabled={isSummarizingShown || !hasSummarizableVisibleItems}
+          >
+            <span
+              className={`btn-icon btn-icon-transcript ${isSummarizingShown ? "is-spinning" : ""}`}
+              aria-hidden
+            />
           </Button>
         </div>
       </div>

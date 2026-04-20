@@ -27,6 +27,7 @@ import fixtureBoards from "./fixtures/fixture-boards.json";
 import { AppTopbar } from "./components/AppTopbar";
 import { BoardColumns } from "./components/BoardColumns";
 import { BoardSummaryBatchPage, type BoardSummaryBatchItem } from "./components/BoardSummaryBatchModal";
+import { BoardSummaryAggregateModal } from "./components/BoardSummaryAggregateModal";
 const TranscriptSummaryModal = lazy(() => import("./components/TranscriptSummaryModal"));
 import { VideoPlayerModal } from "./components/VideoPlayerModal";
 import {
@@ -240,6 +241,7 @@ type BoardState = {
   kind: BoardKind;
   columns: ColumnState[];
   boardSummaryFormatId: string;
+  boardSummaryAggregateFormatId: string;
   columnScopeFilter: string[];
   watchedVideos: WatchedVideosMap;
   viewCountRefreshedAtByVideoId: Record<string, number>;
@@ -255,6 +257,7 @@ type PersistedBoardState = {
   kind?: BoardKind;
   columns: PersistedColumnState[];
   boardSummaryFormatId?: string;
+  boardSummaryAggregateFormatId?: string;
   columnScopeFilter?: string | string[];
   watchedVideos: WatchedVideosMap;
   viewCountRefreshedAtByVideoId?: Record<string, number>;
@@ -325,6 +328,17 @@ type PendingBoardSummaryBatch = {
   modelText: string;
   promptCacheKey: string;
   promptHash: string;
+};
+
+type BoardSummaryAggregateState = {
+  open: boolean;
+  loading: boolean;
+  error: string | null;
+  summaryText: string;
+  keyPoints: string[];
+  model: string;
+  selectedFormatId: string;
+  items: BoardSummaryBatchItem[];
 };
 
 type QuotaEstimateState = {
@@ -901,6 +915,7 @@ function createBoardState(
     kind: "channels",
     columns: Array.from({ length: initialColumnCount }, () => createColumnState()),
     boardSummaryFormatId: "",
+    boardSummaryAggregateFormatId: "",
     columnScopeFilter: [COLUMN_SCOPE_ALL],
     watchedVideos: {},
     viewCountRefreshedAtByVideoId: {},
@@ -1109,6 +1124,9 @@ function toPersistedBoards(boards: BoardState[]): PersistedBoardState[] {
     if (board.boardSummaryFormatId.trim().length > 0) {
       persisted.boardSummaryFormatId = board.boardSummaryFormatId.trim();
     }
+    if (board.boardSummaryAggregateFormatId.trim().length > 0) {
+      persisted.boardSummaryAggregateFormatId = board.boardSummaryAggregateFormatId.trim();
+    }
     if (!(board.columnScopeFilter.length === 1 && board.columnScopeFilter[0] === COLUMN_SCOPE_ALL)) {
       persisted.columnScopeFilter = board.columnScopeFilter;
     }
@@ -1131,6 +1149,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     kind?: unknown;
     columns?: unknown;
     boardSummaryFormatId?: unknown;
+    boardSummaryAggregateFormatId?: unknown;
     columnScopeFilter?: unknown;
     watchedVideos?: unknown;
     viewCountRefreshedAtByVideoId?: unknown;
@@ -1160,6 +1179,10 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     columns,
     boardSummaryFormatId:
       typeof candidate.boardSummaryFormatId === "string" ? candidate.boardSummaryFormatId : "",
+    boardSummaryAggregateFormatId:
+      typeof candidate.boardSummaryAggregateFormatId === "string"
+        ? candidate.boardSummaryAggregateFormatId
+        : "",
     columnScopeFilter:
       typeof candidate.columnScopeFilter === "string" ||
       Array.isArray(candidate.columnScopeFilter)
@@ -1210,6 +1233,7 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
     kind: board.kind === "saved" ? "saved" : "channels",
     columns: restoredColumns,
     boardSummaryFormatId: board.boardSummaryFormatId ?? "",
+    boardSummaryAggregateFormatId: board.boardSummaryAggregateFormatId ?? "",
     columnScopeFilter: normalizeColumnScopeFilter(
       board.columnScopeFilter,
       restoredColumns,
@@ -1230,7 +1254,7 @@ function readStoredBoards(): BoardState[] {
     .map((item) => sanitizePersistedBoard(item))
     .filter((item): item is PersistedBoardState => item !== null)
     .map((board) => fromPersistedBoard(board));
-  return ensureSavedBoard(boards);
+  return boards.length > 0 ? ensureSavedBoard(boards) : [];
 }
 
 function readStoredBoardRuntime(): PersistedBoardRuntimeState {
@@ -1627,7 +1651,11 @@ function App() {
   const [isBoardSummaryBatchPreparing, setIsBoardSummaryBatchPreparing] = useState(false);
   const [isBoardSummaryBatchCopied, setIsBoardSummaryBatchCopied] = useState(false);
   const [pendingBoardSummaryBatch, setPendingBoardSummaryBatch] = useState<PendingBoardSummaryBatch | null>(null);
+  const [boardSummaryAggregateState, setBoardSummaryAggregateState] =
+    useState<BoardSummaryAggregateState | null>(null);
+  const [isBoardSummaryAggregateCopied, setIsBoardSummaryAggregateCopied] = useState(false);
   const boardSummaryBatchRunIdRef = useRef(0);
+  const boardSummaryAggregateCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const [pendingSummarySaveRemovalVideoId, setPendingSummarySaveRemovalVideoId] = useState<string | null>(null);
   const [bulkWatchColumnAction, setBulkWatchColumnAction] =
     useState<BulkWatchColumnAction | null>(null);
@@ -2932,6 +2960,162 @@ function App() {
     boardSummaryCopyFeedbackTimeoutRef.current = window.setTimeout(() => {
       setIsBoardSummaryBatchCopied(false);
       boardSummaryCopyFeedbackTimeoutRef.current = null;
+    }, 1000);
+  };
+
+  const summarizeShownBoardSummaries = async (
+    items: BoardSummaryBatchItem[],
+    formatId?: string
+  ): Promise<void> => {
+    const completedItems = items.filter(
+      (item) =>
+        item.status === "done" &&
+        (item.summary.trim().length > 0 || item.keyPoints.some((point) => point.trim().length > 0))
+    );
+
+    const resolvedSummaryFormat = resolveBoardSummaryFormat(
+      summaryFormats,
+      formatId ?? activeBoard?.boardSummaryAggregateFormatId ?? ""
+    );
+    const selectedFormatId = resolvedSummaryFormat.id;
+
+    setIsBoardSummaryAggregateCopied(false);
+    setBoardSummaryAggregateState({
+      open: true,
+      loading: true,
+      error: null,
+      summaryText: "",
+      keyPoints: [],
+      model: "",
+      selectedFormatId,
+      items
+    });
+
+    if (completedItems.length === 0) {
+      setBoardSummaryAggregateState({
+        open: true,
+        loading: false,
+        error: "No completed summaries are currently shown.",
+        summaryText: "",
+        keyPoints: [],
+        model: "",
+        selectedFormatId,
+        items
+      });
+      return;
+    }
+
+    const sourceText = completedItems
+      .map((item) => {
+        const keyPoints = item.keyPoints
+          .map((point) => point.trim())
+          .filter((point) => point.length > 0);
+        return [
+          item.video.title.trim(),
+          item.summary.trim(),
+          keyPoints.length > 0 ? keyPoints.map((point) => `- ${point}`).join("\n") : ""
+        ]
+          .filter(Boolean)
+          .join("\n\n")
+          .trim();
+      })
+      .filter(Boolean)
+      .join("\n\n---\n\n");
+
+    const promptText = [
+      "Combine these video summaries into one concise overall summary.",
+      resolvedSummaryFormat.prompt.trim() || DEFAULT_SUMMARY_PROMPT
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    try {
+      const payload = await fetchSummaryByVideoInput({
+        videoId: `board-summary-aggregate:${activeBoardId}:${Date.now()}`,
+        transcriptText: sourceText,
+        mode: "short",
+        prompt: promptText,
+        model: (resolvedSummaryFormat.model ?? "").trim() || undefined
+      });
+      const nextSummary = payload.summary.trim();
+      const nextKeyPoints = payload.keyPoints
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+      if (!nextSummary && nextKeyPoints.length === 0) {
+        throw new Error("No summary.");
+      }
+      setBoardSummaryAggregateState({
+        open: true,
+        loading: false,
+        error: null,
+        summaryText: nextSummary,
+        keyPoints: nextKeyPoints,
+        model: payload.model,
+        selectedFormatId,
+        items
+      });
+    } catch (error) {
+      setBoardSummaryAggregateState({
+        open: true,
+        loading: false,
+        error: error instanceof Error ? error.message : "Summary failed.",
+        summaryText: "",
+        keyPoints: [],
+        model: "",
+        selectedFormatId,
+        items
+      });
+    }
+  };
+
+  const handleBoardSummaryAggregateFormatChange = (formatId: string): void => {
+    if (!activeBoard || !boardSummaryAggregateState) {
+      return;
+    }
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      boardSummaryAggregateFormatId: formatId
+    }));
+    void summarizeShownBoardSummaries(boardSummaryAggregateState.items, formatId);
+  };
+
+  const copyBoardSummaryAggregate = async (): Promise<void> => {
+    const state = boardSummaryAggregateState;
+    if (!state) {
+      return;
+    }
+    const text = [state.summaryText.trim(), state.keyPoints.map((point) => `- ${point}`).join("\n")]
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
+    if (!text) {
+      return;
+    }
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard API unavailable.");
+      }
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "true");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+
+    setIsBoardSummaryAggregateCopied(true);
+    if (boardSummaryAggregateCopyFeedbackTimeoutRef.current) {
+      window.clearTimeout(boardSummaryAggregateCopyFeedbackTimeoutRef.current);
+    }
+    boardSummaryAggregateCopyFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setIsBoardSummaryAggregateCopied(false);
+      boardSummaryAggregateCopyFeedbackTimeoutRef.current = null;
     }, 1000);
   };
 
@@ -5139,6 +5323,8 @@ function App() {
           isCopied={isBoardSummaryBatchCopied}
           items={boardSummaryBatchItems}
           onCopyAll={copyBoardSummaryBatchToClipboard}
+          onSummarizeShown={summarizeShownBoardSummaries}
+          isSummarizingShown={boardSummaryAggregateState?.loading === true}
           onSummaryFormatChange={changeBoardSummaryFormat}
           activeBoardId={activeBoardId}
           isSavedBoardActive={isSavedBoardActive}
@@ -5323,6 +5509,28 @@ function App() {
             deleteSummaryFormatAndClose={deleteSummaryFormatAndClose}
           />
         </Suspense>
+      ) : null}
+
+      {boardSummaryAggregateState?.open ? (
+        <BoardSummaryAggregateModal
+          open={boardSummaryAggregateState.open}
+          loading={boardSummaryAggregateState.loading}
+          error={boardSummaryAggregateState.error}
+          summaryText={boardSummaryAggregateState.summaryText}
+          summaryKeyPoints={boardSummaryAggregateState.keyPoints}
+          summaryModel={boardSummaryAggregateState.model}
+          summaryFormats={summaryFormats}
+          selectedSummaryFormatId={
+            resolveBoardSummaryFormat(
+              summaryFormats,
+              boardSummaryAggregateState.selectedFormatId
+            ).id
+          }
+          isCopied={isBoardSummaryAggregateCopied}
+          onSummaryFormatChange={handleBoardSummaryAggregateFormatChange}
+          onCancel={() => setBoardSummaryAggregateState(null)}
+          onCopy={copyBoardSummaryAggregate}
+        />
       ) : null}
 
       {!isBoardSummariesPage ? (
