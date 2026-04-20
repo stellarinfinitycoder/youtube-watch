@@ -1598,6 +1598,7 @@ function App() {
   const [isBoardSummaryBatchPreparing, setIsBoardSummaryBatchPreparing] = useState(false);
   const [isBoardSummaryBatchCopied, setIsBoardSummaryBatchCopied] = useState(false);
   const [pendingBoardSummaryBatch, setPendingBoardSummaryBatch] = useState<PendingBoardSummaryBatch | null>(null);
+  const [pendingSummarySaveRemovalVideoId, setPendingSummarySaveRemovalVideoId] = useState<string | null>(null);
   const [bulkWatchColumnAction, setBulkWatchColumnAction] =
     useState<BulkWatchColumnAction | null>(null);
   const [moveSavedVideoTargetColumnId, setMoveSavedVideoTargetColumnId] =
@@ -3284,6 +3285,23 @@ function App() {
     setWatchedStatusAcrossBoards([videoId], shouldMarkWatched);
   };
 
+  const removeBoardSummaryBatchItem = (videoId: string): void => {
+    setBoardSummaryBatchItems((previous) =>
+      previous.filter((item) => item.videoId !== videoId)
+    );
+  };
+
+  const toggleWatchedFromSummaries = (videoId: string): void => {
+    if (!activeBoard) {
+      return;
+    }
+    const shouldMarkWatched = !isVideoMarkedWatched(activeBoard.watchedVideos, videoId);
+    setWatchedStatusAcrossBoards([videoId], shouldMarkWatched);
+    if (shouldMarkWatched) {
+      removeBoardSummaryBatchItem(videoId);
+    }
+  };
+
   const backfillVideoStats = async (videoId: string): Promise<void> => {
     if (videoStatsBackfillInFlight.includes(videoId)) {
       return;
@@ -3870,6 +3888,7 @@ function App() {
     if (!savingVideo || !saveTargetColumnId || !savedBoard) {
       return;
     }
+    const savedVideoId = savingVideo.videoId;
     const now = Date.now();
     setBoards((previous) =>
       previous.map((board) => {
@@ -3900,12 +3919,21 @@ function App() {
     );
     setSavingVideo(null);
     setSaveTargetColumnId("");
+    if (pendingSummarySaveRemovalVideoId === savedVideoId) {
+      removeBoardSummaryBatchItem(savedVideoId);
+      setPendingSummarySaveRemovalVideoId(null);
+    }
   };
 
   const openEditSavedListModal = (column: ColumnState): void => {
     setEditingSavedListColumnId(column.id);
     setSavedListNameInput(column.handleInput);
     savedListNameDraftRef.current = column.handleInput;
+  };
+
+  const openSaveVideoModalFromSummaries = (video: VideoItem): void => {
+    setPendingSummarySaveRemovalVideoId(video.videoId);
+    openSaveVideoModal(video);
   };
 
   const openEditChannelModal = (column: ColumnState): void => {
@@ -4938,8 +4966,8 @@ function App() {
           onOpenMoveSavedVideoModal={openMoveSavedVideoModal}
           onSetDeletingSavedVideo={setDeletingSavedVideo}
           onMoveSavedVideoInManualOrder={moveSavedVideoInManualOrder}
-          onOpenSaveVideoModal={openSaveVideoModal}
-          onToggleWatched={toggleWatched}
+          onOpenSaveVideoModal={openSaveVideoModalFromSummaries}
+          onToggleWatched={toggleWatchedFromSummaries}
           onOpenVideo={openVideo}
         />
       ) : (
@@ -5401,6 +5429,7 @@ function App() {
         onCancel={() => {
           setSavingVideo(null);
           setSaveTargetColumnId("");
+          setPendingSummarySaveRemovalVideoId(null);
         }}
         onOk={saveVideoToSavedColumn}
         okText="Save"
