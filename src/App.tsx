@@ -996,7 +996,7 @@ function createFixtureBoardsState(): { boards: BoardState[]; activeBoardId: stri
     viewCountRefreshedAtByVideoId: {},
     videoFilter: "new",
     videoDurationFilter: ["all"],
-    videoWindowDays: DEFAULT_VIDEO_WINDOW_DAYS,
+    videoWindowDays: 90,
     defaultPlaybackRate: 1.5
   }, 0);
 
@@ -1827,6 +1827,21 @@ function App() {
     forceVisibleColumnIds: fetchAllVisibleColumnIds,
     errorVisibleColumnIds: fetchAllErrorVisibleColumnIds
   });
+  const boardSummaryChannelScopeLabel = formatColumnScopeSummary(
+    columnScopeFilter,
+    isSavedBoardActive,
+    activeBoard?.columns ?? [],
+    COLUMN_SCOPE_ALL,
+    COLUMN_SCOPE_NOT_EMPTY
+  );
+  const boardSummaryVideoFilterLabel =
+    videoFilter === "all" ? "ALL" : videoFilter === "watched" ? "WATCHED" : "NEW";
+  const boardSummaryTimeFilterLabel = (
+    (isSavedBoardActive ? SAVED_VIDEO_WINDOW_SELECT_OPTIONS : CHANNEL_VIDEO_WINDOW_SELECT_OPTIONS).find(
+      (option) => option.value === videoWindowDays
+    )?.label ?? String(videoWindowDays)
+  );
+  const boardSummaryShownVideosLabel = String(shownVideosTotal);
   const topbarLastFetchLabel = activeBoard
     ? formatLastFetchTooltipLabel(
         activeBoard.columns.reduce<number | null>((latest, column) => {
@@ -2759,13 +2774,14 @@ function App() {
           summary: item.summary.trim(),
           keyPoints,
           error: item.error,
-          textBody
+          textBody,
+          videoUrl: item.video.videoUrl.trim()
         };
       })
       .filter((item) => item.textBody.length > 0);
 
     const text = normalizedItems
-      .map((item) => `${item.title}\n\n${item.textBody}`.trim())
+      .map((item) => [item.title, item.textBody, item.videoUrl].filter(Boolean).join("\n\n").trim())
       .join("\n\n\n");
 
     const htmlBlocks = normalizedItems.map((item) => {
@@ -2794,11 +2810,15 @@ function App() {
                 .map((point) => `<li>${escapeHtml(point)}</li>`)
                 .join("")}</ul>`
             : "";
+        const linkHtml = item.videoUrl
+          ? `<p style="margin:10px 0 0;"><a href="${escapeHtml(item.videoUrl)}">${escapeHtml(item.videoUrl)}</a></p>`
+          : "";
         return [
           '<div>',
           `<h3 style="margin:0 0 8px;font-size:16px;font-weight:700;">${escapeHtml(item.title)}</h3>`,
           summaryHtml,
           keyPointsHtml,
+          linkHtml,
           "</div>"
         ].join("");
       });
@@ -5041,6 +5061,11 @@ function App() {
         <BoardSummaryBatchPage
           open={isBoardSummariesPage}
           boardName={activeBoard?.name ?? "BOARD"}
+          channelScopeLabel={boardSummaryChannelScopeLabel}
+          videoFilterLabel={boardSummaryVideoFilterLabel}
+          timeFilterLabel={boardSummaryTimeFilterLabel}
+          lengthFilterLabel={formatDurationFilterSummary(videoDurationFilter)}
+          shownVideosLabel={boardSummaryShownVideosLabel}
           isPreparing={isBoardSummaryBatchPreparing}
           isCopied={isBoardSummaryBatchCopied}
           items={boardSummaryBatchItems}

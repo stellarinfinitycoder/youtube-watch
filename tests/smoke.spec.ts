@@ -5,7 +5,7 @@ test.describe("fixture smoke", () => {
     await page.goto("/?fixture=1");
 
     await expect(page.getByTestId("topbar-board-select")).toBeVisible();
-    await expect(page.getByTestId("topbar-fetch-all")).toBeVisible();
+    await expect(page.getByTestId("topbar-logo")).toBeVisible();
 
     await page.getByTestId("column-fetch").first().click();
     await expect(page.locator("[data-video-id]").first()).toBeVisible();
@@ -21,7 +21,7 @@ test.describe("fixture smoke", () => {
     await firstColumn.getByTestId("column-play").click();
     await expect(page.locator(".video-player-modal .ant-modal-content")).toBeVisible();
 
-    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Close" }).click();
     await expect(page.locator(".video-player-modal .ant-modal-content")).toBeHidden();
   });
 
