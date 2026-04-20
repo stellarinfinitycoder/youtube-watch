@@ -308,6 +308,8 @@ type BoardSummaryBatchTarget = {
   column: ColumnState;
 };
 
+type ActiveVideoSource = "board" | "summaries" | null;
+
 type PendingBoardSummaryBatch = {
   targets: BoardSummaryBatchTarget[];
   promptText: string;
@@ -1635,6 +1637,7 @@ function App() {
   const [copiedLinkVideoId, setCopiedLinkVideoId] = useState<string | null>(null);
   const [bulkInput, setBulkInput] = useState("");
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
+  const [activeVideoSource, setActiveVideoSource] = useState<ActiveVideoSource>(null);
   const bulkInputDraftRef = useRef("");
   const renameBoardInputDraftRef = useRef("");
   const savedListNameDraftRef = useRef("");
@@ -3214,6 +3217,7 @@ function App() {
 
   const closeVideoModal = (): void => {
     setActiveVideo(null);
+    setActiveVideoSource(null);
   };
 
   const markWatchedAndAdvanceOrClose = (): void => {
@@ -3240,9 +3244,31 @@ function App() {
     setActiveVideo(playlistQueue[nextIndex]);
   };
 
+  const markWatchedAndAdvanceOrCloseFromSummaries = (): void => {
+    const currentVideo = activeVideo;
+    const shouldRemove =
+      currentVideo !== null &&
+      activeVideoSource === "summaries" &&
+      activeBoard !== null &&
+      !isVideoMarkedWatched(activeBoard.watchedVideos, currentVideo.videoId);
+
+    markWatchedAndAdvanceOrClose();
+
+    if (shouldRemove && currentVideo) {
+      removeBoardSummaryBatchItem(currentVideo.videoId);
+    }
+  };
+
   const openVideo = (video: VideoItem): void => {
     stopPlaylist();
     setActiveVideo(video);
+    setActiveVideoSource("board");
+  };
+
+  const openVideoFromSummaries = (video: VideoItem): void => {
+    stopPlaylist();
+    setActiveVideo(video);
+    setActiveVideoSource("summaries");
   };
 
   const toggleVideoFullscreen = (): void => {
@@ -3933,6 +3959,13 @@ function App() {
 
   const openSaveVideoModalFromSummaries = (video: VideoItem): void => {
     setPendingSummarySaveRemovalVideoId(video.videoId);
+    openSaveVideoModal(video);
+  };
+
+  const openSaveVideoModalFromPlayer = (video: VideoItem): void => {
+    if (activeVideoSource === "summaries") {
+      setPendingSummarySaveRemovalVideoId(video.videoId);
+    }
     openSaveVideoModal(video);
   };
 
@@ -4969,7 +5002,7 @@ function App() {
           onMoveSavedVideoInManualOrder={moveSavedVideoInManualOrder}
           onOpenSaveVideoModal={openSaveVideoModalFromSummaries}
           onToggleWatched={toggleWatchedFromSummaries}
-          onOpenVideo={openVideo}
+          onOpenVideo={openVideoFromSummaries}
         />
       ) : (
         <>
@@ -5073,9 +5106,9 @@ function App() {
         toggleVideoFullscreen={toggleVideoFullscreen}
         copiedLinkVideoId={copiedLinkVideoId}
         copyVideoLink={copyVideoLink}
-        openSaveVideoModal={openSaveVideoModal}
+        openSaveVideoModal={openSaveVideoModalFromPlayer}
         saveDestinationColumnsLength={saveDestinationColumns.length}
-        markWatchedAndAdvanceOrClose={markWatchedAndAdvanceOrClose}
+        markWatchedAndAdvanceOrClose={markWatchedAndAdvanceOrCloseFromSummaries}
         isPlaylistActive={isPlaylistActive}
         playlistIndex={playlistIndex}
         playlistQueueLength={playlistQueue.length}
