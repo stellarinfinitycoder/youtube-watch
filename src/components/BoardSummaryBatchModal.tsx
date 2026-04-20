@@ -19,6 +19,7 @@ export type BoardSummaryBatchItem = {
 
 type BoardSummaryBatchPageProps = {
   open: boolean;
+  boardName: string;
   isPreparing: boolean;
   isCopied: boolean;
   items: BoardSummaryBatchItem[];
@@ -52,6 +53,7 @@ type BoardSummaryBatchPageProps = {
 
 function BoardSummaryBatchPageComponent({
   open,
+  boardName,
   isPreparing,
   isCopied,
   items,
@@ -94,7 +96,7 @@ function BoardSummaryBatchPageComponent({
   return (
     <section className="board-summary-page">
       <div className="board-summary-page-header">
-        <h1 className="board-summary-page-title">SUMMARIES: AI</h1>
+        <h1 className="board-summary-page-title">{`SUMMARIES: ${boardName.toUpperCase()}`}</h1>
         <Button
           htmlType="button"
           className={`column-move-btn transcript-copy-btn board-summary-copy-btn ${

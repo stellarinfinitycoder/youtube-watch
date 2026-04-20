@@ -4944,6 +4944,7 @@ function App() {
       {isBoardSummariesPage ? (
         <BoardSummaryBatchPage
           open={isBoardSummariesPage}
+          boardName={activeBoard?.name ?? "BOARD"}
           isPreparing={isBoardSummaryBatchPreparing}
           isCopied={isBoardSummaryBatchCopied}
           items={boardSummaryBatchItems}
