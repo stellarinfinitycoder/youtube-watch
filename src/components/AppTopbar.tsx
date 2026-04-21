@@ -1,5 +1,5 @@
-import { memo } from "react";
-import { Button, Dropdown, Select, Tooltip, Typography } from "antd";
+import { memo, useState } from "react";
+import { Button, Dropdown, Modal, Select, Typography } from "antd";
 import type { MenuProps } from "antd";
 
 const { Text } = Typography;
@@ -111,9 +111,11 @@ function AppTopbarComponent({
   scrollToEdge,
   scrollColumns
 }: AppTopbarProps) {
+  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
   const maintenanceMenuItems: MenuProps["items"] = [
     { key: "backup", label: "BACKUP" },
     { key: "restore", label: "RESTORE" },
+    { key: "open-stats", label: "OPEN INFO" },
     { key: "logs", label: "OPEN LOGS" },
     {
       key: "board-duration",
@@ -129,6 +131,10 @@ function AppTopbarComponent({
   ];
 
   const handleMaintenanceMenuClick: MenuProps["onClick"] = ({ key }) => {
+    if (key === "open-stats") {
+      setIsStatsModalOpen(true);
+      return;
+    }
     if (key === "backup") {
       openMaintenanceMenuExport();
       return;
@@ -155,26 +161,8 @@ function AppTopbarComponent({
   };
 
   return (
-    <div className="columns-nav">
-      <Tooltip
-        title={
-          <>
-            <div>FETCH ALL NEW VIDEOS FOR THIS BOARD.</div>
-            <div style={{ height: 8 }} />
-            <div>LAST FETCH: {topbarLastFetchLabel}</div>
-            <div>LAST API QUERY: {lastApiQueryUnits}</div>
-            <div>TOTAL API QUERIES TODAY: {totalApiQueryUnits}</div>
-            <div style={{ height: 8 }} />
-            <div>MAX FETCHED VIDEO AGE: 90 DAYS</div>
-            <div>MAX WATCHED VIDEO AGE: 90 DAYS</div>
-            <div>MAX SAVED VIDEO AGE: UNLIMITED</div>
-            <div style={{ height: 8 }} />
-            <div>VERSION: {buildInfoLabel}</div>
-          </>
-        }
-        placement="bottom"
-        overlayClassName="fetch-all-tooltip"
-      >
+    <>
+      <div className="columns-nav">
         <img
           src={topBarLogoSrc}
           alt="Logo"
@@ -182,8 +170,7 @@ function AppTopbarComponent({
           onClick={fetchAllColumns}
           data-testid="topbar-logo"
         />
-      </Tooltip>
-      <Select<string>
+        <Select<string>
         value={activeBoardId}
         onChange={(value) => {
           handleBoardSelectChange(value);
@@ -404,7 +391,28 @@ function AppTopbarComponent({
       >
         {"»"}
       </Button>
-    </div>
+      </div>
+      <Modal
+        title="STATS"
+        open={isStatsModalOpen}
+        onCancel={() => setIsStatsModalOpen(false)}
+        footer={null}
+        width={420}
+        destroyOnHidden
+      >
+        <div className="stats-modal-body">
+          <div>LAST FETCH: {topbarLastFetchLabel}</div>
+          <div>LAST API QUERY: {lastApiQueryUnits}</div>
+          <div>TOTAL API QUERIES TODAY: {totalApiQueryUnits}</div>
+          <div style={{ height: 8 }} />
+          <div>MAX FETCHED VIDEO AGE: 90 DAYS</div>
+          <div>MAX WATCHED VIDEO AGE: 90 DAYS</div>
+          <div>MAX SAVED VIDEO AGE: UNLIMITED</div>
+          <div style={{ height: 8 }} />
+          <div>VERSION: {buildInfoLabel}</div>
+        </div>
+      </Modal>
+    </>
   );
 }
 

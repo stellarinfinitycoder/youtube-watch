@@ -63,6 +63,7 @@ If a step is skipped, state exactly why.
 
 - For architecture-sensitive tasks, consult `PROJECT_ARCHITECTURE_SHORT.md`.
 - For code-writing or code-modifying tasks, consult `CODE_CONVENTIONS_SHORT.md`.
+- For project-specific durable notes and previously established UI or validation decisions, consult `MEMORY.MD`.
 
 ## Instruction Priority
 
@@ -72,7 +73,8 @@ Follow this order of precedence:
 2. Repo guardrails (`AGENTS.md`)
 3. `PROJECT_ARCHITECTURE_SHORT.md`
 4. `CODE_CONVENTIONS_SHORT.md`
-5. Nearest local code pattern
+5. `MEMORY.MD`
+6. Nearest local code pattern
 
 ## Handoff Format
 
