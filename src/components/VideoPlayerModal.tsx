@@ -112,7 +112,7 @@ function VideoPlayerModalComponent({
         closeVideoModal();
       }}
       footer={null}
-      width={1125}
+      width={1520}
       zIndex={1000}
       destroyOnHidden
       className="video-player-modal"
