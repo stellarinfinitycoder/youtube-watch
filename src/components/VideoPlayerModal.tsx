@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { Button, Modal, Space, Typography } from "antd";
 import type { VideoItem } from "../types/youtube";
 
@@ -43,10 +43,58 @@ function VideoPlayerModalComponent({
   isSavedBoardActive,
   playlistOrderLabel
 }: VideoPlayerModalProps) {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const focusRetryTimeoutRef = useRef<number | null>(null);
+  const focusAnimationFrameRef = useRef<number | null>(null);
   const embedUrl = activeVideo
     ? `https://www.youtube.com/embed/${activeVideo.videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
     : "";
   const isEmbedBlocked = activeVideo?.embeddable === false;
+
+  const clearPendingFocus = useCallback((): void => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (focusAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(focusAnimationFrameRef.current);
+      focusAnimationFrameRef.current = null;
+    }
+    if (focusRetryTimeoutRef.current !== null) {
+      window.clearTimeout(focusRetryTimeoutRef.current);
+      focusRetryTimeoutRef.current = null;
+    }
+  }, []);
+
+  const focusEmbeddedPlayer = useCallback((attempt = 0): void => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    videoModalWrapRef.current?.focus();
+    focusAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      focusAnimationFrameRef.current = null;
+      iframeRef.current?.focus();
+
+      if (document.activeElement === iframeRef.current || attempt >= 2) {
+        return;
+      }
+
+      focusRetryTimeoutRef.current = window.setTimeout(() => {
+        focusRetryTimeoutRef.current = null;
+        focusEmbeddedPlayer(attempt + 1);
+      }, 120);
+    });
+  }, [videoModalWrapRef]);
+
+  useEffect(() => {
+    clearPendingFocus();
+    if (!activeVideo || isEmbedBlocked) {
+      return;
+    }
+    focusEmbeddedPlayer();
+  }, [activeVideo, isEmbedBlocked, clearPendingFocus, focusEmbeddedPlayer]);
+
+  useEffect(() => clearPendingFocus, [clearPendingFocus]);
 
   const openVideoOnYouTube = (): void => {
     if (!activeVideo || typeof window === "undefined") {
@@ -68,6 +116,12 @@ function VideoPlayerModalComponent({
       zIndex={1000}
       destroyOnHidden
       className="video-player-modal"
+      afterOpenChange={(open) => {
+        clearPendingFocus();
+        if (open && activeVideo && !isEmbedBlocked) {
+          focusEmbeddedPlayer();
+        }
+      }}
     >
       {activeVideo ? (
         <Space direction="vertical" size="middle" className="full-width">
@@ -88,12 +142,14 @@ function VideoPlayerModalComponent({
               </div>
             ) : (
               <iframe
+                ref={iframeRef}
                 className="video-modal-frame"
                 src={embedUrl}
                 title={activeVideo.title}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
                 referrerPolicy="strict-origin-when-cross-origin"
+                tabIndex={-1}
               />
             )}
           </div>
