@@ -40,6 +40,7 @@ describe("BoardSummaryBatchPage", () => {
     render(
       <BoardSummaryBatchPage
         open
+        onGoHome={() => undefined}
         boardName="Board"
         channelScopeLabel="All"
         videoFilterLabel="All"

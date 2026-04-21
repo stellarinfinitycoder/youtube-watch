@@ -5338,6 +5338,7 @@ function App() {
       {isBoardSummariesPage ? (
         <BoardSummaryBatchPage
           open={isBoardSummariesPage}
+          onGoHome={() => navigateToAppPath("/")}
           boardName={activeBoard?.name ?? "BOARD"}
           channelScopeLabel={boardSummaryChannelScopeLabel}
           videoFilterLabel={boardSummaryVideoFilterLabel}

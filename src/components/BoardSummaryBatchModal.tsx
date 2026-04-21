@@ -112,6 +112,7 @@ export type BoardSummaryBatchItem = {
 
 type BoardSummaryBatchPageProps = {
   open: boolean;
+  onGoHome: () => void;
   boardName: string;
   channelScopeLabel: string;
   videoFilterLabel: string;
@@ -156,6 +157,7 @@ type BoardSummaryBatchPageProps = {
 
 function BoardSummaryBatchPageComponent({
   open,
+  onGoHome,
   boardName,
   channelScopeLabel,
   videoFilterLabel,
@@ -274,7 +276,17 @@ function BoardSummaryBatchPageComponent({
   return (
     <section className="board-summary-page">
       <div className="board-summary-page-header">
-        <h1 className="board-summary-page-title">{pageTitle}</h1>
+        <div className="board-summary-page-title-row">
+          <Button
+            htmlType="button"
+            className="column-move-btn board-summary-home-btn"
+            aria-label="Return to board"
+            onClick={onGoHome}
+          >
+            <span className="btn-icon btn-icon-home" aria-hidden />
+          </Button>
+          <h1 className="board-summary-page-title">{pageTitle}</h1>
+        </div>
         <div className="board-summary-page-actions">
           <Select<string>
             value={selectedSummaryFormatId}

@@ -999,6 +999,11 @@ body {
   mask: url("/svg/btn-fullscreen.svg") center / contain no-repeat;
 }
 
+.btn-icon-home {
+  -webkit-mask: url("/svg/btn-home.svg") center / 18px 18px no-repeat;
+  mask: url("/svg/btn-home.svg") center / 18px 18px no-repeat;
+}
+
 .board-option-edit-btn .btn-icon {
   width: 14px;
   height: 14px;
@@ -2024,6 +2029,14 @@ body {
   margin: 0 auto;
 }
 
+.board-summary-page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .board-summary-page-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -2041,6 +2054,10 @@ body {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  flex: 0 0 auto;
+}
+
+.board-summary-home-btn.ant-btn {
   flex: 0 0 auto;
 }
 
