@@ -53,6 +53,8 @@ For setup/deploy steps, see [README.md](./README.md).
 ## State And Persistence
 
 - Board-centric runtime state is managed in the frontend and persisted via `src/storage/*`.
+- Heavy transcript and summary caches are stored client-side in IndexedDB.
+- Lightweight UI state such as boards, active board id, formats, and small preferences remains in `localStorage`.
 - Domain modules should remain side-effect-light and deterministic.
 - API handlers own server-side validation, auth checks, and integration boundaries.
 

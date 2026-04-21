@@ -37,11 +37,9 @@ import {
 } from "./storage/boardsStorage";
 import {
   SUMMARY_CACHE_KEY_PREFIX,
-  pruneSummaryCaches,
-  readCachedSummary,
+  readCachedSummary
 } from "./storage/summariesStorage";
 import {
-  pruneTranscriptCaches,
   readCachedTranscript,
   writeCachedTranscript
 } from "./storage/transcriptsStorage";
@@ -879,13 +877,6 @@ function readLegacyStoredColumns(): PersistedColumnState[] {
   } catch {
     return [];
   }
-}
-
-function pruneCachedTranscriptAndSummary(storage: Storage): boolean {
-  if (pruneTranscriptCaches(storage)) {
-    return true;
-  }
-  return pruneSummaryCaches(storage);
 }
 
 function hasLegacyStoredColumnsState(): boolean {
@@ -2098,7 +2089,7 @@ function App() {
         const didPersist = persistBoardsPayload(
           boardsPayload,
           activeBoardId,
-          pruneCachedTranscriptAndSummary
+          () => false
         );
         if (!didPersist) {
           // eslint-disable-next-line no-console
@@ -2743,7 +2734,7 @@ function App() {
     const runSingle = async (target: BoardSummaryBatchTarget, index: number): Promise<void> => {
       const { video } = target;
       try {
-        const directCachedSummary = readCachedSummary(video.videoId, promptHash);
+        const directCachedSummary = await readCachedSummary(video.videoId, promptHash);
         if (directCachedSummary) {
           updateBatchItem(index, {
             status: "done",
@@ -2754,7 +2745,7 @@ function App() {
           return;
         }
 
-        let transcriptText = readCachedTranscript(video.videoId) ?? "";
+        let transcriptText = (await readCachedTranscript(video.videoId)) ?? "";
         if (!transcriptText) {
           const transcriptPayload = await fetchTranscriptByVideoInput({
             videoId: video.videoId,
@@ -2764,10 +2755,14 @@ function App() {
           if (!transcriptText) {
             throw new Error("Transcript unavailable.");
           }
-          writeCachedTranscript(video.videoId, transcriptText);
+          await writeCachedTranscript(video.videoId, transcriptText);
         }
 
-        const cached = readCachedSummaryForTranscript(video.videoId, transcriptText, promptCacheKey);
+        const cached = await readCachedSummaryForTranscript(
+          video.videoId,
+          transcriptText,
+          promptCacheKey
+        );
         if (cached) {
           updateBatchItem(index, {
             status: "done",
@@ -2799,7 +2794,7 @@ function App() {
           throw new Error("No summary.");
         }
 
-        writeCachedSummaryForTranscript(video.videoId, transcriptText, promptCacheKey, {
+        await writeCachedSummaryForTranscript(video.videoId, transcriptText, promptCacheKey, {
           summary: nextSummary,
           keyPoints: nextKeyPoints,
           model: payload.model

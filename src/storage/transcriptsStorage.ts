@@ -1,3 +1,11 @@
+import {
+  deleteCacheValue,
+  getAllCacheKeys,
+  getCacheValue,
+  setCacheValue,
+  TRANSCRIPTS_STORE_NAME
+} from "./indexedDbCache";
+
 export const TRANSCRIPT_CACHE_KEY_PREFIX = "youtube-watch:transcript:v1:";
 export const TRANSCRIPT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -21,9 +29,90 @@ function getStorage(): Storage | null {
   }
 }
 
-export function readCachedTranscript(videoId: string): string | null {
+function normalizeTranscriptCacheEntry(input: unknown): TranscriptCacheEntry | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+  const parsed = input as Partial<TranscriptCacheEntry>;
+  if (typeof parsed.text !== "string" || typeof parsed.cachedAt !== "number") {
+    return null;
+  }
+  const text = parsed.text.trim();
+  return text
+    ? {
+        text,
+        cachedAt: parsed.cachedAt
+      }
+    : null;
+}
+
+let migrateTranscriptCachePromise: Promise<void> | null = null;
+
+async function migrateLegacyTranscriptCache(): Promise<void> {
+  if (migrateTranscriptCachePromise) {
+    return migrateTranscriptCachePromise;
+  }
+
+  migrateTranscriptCachePromise = (async () => {
+    const storage = getStorage();
+    if (!storage) {
+      return;
+    }
+    const keysToDelete: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (!key?.startsWith(TRANSCRIPT_CACHE_KEY_PREFIX)) {
+        continue;
+      }
+      keysToDelete.push(key);
+    }
+
+    for (const key of keysToDelete) {
+      const videoId = key.slice(TRANSCRIPT_CACHE_KEY_PREFIX.length).trim();
+      if (!videoId) {
+        storage.removeItem(key);
+        continue;
+      }
+      try {
+        const raw = storage.getItem(key);
+        if (!raw) {
+          storage.removeItem(key);
+          continue;
+        }
+        const parsed = normalizeTranscriptCacheEntry(JSON.parse(raw) as unknown);
+        if (!parsed || Date.now() - parsed.cachedAt > TRANSCRIPT_CACHE_TTL_MS) {
+          storage.removeItem(key);
+          continue;
+        }
+        await setCacheValue(TRANSCRIPTS_STORE_NAME, videoId, parsed);
+      } catch {
+        // Ignore malformed legacy entries.
+      } finally {
+        storage.removeItem(key);
+      }
+    }
+  })().finally(() => {
+    migrateTranscriptCachePromise = null;
+  });
+
+  return migrateTranscriptCachePromise;
+}
+
+export async function readCachedTranscript(videoId: string): Promise<string | null> {
   if (videoId.trim().length === 0) {
     return null;
+  }
+
+  await migrateLegacyTranscriptCache();
+  const parsed = normalizeTranscriptCacheEntry(
+    await getCacheValue<TranscriptCacheEntry>(TRANSCRIPTS_STORE_NAME, videoId)
+  );
+  if (parsed) {
+    if (Date.now() - parsed.cachedAt > TRANSCRIPT_CACHE_TTL_MS) {
+      await deleteCacheValue(TRANSCRIPTS_STORE_NAME, videoId);
+      return null;
+    }
+    return parsed.text;
   }
 
   const storage = getStorage();
@@ -36,24 +125,29 @@ export function readCachedTranscript(videoId: string): string | null {
     if (!raw) {
       return null;
     }
-    const parsed = JSON.parse(raw) as Partial<TranscriptCacheEntry>;
-    if (typeof parsed.text !== "string" || typeof parsed.cachedAt !== "number") {
+    const legacyParsed = normalizeTranscriptCacheEntry(JSON.parse(raw) as unknown);
+    if (!legacyParsed || Date.now() - legacyParsed.cachedAt > TRANSCRIPT_CACHE_TTL_MS) {
       storage.removeItem(`${TRANSCRIPT_CACHE_KEY_PREFIX}${videoId}`);
       return null;
     }
-    if (Date.now() - parsed.cachedAt > TRANSCRIPT_CACHE_TTL_MS) {
-      storage.removeItem(`${TRANSCRIPT_CACHE_KEY_PREFIX}${videoId}`);
-      return null;
-    }
-    const text = parsed.text.trim();
-    return text.length > 0 ? text : null;
+    return legacyParsed.text;
   } catch {
     return null;
   }
 }
 
-export function writeCachedTranscript(videoId: string, text: string): void {
+export async function writeCachedTranscript(videoId: string, text: string): Promise<void> {
   if (videoId.trim().length === 0) {
+    return;
+  }
+
+  await migrateLegacyTranscriptCache();
+  const payload: TranscriptCacheEntry = {
+    text,
+    cachedAt: Date.now()
+  };
+  const didWrite = await setCacheValue(TRANSCRIPTS_STORE_NAME, videoId, payload);
+  if (didWrite) {
     return;
   }
 
@@ -63,30 +157,40 @@ export function writeCachedTranscript(videoId: string, text: string): void {
   }
 
   try {
-    const payload: TranscriptCacheEntry = {
-      text,
-      cachedAt: Date.now()
-    };
     storage.setItem(`${TRANSCRIPT_CACHE_KEY_PREFIX}${videoId}`, JSON.stringify(payload));
   } catch {
-    // Ignore storage write failures.
+    // Ignore fallback write failures.
   }
 }
 
-export function pruneTranscriptCaches(storage: Storage): boolean {
-  const transcriptKeys: string[] = [];
+export async function pruneTranscriptCaches(): Promise<boolean> {
+  await migrateLegacyTranscriptCache();
+  const transcriptKeys = await getAllCacheKeys(TRANSCRIPTS_STORE_NAME);
 
-  for (let index = 0; index < storage.length; index += 1) {
-    const key = storage.key(index);
-    if (key?.startsWith(TRANSCRIPT_CACHE_KEY_PREFIX)) {
-      transcriptKeys.push(key);
-    }
+  if (transcriptKeys.length > 0) {
+    await Promise.all(
+      transcriptKeys.map((key) => deleteCacheValue(TRANSCRIPTS_STORE_NAME, key))
+    );
+    return true;
   }
 
-  if (transcriptKeys.length === 0) {
+  const storage = getStorage();
+  if (!storage) {
     return false;
   }
 
-  transcriptKeys.forEach((key) => storage.removeItem(key));
+  const legacyKeys: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(TRANSCRIPT_CACHE_KEY_PREFIX)) {
+      legacyKeys.push(key);
+    }
+  }
+
+  if (legacyKeys.length === 0) {
+    return false;
+  }
+
+  legacyKeys.forEach((key) => storage.removeItem(key));
   return true;
 }

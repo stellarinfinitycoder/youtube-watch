@@ -5,6 +5,7 @@ import {
   useTranscriptSummary,
   writeCachedSummaryForTranscript
 } from "./useTranscriptSummary";
+import { resetCacheDbForTests } from "../storage/indexedDbCache";
 import { writeCachedTranscript } from "../storage/transcriptsStorage";
 import type { VideoItem } from "../types/youtube";
 import {
@@ -33,14 +34,15 @@ const video: VideoItem = {
 const defaultPromptCacheKey = `${DEFAULT_SUMMARY_PROMPT}\n__MODEL__:`;
 
 describe("useTranscriptSummary", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     window.localStorage.clear();
     vi.clearAllMocks();
+    await resetCacheDbForTests();
   });
 
   it("opens from direct cached summary under loading state without transcript fetch", async () => {
-    writeCachedTranscript(video.videoId, "Cached transcript body");
-    writeCachedSummaryForTranscript(video.videoId, "Cached transcript body", defaultPromptCacheKey, {
+    await writeCachedTranscript(video.videoId, "Cached transcript body");
+    await writeCachedSummaryForTranscript(video.videoId, "Cached transcript body", defaultPromptCacheKey, {
       summary: "Cached summary body",
       keyPoints: ["Cached point"],
       model: "openai/gpt-4o-mini"
@@ -52,7 +54,9 @@ describe("useTranscriptSummary", () => {
       void result.current.openTranscript(video);
     });
 
-    expect(result.current.summaryHydrating).toBe(true);
+    await waitFor(() => {
+      expect(result.current.summaryHydrating).toBe(true);
+    });
     expect(result.current.transcriptLoading).toBe(false);
     expect(fetchTranscriptMock).not.toHaveBeenCalled();
 
@@ -69,7 +73,7 @@ describe("useTranscriptSummary", () => {
   });
 
   it("opens from direct cached summary without transcript fetch, then lazily fetches transcript on transcript view", async () => {
-    writeCachedSummaryForTranscript(video.videoId, "Fetched transcript body", defaultPromptCacheKey, {
+    await writeCachedSummaryForTranscript(video.videoId, "Fetched transcript body", defaultPromptCacheKey, {
       summary: "Fetched summary body",
       keyPoints: ["Fetched point"],
       model: "openai/gpt-4o-mini"
@@ -88,7 +92,9 @@ describe("useTranscriptSummary", () => {
       void result.current.openTranscript(video);
     });
 
-    expect(result.current.summaryHydrating).toBe(true);
+    await waitFor(() => {
+      expect(result.current.summaryHydrating).toBe(true);
+    });
     expect(result.current.transcriptHydrating).toBe(false);
     expect(result.current.transcriptLoading).toBe(false);
     expect(fetchTranscriptMock).not.toHaveBeenCalled();
@@ -104,7 +110,9 @@ describe("useTranscriptSummary", () => {
       void result.current.handleTranscriptViewModeChange("transcript");
     });
 
-    expect(result.current.transcriptLoading).toBe(true);
+    await waitFor(() => {
+      expect(result.current.transcriptLoading).toBe(true);
+    });
     expect(fetchTranscriptMock).toHaveBeenCalledWith({
       videoId: video.videoId,
       videoUrl: video.videoUrl
@@ -125,7 +133,7 @@ describe("useTranscriptSummary", () => {
   });
 
   it("regenerates from direct cached summary by fetching transcript first, then summary", async () => {
-    writeCachedSummaryForTranscript(video.videoId, "Fetched transcript body", defaultPromptCacheKey, {
+    await writeCachedSummaryForTranscript(video.videoId, "Fetched transcript body", defaultPromptCacheKey, {
       summary: "Fetched summary body",
       keyPoints: ["Fetched point"],
       model: "openai/gpt-4o-mini"
@@ -206,7 +214,7 @@ describe("useTranscriptSummary", () => {
   });
 
   it("hydrates cached transcript without transcript fetch and only summarizes when no cached summary matches", async () => {
-    writeCachedTranscript(video.videoId, "Cached transcript body");
+    await writeCachedTranscript(video.videoId, "Cached transcript body");
     let resolveSummary:
       | ((value: { summary: string; keyPoints: string[]; model: string }) => void)
       | null = null;
@@ -223,7 +231,9 @@ describe("useTranscriptSummary", () => {
       void result.current.openTranscript(video);
     });
 
-    expect(result.current.transcriptHydrating).toBe(true);
+    await waitFor(() => {
+      expect(result.current.transcriptHydrating).toBe(true);
+    });
     expect(result.current.transcriptLoading).toBe(false);
 
     await act(async () => {
@@ -279,7 +289,9 @@ describe("useTranscriptSummary", () => {
 
     expect(result.current.summaryHydrating).toBe(false);
     expect(result.current.transcriptHydrating).toBe(false);
-    expect(result.current.transcriptLoading).toBe(true);
+    await waitFor(() => {
+      expect(result.current.transcriptLoading).toBe(true);
+    });
     expect(fetchTranscriptMock).toHaveBeenCalledWith({
       videoId: video.videoId,
       videoUrl: video.videoUrl

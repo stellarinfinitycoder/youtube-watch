@@ -234,20 +234,21 @@ export function readCachedSummaryForTranscript(
   videoId: string,
   transcriptText: string,
   promptText: string
-): SummaryCacheEntry | null {
+): Promise<SummaryCacheEntry | null> {
   if (typeof window === "undefined" || videoId.trim().length === 0) {
-    return null;
+    return Promise.resolve(null);
   }
   const promptHash = hashText(promptText.trim());
   const transcriptHash = hashText(transcriptText.trim());
-  const parsed = readCachedSummaryEntry(videoId, promptHash);
-  if (!parsed) {
-    return null;
-  }
-  if (parsed.transcriptHash !== transcriptHash || parsed.promptHash !== promptHash) {
-    return null;
-  }
-  return parsed;
+  return readCachedSummaryEntry(videoId, promptHash).then((parsed) => {
+    if (!parsed) {
+      return null;
+    }
+    if (parsed.transcriptHash !== transcriptHash || parsed.promptHash !== promptHash) {
+      return null;
+    }
+    return parsed;
+  });
 }
 
 export function writeCachedSummaryForTranscript(
@@ -255,9 +256,9 @@ export function writeCachedSummaryForTranscript(
   transcriptText: string,
   promptText: string,
   payload: { summary: string; keyPoints: string[]; model: string }
-): void {
+): Promise<void> {
   if (typeof window === "undefined" || videoId.trim().length === 0) {
-    return;
+    return Promise.resolve();
   }
   const promptHash = hashText(promptText.trim());
   const cacheEntry: SummaryCacheEntry = {
@@ -268,7 +269,7 @@ export function writeCachedSummaryForTranscript(
     promptHash,
     cachedAt: Date.now()
   };
-  writeCachedSummaryEntry(videoId, promptHash, cacheEntry);
+  return writeCachedSummaryEntry(videoId, promptHash, cacheEntry);
 }
 
 function normalizePublishStatusText(value: string): string {
@@ -383,23 +384,23 @@ export function useTranscriptSummary() {
     setSummaryModel(cached.model);
   };
 
-  const readDirectCachedSummary = (
+  const readDirectCachedSummary = async (
     videoId: string,
     promptText: string,
     modelText: string
-  ): SummaryCacheEntry | null => {
+  ): Promise<SummaryCacheEntry | null> => {
     const promptCacheKey = `${promptText}\n__MODEL__:${modelText || ""}`;
     const promptHash = hashText(promptCacheKey);
     return readCachedSummaryEntry(videoId, promptHash);
   };
 
-  const hydrateCachedSummary = (
+  const hydrateCachedSummary = async (
     videoId: string,
     transcriptBody: string,
     promptText: string,
     modelText: string
-  ): boolean => {
-    const cached = readCachedSummaryForTranscript(
+  ): Promise<boolean> => {
+    const cached = await readCachedSummaryForTranscript(
       videoId,
       transcriptBody,
       `${promptText}\n__MODEL__:${modelText || ""}`
@@ -425,10 +426,10 @@ export function useTranscriptSummary() {
       return inMemoryTranscript;
     }
 
-    const cached = readCachedTranscript(video.videoId);
-      if (cached) {
-        setTranscriptHydrating(true);
-        await yieldForHydration(CACHE_HYDRATION_FEEDBACK_MS);
+    const cached = await readCachedTranscript(video.videoId);
+    if (cached) {
+      setTranscriptHydrating(true);
+      await yieldForHydration(CACHE_HYDRATION_FEEDBACK_MS);
       if (requestId !== transcriptRequestIdRef.current) {
         return null;
       }
@@ -454,7 +455,7 @@ export function useTranscriptSummary() {
       }
       setTranscriptText(text);
       setTranscriptError(null);
-      writeCachedTranscript(video.videoId, text);
+      await writeCachedTranscript(video.videoId, text);
       return text;
     } catch (error) {
       if (requestId !== transcriptRequestIdRef.current) {
@@ -512,7 +513,7 @@ export function useTranscriptSummary() {
     transcriptRequestIdRef.current += 1;
     const requestId = transcriptRequestIdRef.current;
     try {
-      const directCachedSummary = readDirectCachedSummary(
+      const directCachedSummary = await readDirectCachedSummary(
         video.videoId,
         currentDefaultSummaryFormat.prompt,
         (currentDefaultSummaryFormat.model ?? "").trim()
@@ -531,7 +532,7 @@ export function useTranscriptSummary() {
       if (!text) {
         return;
       }
-      hydrateCachedSummary(
+      await hydrateCachedSummary(
         video.videoId,
         text,
         currentDefaultSummaryFormat.prompt,
@@ -576,7 +577,7 @@ export function useTranscriptSummary() {
       : activeSummaryModel;
 
     if (!options?.force) {
-      const directCachedSummary = readDirectCachedSummary(
+      const directCachedSummary = await readDirectCachedSummary(
         transcriptVideo.videoId,
         promptToUse,
         modelToUse
@@ -624,7 +625,7 @@ export function useTranscriptSummary() {
       setSummaryText(nextSummary);
       setSummaryKeyPoints(nextKeyPoints);
       setSummaryModel(payload.model);
-      writeCachedSummaryForTranscript(
+      await writeCachedSummaryForTranscript(
         transcriptVideo.videoId,
         ensuredTranscriptText,
         `${promptToUse}\n__MODEL__:${modelToUse || ""}`,
