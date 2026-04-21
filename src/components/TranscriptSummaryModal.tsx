@@ -16,6 +16,8 @@ const SummaryMarkdownRenderer = lazy(() => import("./SummaryMarkdownRenderer"));
 
 type TranscriptSummaryModalProps = {
   transcriptVideo: VideoItem;
+  summaryHydrating: boolean;
+  transcriptHydrating: boolean;
   transcriptLoading: boolean;
   transcriptText: string;
   transcriptError: string | null;
@@ -62,6 +64,8 @@ type TranscriptSummaryModalProps = {
 function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
   const {
     transcriptVideo,
+    summaryHydrating,
+    transcriptHydrating,
     transcriptLoading,
     transcriptText,
     transcriptError,
@@ -125,6 +129,9 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
   const showPublishButton =
     transcriptViewMode === "summary" &&
     (hasPublishableSummary || isPublishingSummary || publishSummaryFeedback !== null);
+  const hasSummaryContent = plainSummaryText.length > 0 || plainSummaryPoints.length > 0;
+  const isSummaryModeSelectorUsable =
+    transcriptViewMode === "summary" && !isSummaryPromptEditMode && hasSummaryContent;
 
   return (
     <Modal
@@ -134,7 +141,10 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
             {transcriptLoading ? (
               <Text className="video-meta-feedback is-info">FETCHING TRANSCRIPT...</Text>
             ) : null}
-            {!transcriptLoading && summaryLoading ? (
+            {!transcriptLoading && (summaryHydrating || transcriptHydrating) ? (
+              <Text className="video-meta-feedback is-info">LOADING...</Text>
+            ) : null}
+            {!transcriptLoading && !summaryHydrating && !transcriptHydrating && summaryLoading ? (
               <Text className="video-meta-feedback is-info">SUMMARIZING...</Text>
             ) : null}
             {publishSummaryFeedback ? (
@@ -174,13 +184,21 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                 popupClassName="summary-format-dropdown"
                 optionLabelProp="title"
                 disabled={
-                  isSummaryBusy ||
-                  transcriptLoading ||
-                  !!transcriptError ||
-                  transcriptText.trim().length === 0
+                  !isSummaryModeSelectorUsable &&
+                  (isSummaryBusy ||
+                    summaryHydrating ||
+                    transcriptHydrating ||
+                    transcriptLoading ||
+                    (transcriptViewMode === "transcript" &&
+                      !!transcriptError &&
+                      transcriptText.trim().length === 0))
                 }
               >
-                <Select.Option value="transcript" title="TRANSCRIPT">
+                <Select.Option
+                  value="transcript"
+                  title="TRANSCRIPT"
+                  disabled={summaryHydrating || transcriptHydrating || transcriptLoading}
+                >
                   TRANSCRIPT
                 </Select.Option>
                 {summaryFormats.map((format, formatIndex) => (
@@ -263,9 +281,15 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                     ? true
                     : transcriptViewMode === "summary"
                       ? summaryLoading ||
+                        summaryHydrating ||
+                        transcriptHydrating ||
                         !!summaryError ||
                         (summaryText.trim().length === 0 && summaryKeyPoints.length === 0)
-                      : transcriptLoading || !!transcriptError || transcriptText.trim().length === 0
+                      : summaryHydrating ||
+                        transcriptHydrating ||
+                        transcriptLoading ||
+                        !!transcriptError ||
+                        transcriptText.trim().length === 0
                 }
               >
                 {isTranscriptCopied ? (
@@ -283,9 +307,10 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                   transcriptViewMode === "transcript" ||
                   isSummaryBusy ||
                   isSummaryPromptEditMode ||
+                  summaryHydrating ||
+                  transcriptHydrating ||
                   transcriptLoading ||
-                  !!transcriptError ||
-                  transcriptText.trim().length === 0
+                  !!transcriptError
                 }
               >
                 <span className="btn-icon btn-icon-fetch" aria-hidden />
@@ -300,6 +325,8 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                     isSummaryBusy ||
                     isSummaryPromptEditMode ||
                     isPublishingSummary ||
+                    summaryHydrating ||
+                    transcriptHydrating ||
                     transcriptLoading ||
                     !!transcriptError ||
                     !hasPublishableSummary

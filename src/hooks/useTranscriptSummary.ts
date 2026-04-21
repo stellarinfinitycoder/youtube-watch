@@ -27,6 +27,7 @@ export const DEFAULT_SUMMARY_PROMPT = [
 ].join(" ");
 
 const DEFAULT_SUMMARY_FORMAT_NAME = "SUMMARY";
+const CACHE_HYDRATION_FEEDBACK_MS = 120;
 
 const DEFAULT_SUMMARY_MODEL_PRESETS: Array<{ value: string; label: string }> = [
   { value: "", label: "DEFAULT (ENV)" },
@@ -289,6 +290,8 @@ export function useTranscriptSummary() {
   const summaryFormatModelDraftRef = useRef("");
 
   const [transcriptVideo, setTranscriptVideo] = useState<VideoItem | null>(null);
+  const [summaryHydrating, setSummaryHydrating] = useState(false);
+  const [transcriptHydrating, setTranscriptHydrating] = useState(false);
   const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [transcriptText, setTranscriptText] = useState("");
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
@@ -368,6 +371,28 @@ export function useTranscriptSummary() {
     setPublishSummaryFeedback(null);
   };
 
+  const yieldForHydration = async (minimumMs = 0): Promise<void> =>
+    new Promise((resolve) => {
+      window.setTimeout(resolve, minimumMs);
+    });
+
+  const hydrateSummaryCacheEntry = (cached: SummaryCacheEntry): void => {
+    setSummaryText(cached.summary);
+    setSummaryKeyPoints(cached.keyPoints);
+    setSummaryError(null);
+    setSummaryModel(cached.model);
+  };
+
+  const readDirectCachedSummary = (
+    videoId: string,
+    promptText: string,
+    modelText: string
+  ): SummaryCacheEntry | null => {
+    const promptCacheKey = `${promptText}\n__MODEL__:${modelText || ""}`;
+    const promptHash = hashText(promptCacheKey);
+    return readCachedSummaryEntry(videoId, promptHash);
+  };
+
   const hydrateCachedSummary = (
     videoId: string,
     transcriptBody: string,
@@ -382,11 +407,68 @@ export function useTranscriptSummary() {
     if (!cached) {
       return false;
     }
-    setSummaryText(cached.summary);
-    setSummaryKeyPoints(cached.keyPoints);
-    setSummaryError(null);
-    setSummaryModel(cached.model);
+    hydrateSummaryCacheEntry(cached);
     return true;
+  };
+
+  const ensureTranscriptLoaded = async (
+    video: VideoItem,
+    requestId = transcriptRequestIdRef.current
+  ): Promise<string | null> => {
+    if (requestId !== transcriptRequestIdRef.current) {
+      return null;
+    }
+
+    const inMemoryTranscript =
+      transcriptVideo?.videoId === video.videoId ? transcriptText.trim() : "";
+    if (inMemoryTranscript) {
+      return inMemoryTranscript;
+    }
+
+    const cached = readCachedTranscript(video.videoId);
+      if (cached) {
+        setTranscriptHydrating(true);
+        await yieldForHydration(CACHE_HYDRATION_FEEDBACK_MS);
+      if (requestId !== transcriptRequestIdRef.current) {
+        return null;
+      }
+      setTranscriptText(cached);
+      setTranscriptError(null);
+      setTranscriptHydrating(false);
+      return cached;
+    }
+
+    setTranscriptLoading(true);
+    try {
+      const payload = await fetchTranscriptByVideoInput({
+        videoId: video.videoId,
+        videoUrl: video.videoUrl
+      });
+      if (requestId !== transcriptRequestIdRef.current) {
+        return null;
+      }
+      const text = payload.text.trim();
+      if (!text) {
+        setTranscriptError("No transcript.");
+        return null;
+      }
+      setTranscriptText(text);
+      setTranscriptError(null);
+      writeCachedTranscript(video.videoId, text);
+      return text;
+    } catch (error) {
+      if (requestId !== transcriptRequestIdRef.current) {
+        return null;
+      }
+      const message = error instanceof Error ? error.message : "No transcript.";
+      setTranscriptError(message);
+      return null;
+    } finally {
+      if (requestId === transcriptRequestIdRef.current) {
+        setTranscriptHydrating(false);
+        setTranscriptLoading(false);
+      }
+    }
   };
 
   const openTranscript = async (video: VideoItem, sourceHandleRaw?: string): Promise<void> => {
@@ -414,7 +496,9 @@ export function useTranscriptSummary() {
     summaryFormatModelDraftRef.current = currentDefaultSummaryFormat.model ?? "";
     setIsNewSummaryModelDraftMode(false);
     setSummaryFormatDefaultDraft(currentDefaultSummaryFormat.isDefault);
-    setTranscriptLoading(true);
+    setSummaryHydrating(false);
+    setTranscriptHydrating(false);
+    setTranscriptLoading(false);
     setTranscriptError(null);
     setTranscriptText("");
     setIsTranscriptCopied(false);
@@ -428,34 +512,25 @@ export function useTranscriptSummary() {
     transcriptRequestIdRef.current += 1;
     const requestId = transcriptRequestIdRef.current;
     try {
-      const cached = readCachedTranscript(video.videoId);
-      if (cached) {
+      const directCachedSummary = readDirectCachedSummary(
+        video.videoId,
+        currentDefaultSummaryFormat.prompt,
+        (currentDefaultSummaryFormat.model ?? "").trim()
+      );
+      if (directCachedSummary) {
+        setSummaryHydrating(true);
+        await yieldForHydration(CACHE_HYDRATION_FEEDBACK_MS);
         if (requestId !== transcriptRequestIdRef.current) {
           return;
         }
-        setTranscriptText(cached);
-        hydrateCachedSummary(
-          video.videoId,
-          cached,
-          currentDefaultSummaryFormat.prompt,
-          (currentDefaultSummaryFormat.model ?? "").trim()
-        );
+        hydrateSummaryCacheEntry(directCachedSummary);
+        setSummaryHydrating(false);
         return;
       }
-      const payload = await fetchTranscriptByVideoInput({
-        videoId: video.videoId,
-        videoUrl: video.videoUrl
-      });
-      if (requestId !== transcriptRequestIdRef.current) {
-        return;
-      }
-      const text = payload.text.trim();
+      const text = await ensureTranscriptLoaded(video, requestId);
       if (!text) {
-        setTranscriptError("No transcript.");
         return;
       }
-      setTranscriptText(text);
-      writeCachedTranscript(video.videoId, text);
       hydrateCachedSummary(
         video.videoId,
         text,
@@ -470,6 +545,8 @@ export function useTranscriptSummary() {
       setTranscriptError(message);
     } finally {
       if (requestId === transcriptRequestIdRef.current) {
+        setSummaryHydrating(false);
+        setTranscriptHydrating(false);
         setTranscriptLoading(false);
       }
     }
@@ -481,7 +558,7 @@ export function useTranscriptSummary() {
     modelOverride?: string;
     allowFetch?: boolean;
   }): Promise<void> => {
-    if (!transcriptVideo || transcriptLoading || transcriptError || !transcriptText.trim()) {
+    if (!transcriptVideo || transcriptLoading || transcriptHydrating) {
       return;
     }
     if (summaryLoading) {
@@ -499,16 +576,13 @@ export function useTranscriptSummary() {
       : activeSummaryModel;
 
     if (!options?.force) {
-      const cached = readCachedSummaryForTranscript(
+      const directCachedSummary = readDirectCachedSummary(
         transcriptVideo.videoId,
-        transcriptText,
-        `${promptToUse}\n__MODEL__:${modelToUse || ""}`
+        promptToUse,
+        modelToUse
       );
-      if (cached) {
-        setSummaryText(cached.summary);
-        setSummaryKeyPoints(cached.keyPoints);
-        setSummaryError(null);
-        setSummaryModel(cached.model);
+      if (directCachedSummary) {
+        hydrateSummaryCacheEntry(directCachedSummary);
         return;
       }
       if (options?.allowFetch !== true) {
@@ -520,13 +594,21 @@ export function useTranscriptSummary() {
       }
     }
 
+    const ensuredTranscriptText =
+      transcriptText.trim().length > 0
+        ? transcriptText.trim()
+        : await ensureTranscriptLoaded(transcriptVideo);
+    if (!ensuredTranscriptText) {
+      return;
+    }
+
     setSummaryLoading(true);
     setSummaryError(null);
     try {
       const payload = await fetchSummaryByVideoInput({
         videoId: transcriptVideo.videoId,
         videoUrl: transcriptVideo.videoUrl,
-        transcriptText,
+        transcriptText: ensuredTranscriptText,
         mode: "short",
         prompt: promptToUse,
         model: modelToUse || undefined
@@ -544,7 +626,7 @@ export function useTranscriptSummary() {
       setSummaryModel(payload.model);
       writeCachedSummaryForTranscript(
         transcriptVideo.videoId,
-        transcriptText,
+        ensuredTranscriptText,
         `${promptToUse}\n__MODEL__:${modelToUse || ""}`,
         {
           summary: nextSummary,
@@ -564,7 +646,7 @@ export function useTranscriptSummary() {
     if (!transcriptVideo || transcriptViewMode !== "summary" || isSummaryPromptEditMode) {
       return;
     }
-    if (transcriptLoading || transcriptError || !transcriptText.trim()) {
+    if (transcriptLoading || transcriptHydrating || summaryHydrating || transcriptError) {
       return;
     }
     if (summaryLoading || summaryError) {
@@ -579,6 +661,8 @@ export function useTranscriptSummary() {
     transcriptViewMode,
     isSummaryPromptEditMode,
     transcriptLoading,
+    transcriptHydrating,
+    summaryHydrating,
     transcriptError,
     transcriptText,
     summaryLoading,
@@ -625,7 +709,7 @@ export function useTranscriptSummary() {
     setSummaryKeyPoints([]);
     setSummaryError(null);
     setSummaryModel("");
-    if (!transcriptLoading && !transcriptError && transcriptText.trim().length > 0) {
+    if (!transcriptLoading && !transcriptHydrating && !transcriptError) {
       await loadSummary({
         force: false,
         allowFetch: true,
@@ -663,6 +747,9 @@ export function useTranscriptSummary() {
         return;
       }
       setTranscriptViewMode("transcript");
+      if (transcriptVideo && !transcriptText.trim()) {
+        await ensureTranscriptLoaded(transcriptVideo);
+      }
       return;
     }
     if (mode.startsWith(SUMMARY_MODE_OPTION_PREFIX)) {
@@ -983,6 +1070,8 @@ export function useTranscriptSummary() {
   const closeTranscriptModal = (): void => {
     transcriptRequestIdRef.current += 1;
     setTranscriptVideo(null);
+    setSummaryHydrating(false);
+    setTranscriptHydrating(false);
     setTranscriptLoading(false);
     setTranscriptText("");
     setTranscriptError(null);
@@ -1009,6 +1098,8 @@ export function useTranscriptSummary() {
 
   return {
     transcriptVideo,
+    summaryHydrating,
+    transcriptHydrating,
     transcriptLoading,
     transcriptText,
     transcriptError,

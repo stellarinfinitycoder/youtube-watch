@@ -1700,6 +1700,8 @@ function App() {
   const channelNameDraftRef = useRef("");
   const {
     transcriptVideo,
+    summaryHydrating,
+    transcriptHydrating,
     transcriptLoading,
     transcriptText,
     transcriptError,
@@ -3084,15 +3086,45 @@ function App() {
     if (!state) {
       return;
     }
-    const text = [state.summaryText.trim(), state.keyPoints.map((point) => `- ${point}`).join("\n")]
+    const normalizedKeyPoints = state.keyPoints
+      .map((point) => point.trim())
+      .filter((point) => point.length > 0);
+    const text = [state.summaryText.trim(), normalizedKeyPoints.map((point) => `- ${point}`).join("\n")]
       .filter(Boolean)
       .join("\n\n")
       .trim();
     if (!text) {
       return;
     }
+    const renderedSummaryContent = document.querySelector(
+      ".board-summary-aggregate-modal .summary-content"
+    );
+    const fallbackSummaryHtml = state.summaryText.trim()
+      ? `<p style="margin:0 0 10px;">${escapeHtml(state.summaryText.trim()).replace(/\n/g, "<br />")}</p>`
+      : "";
+    const fallbackKeyPointsHtml =
+      normalizedKeyPoints.length > 0
+        ? `<ul style="margin:0;padding-left:20px;">${normalizedKeyPoints
+            .map((point) => `<li>${escapeHtml(point)}</li>`)
+            .join("")}</ul>`
+        : "";
+    const html =
+      renderedSummaryContent instanceof HTMLElement
+        ? `<div>${renderedSummaryContent.innerHTML}</div>`
+        : ["<div>", fallbackSummaryHtml, fallbackKeyPointsHtml, "</div>"].join("");
     try {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      if (
+        navigator.clipboard &&
+        typeof navigator.clipboard.write === "function" &&
+        typeof ClipboardItem !== "undefined"
+      ) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([text], { type: "text/plain" }),
+            "text/html": new Blob([html], { type: "text/html" })
+          })
+        ]);
+      } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
         await navigator.clipboard.writeText(text);
       } else {
         throw new Error("Clipboard API unavailable.");
@@ -5466,6 +5498,8 @@ function App() {
         <Suspense fallback={null}>
           <TranscriptSummaryModal
             transcriptVideo={transcriptVideo}
+            summaryHydrating={summaryHydrating}
+            transcriptHydrating={transcriptHydrating}
             transcriptLoading={transcriptLoading}
             transcriptText={transcriptText}
             transcriptError={transcriptError}
