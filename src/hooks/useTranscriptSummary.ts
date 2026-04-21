@@ -557,7 +557,6 @@ export function useTranscriptSummary() {
     force?: boolean;
     promptOverride?: string;
     modelOverride?: string;
-    allowFetch?: boolean;
   }): Promise<void> => {
     if (!transcriptVideo || transcriptLoading || transcriptHydrating) {
       return;
@@ -586,13 +585,11 @@ export function useTranscriptSummary() {
         hydrateSummaryCacheEntry(directCachedSummary);
         return;
       }
-      if (options?.allowFetch !== true) {
-        setSummaryText("");
-        setSummaryKeyPoints([]);
-        setSummaryError(null);
-        setSummaryModel("");
-        return;
-      }
+      setSummaryText("");
+      setSummaryKeyPoints([]);
+      setSummaryError(null);
+      setSummaryModel("");
+      return;
     }
 
     const ensuredTranscriptText =
@@ -643,37 +640,6 @@ export function useTranscriptSummary() {
     }
   };
 
-  useEffect(() => {
-    if (!transcriptVideo || transcriptViewMode !== "summary" || isSummaryPromptEditMode) {
-      return;
-    }
-    if (transcriptLoading || transcriptHydrating || summaryHydrating || transcriptError) {
-      return;
-    }
-    if (summaryLoading || summaryError) {
-      return;
-    }
-    if (summaryText.trim().length > 0 || summaryKeyPoints.length > 0) {
-      return;
-    }
-    void loadSummary({ allowFetch: true });
-  }, [
-    transcriptVideo,
-    transcriptViewMode,
-    isSummaryPromptEditMode,
-    transcriptLoading,
-    transcriptHydrating,
-    summaryHydrating,
-    transcriptError,
-    transcriptText,
-    summaryLoading,
-    summaryError,
-    summaryText,
-    summaryKeyPoints,
-    activeSummaryPrompt,
-    activeSummaryModel
-  ]);
-
   const openSummaryFormatEditor = (formatId: string | null): void => {
     const format =
       formatId !== null ? summaryFormats.find((item) => item.id === formatId) ?? null : null;
@@ -710,14 +676,11 @@ export function useTranscriptSummary() {
     setSummaryKeyPoints([]);
     setSummaryError(null);
     setSummaryModel("");
-    if (!transcriptLoading && !transcriptHydrating && !transcriptError) {
-      await loadSummary({
-        force: false,
-        allowFetch: true,
-        promptOverride: format.prompt,
-        modelOverride: format.model
-      });
-    }
+    await loadSummary({
+      force: false,
+      promptOverride: format.prompt,
+      modelOverride: format.model
+    });
   };
 
   const moveSummaryFormat = (formatId: string, direction: "up" | "down"): void => {
@@ -759,9 +722,6 @@ export function useTranscriptSummary() {
     }
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
-    if (!summaryText && summaryKeyPoints.length === 0 && !summaryError) {
-      await loadSummary({ allowFetch: true });
-    }
   };
 
   const regenerateSummary = async (): Promise<void> => {

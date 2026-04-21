@@ -213,17 +213,8 @@ describe("useTranscriptSummary", () => {
     expect(result.current.transcriptText).toBe("Fetched transcript body");
   });
 
-  it("hydrates cached transcript without transcript fetch and only summarizes when no cached summary matches", async () => {
+  it("hydrates cached transcript without summary generation when no cached summary matches", async () => {
     await writeCachedTranscript(video.videoId, "Cached transcript body");
-    let resolveSummary:
-      | ((value: { summary: string; keyPoints: string[]; model: string }) => void)
-      | null = null;
-    fetchSummaryMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveSummary = resolve;
-        })
-    );
 
     const { result } = renderHook(() => useTranscriptSummary());
 
@@ -247,29 +238,10 @@ describe("useTranscriptSummary", () => {
       expect(result.current.transcriptText).toBe("Cached transcript body");
     });
 
-    await waitFor(() => {
-      expect(fetchSummaryMock).toHaveBeenCalledWith({
-        videoId: video.videoId,
-        videoUrl: video.videoUrl,
-        transcriptText: "Cached transcript body",
-        mode: "short",
-        prompt: DEFAULT_SUMMARY_PROMPT,
-        model: undefined
-      });
-      expect(result.current.summaryLoading).toBe(true);
-    });
-
-    await act(async () => {
-      resolveSummary?.({
-        summary: "Generated summary body",
-        keyPoints: ["Generated point"],
-        model: "openai/gpt-4o-mini"
-      });
-    });
-
+    expect(fetchSummaryMock).not.toHaveBeenCalled();
     expect(result.current.summaryLoading).toBe(false);
-    expect(result.current.summaryText).toBe("Generated summary body");
-    expect(result.current.summaryKeyPoints).toEqual(["Generated point"]);
+    expect(result.current.summaryText).toBe("");
+    expect(result.current.summaryKeyPoints).toEqual([]);
   });
 
   it("shows transcript fetch state when neither summary nor transcript is cached", async () => {
@@ -306,5 +278,64 @@ describe("useTranscriptSummary", () => {
 
     expect(result.current.transcriptLoading).toBe(false);
     expect(result.current.transcriptText).toBe("Fresh transcript body");
+    expect(fetchSummaryMock).not.toHaveBeenCalled();
+    expect(result.current.summaryText).toBe("");
+    expect(result.current.summaryKeyPoints).toEqual([]);
+  });
+
+  it("switches summary formats without generating when the target format is uncached", async () => {
+    const { result } = renderHook(() => useTranscriptSummary());
+
+    act(() => {
+      result.current.setSummaryFormats([
+        {
+          id: "summary-default",
+          name: "SUMMARY",
+          prompt: DEFAULT_SUMMARY_PROMPT,
+          model: "",
+          isDefault: true,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: "summary-alt",
+          name: "ALT",
+          prompt: "Alternate prompt",
+          model: "",
+          isDefault: false,
+          createdAt: 2,
+          updatedAt: 2
+        }
+      ]);
+    });
+
+    await writeCachedTranscript(video.videoId, "Cached transcript body");
+    await writeCachedSummaryForTranscript(video.videoId, "Cached transcript body", defaultPromptCacheKey, {
+      summary: "Cached summary body",
+      keyPoints: ["Cached point"],
+      model: "openai/gpt-4o-mini"
+    });
+
+    act(() => {
+      void result.current.openTranscript(video);
+    });
+
+    await act(async () => {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 130));
+    });
+
+    expect(result.current.summaryText).toBe("Cached summary body");
+
+    await act(async () => {
+      await result.current.handleTranscriptViewModeChange("summary:summary-alt");
+    });
+
+    await waitFor(() => {
+      expect(result.current.transcriptViewMode).toBe("summary");
+      expect(result.current.activeSummaryFormat.id).toBe("summary-alt");
+      expect(result.current.summaryText).toBe("");
+      expect(result.current.summaryKeyPoints).toEqual([]);
+    });
+    expect(fetchSummaryMock).not.toHaveBeenCalled();
   });
 });
