@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { waitFor } from "@testing-library/react";
 import { resetCacheDbForTests } from "./indexedDbCache";
 import {
+  clearAllCachedSummaries,
   readCachedSummary,
   SUMMARY_CACHE_KEY_PREFIX,
+  SUMMARY_FORMATS_STORAGE_KEY,
   type SummaryCacheEntry,
   writeCachedSummary
 } from "./summariesStorage";
@@ -41,5 +43,39 @@ describe("summariesStorage", () => {
         window.localStorage.getItem(`${SUMMARY_CACHE_KEY_PREFIX}video-legacy:prompt-hash`)
       ).toBeNull();
     });
+  });
+
+  it("clears IndexedDB-backed summary cache entries", async () => {
+    await writeCachedSummary("video-1", "prompt-hash", payload);
+
+    await expect(clearAllCachedSummaries()).resolves.toBe(true);
+    await expect(readCachedSummary("video-1", "prompt-hash")).resolves.toBeNull();
+  });
+
+  it("clears legacy localStorage summary cache entries", async () => {
+    window.localStorage.setItem(
+      `${SUMMARY_CACHE_KEY_PREFIX}video-legacy:prompt-hash`,
+      JSON.stringify(payload)
+    );
+
+    await expect(clearAllCachedSummaries()).resolves.toBe(true);
+    expect(window.localStorage.getItem(`${SUMMARY_CACHE_KEY_PREFIX}video-legacy:prompt-hash`)).toBeNull();
+  });
+
+  it("clears both IndexedDB and legacy localStorage summary cache entries without touching formats", async () => {
+    await writeCachedSummary("video-1", "prompt-hash", payload);
+    window.localStorage.setItem(
+      `${SUMMARY_CACHE_KEY_PREFIX}video-legacy:prompt-hash`,
+      JSON.stringify(payload)
+    );
+    window.localStorage.setItem(
+      SUMMARY_FORMATS_STORAGE_KEY,
+      JSON.stringify([{ id: "summary-default", name: "Summary", prompt: "Prompt", model: "model-a" }])
+    );
+
+    await expect(clearAllCachedSummaries()).resolves.toBe(true);
+    await expect(readCachedSummary("video-1", "prompt-hash")).resolves.toBeNull();
+    expect(window.localStorage.getItem(`${SUMMARY_CACHE_KEY_PREFIX}video-legacy:prompt-hash`)).toBeNull();
+    expect(window.localStorage.getItem(SUMMARY_FORMATS_STORAGE_KEY)).toContain("\"model\":\"model-a\"");
   });
 });

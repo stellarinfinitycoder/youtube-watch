@@ -175,6 +175,37 @@ export async function writeCachedSummary(
   }
 }
 
+export async function clearAllCachedSummaries(): Promise<boolean> {
+  await migrateLegacySummaryCache();
+
+  let didDelete = false;
+  const summaryEntries = await getAllCacheKeys(SUMMARIES_STORE_NAME);
+  if (summaryEntries.length > 0) {
+    await Promise.all(summaryEntries.map((key) => deleteCacheValue(SUMMARIES_STORE_NAME, key)));
+    didDelete = true;
+  }
+
+  const storage = getStorage();
+  if (!storage) {
+    return didDelete;
+  }
+
+  const legacyKeys: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(SUMMARY_CACHE_KEY_PREFIX)) {
+      legacyKeys.push(key);
+    }
+  }
+
+  if (legacyKeys.length === 0) {
+    return didDelete;
+  }
+
+  legacyKeys.forEach((key) => storage.removeItem(key));
+  return true;
+}
+
 export async function pruneSummaryCaches(): Promise<boolean> {
   await migrateLegacySummaryCache();
   const summaryEntries = await getAllCacheKeys(SUMMARIES_STORE_NAME);

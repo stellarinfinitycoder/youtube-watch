@@ -36,7 +36,7 @@ import {
   readStoredBoardsPayload
 } from "./storage/boardsStorage";
 import {
-  SUMMARY_CACHE_KEY_PREFIX,
+  clearAllCachedSummaries,
   readCachedSummary
 } from "./storage/summariesStorage";
 import {
@@ -4240,31 +4240,9 @@ function App() {
     reader.readAsText(file);
   };
 
-  const clearAllCachedSummaries = (): void => {
-    if (typeof window === "undefined") {
-      return;
-    }
+  const handleClearAllCachedSummaries = async (): Promise<void> => {
     try {
-      const storage = window.localStorage;
-      if (!storage) {
-        return;
-      }
-      const keysToDelete: string[] = [];
-      for (let index = 0; index < storage.length; index += 1) {
-        const key = storage.key(index);
-        if (key && key.startsWith(SUMMARY_CACHE_KEY_PREFIX)) {
-          keysToDelete.push(key);
-        }
-      }
-      keysToDelete.forEach((key) => storage.removeItem(key));
-      setSummaryFormats((previous) =>
-        previous.map((format) => ({
-          ...format,
-          model: ""
-        }))
-      );
-      setSummaryFormatModelDraft("");
-      setIsNewSummaryModelDraftMode(false);
+      await clearAllCachedSummaries();
       setIsDeleteSummariesModalOpen(false);
     } catch {
       setIsDeleteSummariesModalOpen(false);
@@ -5665,7 +5643,7 @@ function App() {
         title="Delete Summaries"
         open={isDeleteSummariesModalOpen}
         onCancel={() => setIsDeleteSummariesModalOpen(false)}
-        onOk={clearAllCachedSummaries}
+        onOk={() => void handleClearAllCachedSummaries()}
         okText="Delete"
         okButtonProps={{ danger: true, className: "delete-confirm-ok" }}
         width={360}
