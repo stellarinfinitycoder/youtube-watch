@@ -1631,6 +1631,8 @@ body {
 
 .video-player-modal .ant-modal-header {
   padding-top: 28px !important;
+  padding-bottom: 12px !important;
+  flex: 0 0 auto;
 }
 
 .video-player-modal .ant-modal-title {
@@ -1640,6 +1642,40 @@ body {
 .video-player-modal .ant-modal-close {
   top: 4px !important;
   right: 8px !important;
+}
+
+.video-player-modal .ant-modal {
+  max-height: calc(100dvh - 32px);
+}
+
+.video-player-modal .ant-modal-content {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+}
+
+.video-player-modal .ant-modal-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 0 !important;
+}
+
+.video-player-modal-layout.ant-space {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 12px !important;
+}
+
+.video-player-modal-layout.ant-space .ant-space-item:first-child {
+  min-height: 0;
+}
+
+.video-player-modal-layout.ant-space .ant-space-item:last-child {
+  flex: 0 0 auto;
 }
 
 .transcript-modal .ant-modal-body {

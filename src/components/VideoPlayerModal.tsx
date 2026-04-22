@@ -3,6 +3,11 @@ import { Button, Modal, Space, Typography } from "antd";
 import type { VideoItem } from "../types/youtube";
 
 const { Text } = Typography;
+const VIDEO_PLAYER_MODAL_MAX_WIDTH = 1680;
+const VIDEO_PLAYER_MODAL_VIEWPORT_WIDTH = "92vw";
+const VIDEO_PLAYER_MODAL_VERTICAL_CHROME = 300;
+const VIDEO_PLAYER_MODAL_HEIGHT_FIT_WIDTH = `max(0px, calc((100dvh - ${VIDEO_PLAYER_MODAL_VERTICAL_CHROME}px) * 16 / 9))`;
+const VIDEO_PLAYER_MODAL_WIDTH = `min(${VIDEO_PLAYER_MODAL_MAX_WIDTH}px, ${VIDEO_PLAYER_MODAL_VIEWPORT_WIDTH}, ${VIDEO_PLAYER_MODAL_HEIGHT_FIT_WIDTH})`;
 
 type VideoPlayerModalProps = {
   activeVideo: VideoItem | null;
@@ -112,7 +117,7 @@ function VideoPlayerModalComponent({
         closeVideoModal();
       }}
       footer={null}
-      width={1520}
+      width={VIDEO_PLAYER_MODAL_WIDTH}
       zIndex={1000}
       destroyOnHidden
       className="video-player-modal"
@@ -124,7 +129,7 @@ function VideoPlayerModalComponent({
       }}
     >
       {activeVideo ? (
-        <Space direction="vertical" size="middle" className="full-width">
+        <Space direction="vertical" size="middle" className="video-player-modal-layout full-width">
           <div ref={videoModalWrapRef} className="video-modal-wrap" tabIndex={0}>
             {isEmbedBlocked ? (
               <div className="video-modal-fallback">
