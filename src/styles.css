@@ -1250,6 +1250,16 @@ body {
   color: var(--red) !important;
 }
 
+.stats-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
 .ant-form-item {
   margin-bottom: 10px;
 }
