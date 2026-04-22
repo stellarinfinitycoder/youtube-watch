@@ -52,22 +52,12 @@ describe("summariesStorage", () => {
     await expect(readCachedSummary("video-1", "prompt-hash")).resolves.toBeNull();
   });
 
-  it("clears legacy localStorage summary cache entries", async () => {
-    window.localStorage.setItem(
-      `${SUMMARY_CACHE_KEY_PREFIX}video-legacy:prompt-hash`,
-      JSON.stringify(payload)
-    );
-
-    await expect(clearAllCachedSummaries()).resolves.toBe(true);
-    expect(window.localStorage.getItem(`${SUMMARY_CACHE_KEY_PREFIX}video-legacy:prompt-hash`)).toBeNull();
+  it("returns false when the IndexedDB summary store is already empty", async () => {
+    await expect(clearAllCachedSummaries()).resolves.toBe(false);
   });
 
-  it("clears both IndexedDB and legacy localStorage summary cache entries without touching formats", async () => {
+  it("clears IndexedDB summary cache entries without touching formats", async () => {
     await writeCachedSummary("video-1", "prompt-hash", payload);
-    window.localStorage.setItem(
-      `${SUMMARY_CACHE_KEY_PREFIX}video-legacy:prompt-hash`,
-      JSON.stringify(payload)
-    );
     window.localStorage.setItem(
       SUMMARY_FORMATS_STORAGE_KEY,
       JSON.stringify([{ id: "summary-default", name: "Summary", prompt: "Prompt", model: "model-a" }])
@@ -75,7 +65,6 @@ describe("summariesStorage", () => {
 
     await expect(clearAllCachedSummaries()).resolves.toBe(true);
     await expect(readCachedSummary("video-1", "prompt-hash")).resolves.toBeNull();
-    expect(window.localStorage.getItem(`${SUMMARY_CACHE_KEY_PREFIX}video-legacy:prompt-hash`)).toBeNull();
     expect(window.localStorage.getItem(SUMMARY_FORMATS_STORAGE_KEY)).toContain("\"model\":\"model-a\"");
   });
 });

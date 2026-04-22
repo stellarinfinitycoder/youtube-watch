@@ -4,7 +4,6 @@ import App from "./App";
 import { resetCacheDbForTests } from "./storage/indexedDbCache";
 import {
   readCachedSummary,
-  SUMMARY_CACHE_KEY_PREFIX,
   SUMMARY_FORMATS_STORAGE_KEY,
   type SummaryCacheEntry,
   writeCachedSummary
@@ -21,7 +20,6 @@ describe("App delete summaries", () => {
     } as Response) as typeof fetch;
 
     window.localStorage.removeItem(SUMMARY_FORMATS_STORAGE_KEY);
-    window.localStorage.removeItem(`${SUMMARY_CACHE_KEY_PREFIX}video-legacy:prompt-hash`);
     await resetCacheDbForTests();
   });
 
@@ -49,10 +47,6 @@ describe("App delete summaries", () => {
     };
 
     await writeCachedSummary("video-1", "prompt-hash", payload);
-    window.localStorage.setItem(
-      `${SUMMARY_CACHE_KEY_PREFIX}video-legacy:prompt-hash`,
-      JSON.stringify(payload)
-    );
     window.localStorage.setItem(
       SUMMARY_FORMATS_STORAGE_KEY,
       JSON.stringify([
@@ -89,7 +83,6 @@ describe("App delete summaries", () => {
     });
 
     await expect(readCachedSummary("video-1", "prompt-hash")).resolves.toBeNull();
-    expect(window.localStorage.getItem(`${SUMMARY_CACHE_KEY_PREFIX}video-legacy:prompt-hash`)).toBeNull();
     expect(window.localStorage.getItem(SUMMARY_FORMATS_STORAGE_KEY)).toContain(
       "\"model\":\"openai/gpt-4o-mini\""
     );
