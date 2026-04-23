@@ -50,6 +50,7 @@ type TranscriptSummaryModalProps = {
   setSummaryFormatDefaultDraft: (value: boolean) => void;
   setActiveSummaryFormatId: (value: string) => void;
   setIsSummaryPromptEditMode: (value: boolean) => void;
+  cancelSummaryFormatEditing: () => void;
   handleTranscriptViewModeChange: (value: "transcript" | "summary" | string) => Promise<void>;
   copyTranscriptText: () => Promise<void>;
   regenerateSummary: () => Promise<void>;
@@ -98,6 +99,7 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
     setSummaryFormatDefaultDraft,
     setActiveSummaryFormatId,
     setIsSummaryPromptEditMode,
+    cancelSummaryFormatEditing,
     handleTranscriptViewModeChange,
     copyTranscriptText,
     regenerateSummary,
@@ -445,14 +447,7 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                 <Button
                   htmlType="button"
                   className="summary-prompt-action-btn"
-                  onClick={() => {
-                    setIsSummaryPromptEditMode(false);
-                    setSummaryFormatNameDraft(activeSummaryFormat.name);
-                    setSummaryPromptDraft(activeSummaryFormat.prompt);
-                    setSummaryFormatModelDraft(activeSummaryFormat.model ?? "");
-                    setIsNewSummaryModelDraftMode(false);
-                    setSummaryFormatDefaultDraft(activeSummaryFormat.isDefault);
-                  }}
+                  onClick={cancelSummaryFormatEditing}
                 >
                   CANCEL
                 </Button>

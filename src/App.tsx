@@ -1726,6 +1726,7 @@ function App() {
     setSummaryFormatDefaultDraft,
     setActiveSummaryFormatId,
     setIsSummaryPromptEditMode,
+    cancelSummaryFormatEditing,
     clearPublishFeedback,
     openTranscript,
     closeTranscriptModal,
@@ -5506,6 +5507,7 @@ function App() {
             setSummaryFormatDefaultDraft={setSummaryFormatDefaultDraft}
             setActiveSummaryFormatId={setActiveSummaryFormatId}
             setIsSummaryPromptEditMode={setIsSummaryPromptEditMode}
+            cancelSummaryFormatEditing={cancelSummaryFormatEditing}
             handleTranscriptViewModeChange={handleTranscriptViewModeChange}
             copyTranscriptText={copyTranscriptText}
             regenerateSummary={regenerateSummary}

@@ -338,4 +338,247 @@ describe("useTranscriptSummary", () => {
     });
     expect(fetchSummaryMock).not.toHaveBeenCalled();
   });
+
+  it("keeps a cleared default summary format model blank after save and reopen", async () => {
+    const { result } = renderHook(() => useTranscriptSummary());
+
+    act(() => {
+      result.current.setSummaryFormats([
+        {
+          id: "summary-default",
+          name: "SUMMARY",
+          prompt: DEFAULT_SUMMARY_PROMPT,
+          model: "openai/gpt-4o-mini",
+          isDefault: true,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.summaryFormats[0]?.model).toBe("openai/gpt-4o-mini");
+    });
+
+    act(() => {
+      result.current.setActiveSummaryFormatId("summary-default");
+      result.current.openSummaryFormatEditor("summary-default");
+    });
+
+    expect(result.current.summaryFormatModelDraft).toBe("openai/gpt-4o-mini");
+
+    act(() => {
+      result.current.setSummaryFormatModelDraft("");
+    });
+
+    await act(async () => {
+      await result.current.saveSummaryPromptAndClose();
+    });
+
+    expect(result.current.summaryFormats[0]?.model).toBe("");
+
+    act(() => {
+      result.current.closeTranscriptModal();
+      result.current.openSummaryFormatEditor("summary-default");
+    });
+
+    expect(result.current.summaryFormatModelDraft).toBe("");
+  });
+
+  it("keeps a cleared custom summary format model blank after save and reopen", async () => {
+    const { result } = renderHook(() => useTranscriptSummary());
+
+    act(() => {
+      result.current.setSummaryFormats([
+        {
+          id: "summary-default",
+          name: "SUMMARY",
+          prompt: DEFAULT_SUMMARY_PROMPT,
+          model: "",
+          isDefault: true,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: "summary-custom",
+          name: "CUSTOM",
+          prompt: "Custom prompt",
+          model: "google/gemini-2.5-flash",
+          isDefault: false,
+          createdAt: 2,
+          updatedAt: 2
+        }
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.summaryFormats.find((format) => format.id === "summary-custom")?.model).toBe(
+        "google/gemini-2.5-flash"
+      );
+    });
+
+    act(() => {
+      result.current.setActiveSummaryFormatId("summary-custom");
+      result.current.openSummaryFormatEditor("summary-custom");
+    });
+
+    expect(result.current.summaryFormatModelDraft).toBe("google/gemini-2.5-flash");
+
+    act(() => {
+      result.current.setSummaryFormatModelDraft("");
+    });
+
+    await act(async () => {
+      await result.current.saveSummaryPromptAndClose();
+    });
+
+    expect(result.current.summaryFormats.find((format) => format.id === "summary-custom")?.model).toBe("");
+
+    act(() => {
+      result.current.closeTranscriptModal();
+      result.current.setActiveSummaryFormatId("summary-custom");
+      result.current.openSummaryFormatEditor("summary-custom");
+    });
+
+    expect(result.current.summaryFormatModelDraft).toBe("");
+  });
+
+  it("removes a built-in preset globally, resets affected formats, and keeps it deleted after reload", async () => {
+    const { result, unmount } = renderHook(() => useTranscriptSummary());
+
+    act(() => {
+      result.current.setSummaryFormats([
+        {
+          id: "summary-default",
+          name: "SUMMARY",
+          prompt: DEFAULT_SUMMARY_PROMPT,
+          model: "openai/gpt-4o-mini",
+          isDefault: true,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: "summary-custom",
+          name: "CUSTOM",
+          prompt: "Custom prompt",
+          model: "openai/gpt-4o-mini",
+          isDefault: false,
+          createdAt: 2,
+          updatedAt: 2
+        }
+      ]);
+      result.current.setActiveSummaryFormatId("summary-default");
+      result.current.openSummaryFormatEditor("summary-default");
+    });
+
+    await waitFor(() => {
+      expect(
+        result.current.summaryModelPresets.some((preset) => preset.value === "openai/gpt-4o-mini")
+      ).toBe(true);
+    });
+
+    act(() => {
+      result.current.removeSummaryModelPreset("openai/gpt-4o-mini");
+    });
+
+    await waitFor(() => {
+      expect(
+        result.current.summaryModelPresets.some((preset) => preset.value === "openai/gpt-4o-mini")
+      ).toBe(false);
+      expect(result.current.summaryFormats.every((format) => format.model === "")).toBe(true);
+      expect(result.current.summaryFormatModelDraft).toBe("");
+    });
+
+    unmount();
+
+    const reloaded = renderHook(() => useTranscriptSummary());
+
+    expect(
+      reloaded.result.current.summaryModelPresets.some((preset) => preset.value === "openai/gpt-4o-mini")
+    ).toBe(false);
+    expect(reloaded.result.current.summaryModelPresets.some((preset) => preset.value === "")).toBe(true);
+  });
+
+  it("removes a custom preset globally and keeps unrelated formats unchanged after reload", async () => {
+    const { result, unmount } = renderHook(() => useTranscriptSummary());
+
+    act(() => {
+      result.current.setSummaryFormats([
+        {
+          id: "summary-default",
+          name: "SUMMARY",
+          prompt: DEFAULT_SUMMARY_PROMPT,
+          model: "",
+          isDefault: true,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: "summary-custom",
+          name: "CUSTOM",
+          prompt: "Custom prompt",
+          model: "custom/model-one",
+          isDefault: false,
+          createdAt: 2,
+          updatedAt: 2
+        },
+        {
+          id: "summary-other",
+          name: "OTHER",
+          prompt: "Other prompt",
+          model: "google/gemini-2.5-flash",
+          isDefault: false,
+          createdAt: 3,
+          updatedAt: 3
+        }
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.summaryFormats.find((format) => format.id === "summary-custom")?.model).toBe(
+        "custom/model-one"
+      );
+    });
+
+    act(() => {
+      result.current.setActiveSummaryFormatId("summary-custom");
+      result.current.openSummaryFormatEditor("summary-custom");
+    });
+
+    await act(async () => {
+      await result.current.saveSummaryPromptAndClose();
+    });
+
+    await waitFor(() => {
+      expect(
+        result.current.summaryModelPresets.some((preset) => preset.value === "custom/model-one")
+      ).toBe(true);
+    });
+
+    act(() => {
+      result.current.removeSummaryModelPreset("custom/model-one");
+    });
+
+    await waitFor(() => {
+      expect(
+        result.current.summaryModelPresets.some((preset) => preset.value === "custom/model-one")
+      ).toBe(false);
+      expect(result.current.summaryFormats.find((format) => format.id === "summary-custom")?.model).toBe("");
+      expect(result.current.summaryFormats.find((format) => format.id === "summary-other")?.model).toBe(
+        "google/gemini-2.5-flash"
+      );
+      expect(result.current.summaryFormatModelDraft).toBe("");
+    });
+
+    unmount();
+
+    const reloaded = renderHook(() => useTranscriptSummary());
+
+    expect(
+      reloaded.result.current.summaryModelPresets.some((preset) => preset.value === "custom/model-one")
+    ).toBe(false);
+    expect(reloaded.result.current.summaryFormats.find((format) => format.id === "summary-custom")?.model).toBe(
+      ""
+    );
+  });
 });

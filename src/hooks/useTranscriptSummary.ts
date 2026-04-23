@@ -125,10 +125,28 @@ export function getDefaultSummaryFormat(formats: SummaryFormat[]): SummaryFormat
   return formats.find((item) => item.isDefault) ?? formats[0] ?? createDefaultSummaryFormat();
 }
 
+function getSummaryFormatById(
+  formats: SummaryFormat[],
+  formatId: string | null | undefined,
+  fallback?: SummaryFormat
+): SummaryFormat {
+  if (typeof formatId === "string" && formatId.trim().length > 0) {
+    const existing = formats.find((item) => item.id === formatId);
+    if (existing) {
+      return existing;
+    }
+  }
+  if (fallback) {
+    return fallback;
+  }
+  return getDefaultSummaryFormat(formats);
+}
+
 function normalizeSummaryModelPresets(input: unknown): SummaryModelPreset[] {
-  const defaults = [...DEFAULT_SUMMARY_MODEL_PRESETS];
+  const defaultEnvPreset = DEFAULT_SUMMARY_MODEL_PRESETS[0];
+  const defaults = defaultEnvPreset ? [defaultEnvPreset] : [];
   if (!Array.isArray(input)) {
-    return defaults;
+    return [...DEFAULT_SUMMARY_MODEL_PRESETS];
   }
 
   const merged = [...defaults];
@@ -338,6 +356,18 @@ export function useTranscriptSummary() {
   const setSummaryFormatModelDraft = (value: string): void => {
     summaryFormatModelDraftRef.current = value;
     setSummaryFormatModelDraftState(value);
+  };
+
+  const hydrateSummaryFormatDrafts = (format: SummaryFormat): void => {
+    setEditingSummaryFormatId(format.id);
+    setSummaryFormatNameDraft(format.name);
+    setSummaryPromptDraft(format.prompt);
+    setSummaryFormatModelDraft(format.model ?? "");
+    summaryFormatNameDraftRef.current = format.name;
+    summaryPromptDraftRef.current = format.prompt;
+    summaryFormatModelDraftRef.current = format.model ?? "";
+    setIsNewSummaryModelDraftMode(false);
+    setSummaryFormatDefaultDraft(format.isDefault);
   };
 
   const activeSummaryFormat = useMemo(
@@ -641,17 +671,20 @@ export function useTranscriptSummary() {
   };
 
   const openSummaryFormatEditor = (formatId: string | null): void => {
-    const format =
-      formatId !== null ? summaryFormats.find((item) => item.id === formatId) ?? null : null;
-    setEditingSummaryFormatId(format?.id ?? null);
-    setSummaryFormatNameDraft(format?.name ?? "");
-    setSummaryPromptDraft(format?.prompt ?? "");
-    setSummaryFormatModelDraft(format?.model ?? "");
-    summaryFormatNameDraftRef.current = format?.name ?? "";
-    summaryPromptDraftRef.current = format?.prompt ?? "";
-    summaryFormatModelDraftRef.current = format?.model ?? "";
-    setIsNewSummaryModelDraftMode(false);
-    setSummaryFormatDefaultDraft(format?.isDefault ?? false);
+    const format = formatId !== null ? getSummaryFormatById(summaryFormats, formatId) : null;
+    if (format) {
+      hydrateSummaryFormatDrafts(format);
+    } else {
+      setEditingSummaryFormatId(null);
+      setSummaryFormatNameDraft("");
+      setSummaryPromptDraft("");
+      setSummaryFormatModelDraft("");
+      summaryFormatNameDraftRef.current = "";
+      summaryPromptDraftRef.current = "";
+      summaryFormatModelDraftRef.current = "";
+      setIsNewSummaryModelDraftMode(false);
+      setSummaryFormatDefaultDraft(false);
+    }
     setIsSummaryPromptEditMode(true);
   };
 
@@ -661,15 +694,7 @@ export function useTranscriptSummary() {
       return;
     }
     setActiveSummaryFormatId(format.id);
-    setEditingSummaryFormatId(format.id);
-    setSummaryFormatNameDraft(format.name);
-    setSummaryPromptDraft(format.prompt);
-    setSummaryFormatModelDraft(format.model ?? "");
-    summaryFormatNameDraftRef.current = format.name;
-    summaryPromptDraftRef.current = format.prompt;
-    summaryFormatModelDraftRef.current = format.model ?? "";
-    setIsNewSummaryModelDraftMode(false);
-    setSummaryFormatDefaultDraft(format.isDefault);
+    hydrateSummaryFormatDrafts(format);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
     setSummaryText("");
@@ -752,10 +777,25 @@ export function useTranscriptSummary() {
     if (!trimmed) {
       return;
     }
+    const modelKey = trimmed.toLowerCase();
+    const now = Date.now();
     setSummaryModelPresets((previous) =>
-      previous.filter((item) => item.value.trim().toLowerCase() !== trimmed.toLowerCase())
+      normalizeSummaryModelPresets(
+        previous.filter((item) => item.value.trim().toLowerCase() !== modelKey)
+      )
     );
-    if (summaryFormatModelDraft.trim().toLowerCase() === trimmed.toLowerCase()) {
+    const nextFormats = summaryFormats.map((format) => {
+      if ((format.model ?? "").trim().toLowerCase() !== modelKey) {
+        return format;
+      }
+      return {
+        ...format,
+        model: "",
+        updatedAt: now
+      };
+    });
+    setSummaryFormats(normalizeStoredSummaryFormats(nextFormats));
+    if (summaryFormatModelDraft.trim().toLowerCase() === modelKey) {
       setSummaryFormatModelDraft("");
       summaryFormatModelDraftRef.current = "";
     }
@@ -811,15 +851,11 @@ export function useTranscriptSummary() {
         ...format,
         isDefault: nextDefault ? format.id === newFormat.id : format.isDefault
       }));
-      setSummaryFormats(normalizeStoredSummaryFormats(nextFormats));
-      setActiveSummaryFormatId(newFormat.id);
-      setEditingSummaryFormatId(newFormat.id);
-      setSummaryFormatNameDraft(newFormat.name);
-      setSummaryFormatModelDraft(newFormat.model ?? "");
-      summaryFormatNameDraftRef.current = newFormat.name;
-      summaryPromptDraftRef.current = newFormat.prompt;
-      summaryFormatModelDraftRef.current = newFormat.model ?? "";
-      setIsNewSummaryModelDraftMode(false);
+      const normalizedFormats = normalizeStoredSummaryFormats(nextFormats);
+      const savedFormat = getSummaryFormatById(normalizedFormats, newFormat.id, newFormat);
+      setSummaryFormats(normalizedFormats);
+      setActiveSummaryFormatId(savedFormat.id);
+      hydrateSummaryFormatDrafts(savedFormat);
       setIsSummaryPromptEditMode(false);
       setTranscriptViewMode("summary");
       setSummaryText("");
@@ -873,17 +909,17 @@ export function useTranscriptSummary() {
       };
     });
     const normalizedFormats = normalizeStoredSummaryFormats(nextFormats);
+    const savedFormat = getSummaryFormatById(normalizedFormats, baseFormat.id, {
+      ...baseFormat,
+      name: nextName,
+      prompt: nextPrompt,
+      model: nextModel,
+      isDefault: nextDefault,
+      updatedAt: now
+    });
     setSummaryFormats(normalizedFormats);
-    setActiveSummaryFormatId(baseFormat.id);
-    setEditingSummaryFormatId(baseFormat.id);
-    setSummaryFormatNameDraft(nextName);
-    setSummaryPromptDraft(nextPrompt);
-    setSummaryFormatModelDraft(nextModel);
-    summaryFormatNameDraftRef.current = nextName;
-    summaryPromptDraftRef.current = nextPrompt;
-    summaryFormatModelDraftRef.current = nextModel;
-    setIsNewSummaryModelDraftMode(false);
-    setSummaryFormatDefaultDraft(nextDefault);
+    setActiveSummaryFormatId(savedFormat.id);
+    hydrateSummaryFormatDrafts(savedFormat);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
     setSummaryText("");
@@ -916,15 +952,7 @@ export function useTranscriptSummary() {
     setSummaryFormats(normalizedFormats);
     const fallbackDefaultFormat = getDefaultSummaryFormat(normalizedFormats);
     setActiveSummaryFormatId(fallbackDefaultFormat.id);
-    setEditingSummaryFormatId(fallbackDefaultFormat.id);
-    setSummaryFormatNameDraft(fallbackDefaultFormat.name);
-    setSummaryPromptDraft(fallbackDefaultFormat.prompt);
-    setSummaryFormatModelDraft(fallbackDefaultFormat.model ?? "");
-    summaryFormatNameDraftRef.current = fallbackDefaultFormat.name;
-    summaryPromptDraftRef.current = fallbackDefaultFormat.prompt;
-    summaryFormatModelDraftRef.current = fallbackDefaultFormat.model ?? "";
-    setIsNewSummaryModelDraftMode(false);
-    setSummaryFormatDefaultDraft(fallbackDefaultFormat.isDefault);
+    hydrateSummaryFormatDrafts(fallbackDefaultFormat);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
     setSummaryText("");
@@ -1029,6 +1057,7 @@ export function useTranscriptSummary() {
   };
 
   const closeTranscriptModal = (): void => {
+    const nextActiveSummaryFormat = getSummaryFormatById(summaryFormats, activeSummaryFormatId, activeSummaryFormat);
     transcriptRequestIdRef.current += 1;
     setTranscriptVideo(null);
     setSummaryHydrating(false);
@@ -1046,15 +1075,17 @@ export function useTranscriptSummary() {
     setIsPublishingSummary(false);
     setPublishSummaryFeedback(null);
     setIsSummaryPromptEditMode(false);
-    setEditingSummaryFormatId(activeSummaryFormat.id);
-    setSummaryFormatNameDraft(activeSummaryFormat.name);
-    setSummaryPromptDraft(activeSummaryFormat.prompt);
-    setSummaryFormatModelDraft(activeSummaryFormat.model ?? "");
-    summaryFormatNameDraftRef.current = activeSummaryFormat.name;
-    summaryPromptDraftRef.current = activeSummaryFormat.prompt;
-    summaryFormatModelDraftRef.current = activeSummaryFormat.model ?? "";
-    setIsNewSummaryModelDraftMode(false);
-    setSummaryFormatDefaultDraft(activeSummaryFormat.isDefault);
+    hydrateSummaryFormatDrafts(nextActiveSummaryFormat);
+  };
+
+  const cancelSummaryFormatEditing = (): void => {
+    const formatToRestore = getSummaryFormatById(
+      summaryFormats,
+      editingSummaryFormatId ?? activeSummaryFormatId,
+      activeSummaryFormat
+    );
+    hydrateSummaryFormatDrafts(formatToRestore);
+    setIsSummaryPromptEditMode(false);
   };
 
   return {
@@ -1105,6 +1136,7 @@ export function useTranscriptSummary() {
     openSummaryFormatEditor,
     moveSummaryFormat,
     removeSummaryModelPreset,
+    cancelSummaryFormatEditing,
     saveSummaryPromptAndClose,
     deleteSummaryFormatAndClose
   };

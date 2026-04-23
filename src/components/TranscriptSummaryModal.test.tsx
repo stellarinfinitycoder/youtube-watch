@@ -69,6 +69,7 @@ describe("TranscriptSummaryModal", () => {
         setSummaryFormatDefaultDraft={() => undefined}
         setActiveSummaryFormatId={() => undefined}
         setIsSummaryPromptEditMode={() => undefined}
+        cancelSummaryFormatEditing={() => undefined}
         handleTranscriptViewModeChange={async () => undefined}
         copyTranscriptText={async () => undefined}
         regenerateSummary={async () => undefined}
@@ -133,6 +134,7 @@ describe("TranscriptSummaryModal", () => {
         setSummaryFormatDefaultDraft={() => undefined}
         setActiveSummaryFormatId={() => undefined}
         setIsSummaryPromptEditMode={() => undefined}
+        cancelSummaryFormatEditing={() => undefined}
         handleTranscriptViewModeChange={async () => undefined}
         copyTranscriptText={async () => undefined}
         regenerateSummary={async () => undefined}
