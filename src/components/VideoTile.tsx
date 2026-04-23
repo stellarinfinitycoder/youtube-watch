@@ -200,6 +200,8 @@ function VideoTileComponent({
               src={getVideoThumbnailSrc(video)}
               alt={video.title}
               className="video-thumb"
+              loading="lazy"
+              decoding="async"
               onError={() => onHandleVideoThumbnailError(video)}
             />
           </button>

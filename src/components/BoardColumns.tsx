@@ -225,6 +225,8 @@ function BoardColumnsComponent({
                             src={thumbnailUrl}
                             alt={displayName}
                             className="hidden-channel-thumb-image"
+                            loading="eager"
+                            decoding="async"
                             onLoad={() =>
                               onLoadedChannelThumbnail(
                                 activeBoardId,
@@ -242,7 +244,13 @@ function BoardColumnsComponent({
                           />
                         ) : (
                           <div className="hidden-channel-thumb-placeholder">
-                            <img src={channelPlaceholderIcon} alt="" className="channel-avatar-placeholder-icon" />
+                            <img
+                              src={channelPlaceholderIcon}
+                              alt=""
+                              className="channel-avatar-placeholder-icon"
+                              loading="eager"
+                              decoding="async"
+                            />
                           </div>
                         )}
                       </button>

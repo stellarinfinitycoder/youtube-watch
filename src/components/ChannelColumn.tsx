@@ -266,6 +266,8 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
                 src={channelThumbToShow}
                 alt={`Channel ${columnIndex + 1}`}
                 className="channel-avatar"
+                loading="eager"
+                decoding="async"
                 onLoad={() => onLoadedChannelThumbnail(activeBoardId, column.id, rawChannelThumbToShow)}
                 onError={(event) =>
                   void onBrokenChannelThumbnail(
@@ -280,7 +282,13 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
                 className="channel-avatar channel-avatar-placeholder"
                 aria-label={`Channel ${columnIndex + 1} placeholder`}
               >
-                <img src={channelPlaceholderIcon} alt="" className="channel-avatar-placeholder-icon" />
+                <img
+                  src={channelPlaceholderIcon}
+                  alt=""
+                  className="channel-avatar-placeholder-icon"
+                  loading="eager"
+                  decoding="async"
+                />
               </div>
             )}
           </button>

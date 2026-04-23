@@ -219,6 +219,8 @@ function SavedListColumnComponent(props: SavedListColumnProps) {
               src={channelThumbToShow}
               alt={`Channel ${columnIndex + 1}`}
               className="channel-avatar"
+              loading="eager"
+              decoding="async"
               onError={(event) =>
                 onBrokenChannelThumbnail(
                   activeBoardId,
@@ -229,7 +231,13 @@ function SavedListColumnComponent(props: SavedListColumnProps) {
             />
           ) : (
             <div className="channel-avatar channel-avatar-placeholder" aria-label={`Channel ${columnIndex + 1} placeholder`}>
-              <img src={savedListPlaceholderIcon} alt="" className="channel-avatar-placeholder-icon" />
+              <img
+                src={savedListPlaceholderIcon}
+                alt=""
+                className="channel-avatar-placeholder-icon"
+                loading="eager"
+                decoding="async"
+              />
             </div>
           )}
           <Input

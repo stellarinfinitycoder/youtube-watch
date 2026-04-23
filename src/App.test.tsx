@@ -106,6 +106,130 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Add column" })).toBeInTheDocument();
   });
 
+  it("switches boards without fetching YouTube data and preloads destination assets", async () => {
+    const resolveInputSpy = vi.spyOn(youtubeApi, "resolveChannelByInputWithThumbnail");
+    const resolveHandleSpy = vi.spyOn(youtubeApi, "resolveChannelByHandleWithThumbnail");
+    const discoverySpy = vi.spyOn(youtubeApi, "fetchPlaylistDiscoveryPage");
+    const statsSpy = vi.spyOn(youtubeApi, "fetchVideoStatsByVideoIds");
+    const loadedImages: string[] = [];
+    const originalImage = global.Image;
+
+    class TestImage {
+      decoding = "";
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      set src(value: string) {
+        loadedImages.push(value);
+        this.onload?.();
+      }
+    }
+
+    global.Image = TestImage as unknown as typeof Image;
+    window.localStorage.setItem(
+      "youtube-watch:boards:v1",
+      JSON.stringify([
+        {
+          id: "board-1",
+          name: "Board 1",
+          kind: "channels",
+          columnScopeFilter: ["__all__"],
+          watchedVideos: {},
+          viewCountRefreshedAtByVideoId: {},
+          videoFilter: "all",
+          videoDurationFilter: ["all"],
+          videoWindowDays: 90,
+          defaultPlaybackRate: 1.5,
+          columns: [
+            {
+              id: "column-1",
+              handleInput: "@one",
+              currentHandle: "@one",
+              channelId: "channel-1",
+              uploadsPlaylistId: "uploads-1",
+              channelThumbnailUrl: "https://yt3.ggpht.com/avatar-one.jpg",
+              lastGoodChannelThumbnailUrl: "https://yt3.ggpht.com/avatar-one.jpg",
+              videos: [
+                {
+                  videoId: "video-1",
+                  title: "Board One Video",
+                  publishedAt: "2099-04-01T10:00:00Z",
+                  thumbnailUrl: "https://i.ytimg.com/vi/video-1/hqdefault.jpg",
+                  channelTitle: "One",
+                  videoUrl: "https://www.youtube.com/watch?v=video-1",
+                  viewCount: 1
+                }
+              ],
+              lastFetchAt: null
+            }
+          ]
+        },
+        {
+          id: "board-2",
+          name: "Board 2",
+          kind: "channels",
+          columnScopeFilter: ["__all__"],
+          watchedVideos: {},
+          viewCountRefreshedAtByVideoId: {},
+          videoFilter: "all",
+          videoDurationFilter: ["all"],
+          videoWindowDays: 90,
+          defaultPlaybackRate: 1.5,
+          columns: [
+            {
+              id: "column-2",
+              handleInput: "@two",
+              currentHandle: "@two",
+              channelId: "channel-2",
+              uploadsPlaylistId: "uploads-2",
+              channelThumbnailUrl: "https://yt3.ggpht.com/avatar-two.jpg",
+              lastGoodChannelThumbnailUrl: "https://yt3.ggpht.com/avatar-two.jpg",
+              videos: [
+                {
+                  videoId: "video-2",
+                  title: "Board Two Video",
+                  publishedAt: "2099-04-02T10:00:00Z",
+                  thumbnailUrl: "https://i.ytimg.com/vi/video-2/hqdefault.jpg",
+                  channelTitle: "Two",
+                  videoUrl: "https://www.youtube.com/watch?v=video-2",
+                  viewCount: 2
+                }
+              ],
+              lastFetchAt: null
+            }
+          ]
+        }
+      ])
+    );
+    window.localStorage.setItem("youtube-watch:active-board-id:v1", "board-1");
+
+    try {
+      render(<App />);
+
+      const boardSelect = screen.getByTestId("topbar-board-select");
+      fireEvent.mouseDown(
+        boardSelect.querySelector(".ant-select-selector") ?? boardSelect
+      );
+      fireEvent.click(await screen.findByText("BOARD 2"));
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("Channel 1 handle")).toHaveValue("@two");
+      });
+      expect(resolveInputSpy).not.toHaveBeenCalled();
+      expect(resolveHandleSpy).not.toHaveBeenCalled();
+      expect(discoverySpy).not.toHaveBeenCalled();
+      expect(statsSpy).not.toHaveBeenCalled();
+      expect(loadedImages).toEqual(
+        expect.arrayContaining([
+          "/api/youtube/channel-avatar?url=https%3A%2F%2Fyt3.ggpht.com%2Favatar-two.jpg",
+          "https://i.ytimg.com/vi/video-2/hqdefault.jpg"
+        ])
+      );
+    } finally {
+      global.Image = originalImage;
+    }
+  });
+
   it("enables column fetch when that column handle is valid", () => {
     render(<App />);
     const fetchOne = screen.getByRole("button", { name: "Fetch column 1" });

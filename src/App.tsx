@@ -57,6 +57,7 @@ import {
   updateBoardById,
   updateBoardColumnById
 } from "./domain/boards";
+import { collectBoardAssetPreloadUrls } from "./domain/boardAssets";
 import {
   CHANNEL_VIDEO_WINDOW_OPTIONS,
   DEFAULT_VIDEO_WINDOW_DAYS,
@@ -179,6 +180,7 @@ const BOARD_DROPDOWN_MAX_VISIBLE = 25;
 const CHANNEL_SCOPE_DROPDOWN_MAX_VISIBLE = 20;
 const BOARD_DROPDOWN_ITEM_HEIGHT = 36;
 const BOARD_DROPDOWN_PADDING = 8;
+const BOARD_SELECTOR_PREWARM_BOARD_LIMIT = 3;
 const SAVED_BOARD_ID = "saved-board-system";
 const SAVED_BOARD_NAME = "SAVED LISTS";
 
@@ -1600,6 +1602,7 @@ function App() {
   const linkCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const boardSummaryCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const activeLogoSpinCountRef = useRef(0);
+  const preloadedImageUrlsRef = useRef<Set<string>>(new Set());
   const initialBoardsState = fixtureMode ? createFixtureBoardsState() : getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
   const [appPath, setAppPath] = useState<string>(() =>
@@ -4126,6 +4129,7 @@ function App() {
       return;
     }
     clearFetchAllVisibilityState();
+    preloadBoardAssets(value);
     setActiveBoardId(value);
   };
 
@@ -4499,13 +4503,86 @@ function App() {
     if (!normalized) {
       return Promise.resolve(false);
     }
+    if (preloadedImageUrlsRef.current.has(normalized)) {
+      return Promise.resolve(true);
+    }
     return new Promise((resolve) => {
       const image = new Image();
-      image.onload = () => resolve(true);
+      image.decoding = "async";
+      image.onload = () => {
+        preloadedImageUrlsRef.current.add(normalized);
+        resolve(true);
+      };
       image.onerror = () => resolve(false);
       image.src = normalized;
     });
   }, []);
+
+  const getBoardColumnAvatarPreloadSrc = useCallback(
+    (board: BoardState, column: ColumnState): string => {
+      if (board.kind === "saved") {
+        return column.channelThumbnailUrl || column.videos[0]?.thumbnailUrl || "";
+      }
+
+      const brokenKey = `${board.id}:${column.id}`;
+      const rawThumbnailUrl =
+        column.lastGoodChannelThumbnailUrl ||
+        (brokenChannelThumbnailKeys.includes(brokenKey)
+          ? ""
+          : column.channelThumbnailUrl || "");
+      return buildChannelAvatarProxyUrl(rawThumbnailUrl);
+    },
+    [brokenChannelThumbnailKeys]
+  );
+
+  const preloadBoardAssets = useCallback(
+    (boardId: string): void => {
+      const board = boards.find((item) => item.id === boardId);
+      if (!board) {
+        return;
+      }
+
+      const derivedData = getBoardFilterDerivedData({
+        board,
+        allValue: COLUMN_SCOPE_ALL,
+        notEmptyValue: COLUMN_SCOPE_NOT_EMPTY,
+        getSourceVideos: getSourceVideosForBoard
+      });
+      const urls = collectBoardAssetPreloadUrls({
+        visibleColumns: derivedData.visibleColumns,
+        filteredVideosByColumnId: derivedData.filteredVideosByColumnId,
+        getColumnAvatarSrc: (column) => getBoardColumnAvatarPreloadSrc(board, column),
+        getVideoThumbnailSrc
+      });
+
+      urls.forEach((url) => {
+        void preloadImage(url);
+      });
+    },
+    [
+      boards,
+      getBoardColumnAvatarPreloadSrc,
+      getSourceVideosForBoard,
+      getVideoThumbnailSrc,
+      preloadImage
+    ]
+  );
+
+  const preloadDisplayedBoardAssets = useCallback((): void => {
+    const activeIndex = displayedBoards.findIndex((board) => board.id === activeBoardId);
+    const orderedBoardIds = activeIndex >= 0
+      ? [
+          displayedBoards[activeIndex + 1]?.id,
+          displayedBoards[activeIndex - 1]?.id,
+          displayedBoards[activeIndex + 2]?.id,
+          displayedBoards[activeIndex - 2]?.id
+        ]
+      : displayedBoards.map((board) => board.id);
+    orderedBoardIds
+      .filter((boardId): boardId is string => Boolean(boardId && boardId !== activeBoardId))
+      .slice(0, BOARD_SELECTOR_PREWARM_BOARD_LIMIT)
+      .forEach((boardId) => preloadBoardAssets(boardId));
+  }, [activeBoardId, displayedBoards, preloadBoardAssets]);
 
   const agentModeEnabled =
     typeof window !== "undefined" &&
@@ -5371,6 +5448,7 @@ function App() {
             newBoardOptionValue={NEW_BOARD_OPTION_VALUE}
             boardDropdownListHeight={boardDropdownListHeight}
             handleBoardSelectChange={handleBoardSelectChange}
+            onBoardSelectorPrewarm={preloadDisplayedBoardAssets}
             blurActiveTopbarControl={blurActiveTopbarControl}
             moveBoard={moveBoard}
             openRenameBoardModal={openRenameBoardModal}

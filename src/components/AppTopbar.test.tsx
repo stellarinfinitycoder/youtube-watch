@@ -31,6 +31,7 @@ describe("AppTopbar", () => {
         newBoardOptionValue="__new__"
         boardDropdownListHeight={320}
         handleBoardSelectChange={() => undefined}
+        onBoardSelectorPrewarm={() => undefined}
         blurActiveTopbarControl={() => undefined}
         moveBoard={() => undefined}
         openRenameBoardModal={() => undefined}

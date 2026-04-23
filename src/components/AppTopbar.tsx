@@ -24,6 +24,7 @@ type AppTopbarProps = {
   newBoardOptionValue: string;
   boardDropdownListHeight: number;
   handleBoardSelectChange: (value: string) => void;
+  onBoardSelectorPrewarm: () => void;
   blurActiveTopbarControl: () => void;
   moveBoard: (boardId: string, direction: "up" | "down") => void;
   openRenameBoardModal: (boardId: string) => void;
@@ -75,6 +76,7 @@ function AppTopbarComponent({
   newBoardOptionValue,
   boardDropdownListHeight,
   handleBoardSelectChange,
+  onBoardSelectorPrewarm,
   blurActiveTopbarControl,
   moveBoard,
   openRenameBoardModal,
@@ -171,17 +173,23 @@ function AppTopbarComponent({
           data-testid="topbar-logo"
         />
         <Select<string>
-        value={activeBoardId}
-        onChange={(value) => {
-          handleBoardSelectChange(value);
-          blurActiveTopbarControl();
-        }}
-        aria-label="Board selector"
-        className="video-filter-select board-select"
-        data-testid="topbar-board-select"
-        optionLabelProp="title"
-        listHeight={boardDropdownListHeight}
-      >
+          value={activeBoardId}
+          onChange={(value) => {
+            handleBoardSelectChange(value);
+            blurActiveTopbarControl();
+          }}
+          onFocus={onBoardSelectorPrewarm}
+          onOpenChange={(open) => {
+            if (open) {
+              onBoardSelectorPrewarm();
+            }
+          }}
+          aria-label="Board selector"
+          className="video-filter-select board-select"
+          data-testid="topbar-board-select"
+          optionLabelProp="title"
+          listHeight={boardDropdownListHeight}
+        >
         {displayedBoards.map((board, boardIndex) => (
           <Select.Option key={board.id} value={board.id} title={board.name.toUpperCase()}>
             <div className="board-option-row">
