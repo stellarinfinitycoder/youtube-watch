@@ -64,48 +64,12 @@ function normalizeContent(content: unknown): string {
   return "";
 }
 
-function safeJsonParse(raw: string): Record<string, unknown> | null {
-  const text = raw.trim();
-  if (!text) {
-    return null;
-  }
-  const stripped = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/, "");
-  try {
-    const parsed = JSON.parse(stripped) as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-  } catch {
-    // ignore parse failure
-  }
-  return null;
-}
-
-function normalizeSummaryPayload(raw: string): { summary: string; keyPoints: string[] } {
-  const parsed = safeJsonParse(raw);
-  if (parsed) {
-    const summary =
-      typeof parsed.summary === "string" ? parsed.summary.trim() : "";
-    const keyPoints = Array.isArray(parsed.keyPoints)
-      ? parsed.keyPoints
-          .filter((item): item is string => typeof item === "string")
-          .map((item) => item.trim())
-          .filter((item) => item.length > 0)
-      : [];
-    if (summary.length > 0 || keyPoints.length > 0) {
-      return {
-        summary: summary || keyPoints.join("\n"),
-        keyPoints
-      };
-    }
-  }
-
-  const fallback = raw.trim();
-  if (!fallback) {
+function normalizeRawSummaryPayload(raw: string): { summary: string; keyPoints: string[] } {
+  if (!raw.trim()) {
     throw new Error("Empty summary from model.");
   }
   return {
-    summary: fallback,
+    summary: raw,
     keyPoints: []
   };
 }
@@ -153,7 +117,7 @@ async function fetchOpenRouterSummary(params: {
   }
 
   const content = normalizeContent(payload?.choices?.[0]?.message?.content);
-  return normalizeSummaryPayload(content);
+  return normalizeRawSummaryPayload(content);
 }
 
 export default async function handler(req: any, res: any) {

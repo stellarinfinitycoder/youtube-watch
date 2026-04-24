@@ -108,8 +108,8 @@ describe("TranscriptSummaryModal", () => {
         transcriptViewMode="summary"
         isTranscriptCopied={false}
         summaryLoading={false}
-        summaryText="Cached summary body"
-        summaryKeyPoints={["Cached point"]}
+        summaryText={"Cached summary body\n\n- Model formatted point"}
+        summaryKeyPoints={[]}
         summaryError={null}
         summaryModel="openai/gpt-4o-mini"
         isPublishingSummary={false}
@@ -150,5 +150,7 @@ describe("TranscriptSummaryModal", () => {
     expect(screen.getByRole("combobox", { name: "Transcript view mode" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Copy summary" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Regenerate summary" })).toBeEnabled();
+    const rawSummary = document.querySelector(".summary-raw-text");
+    expect(rawSummary?.textContent).toBe("Cached summary body\n\n- Model formatted point");
   });
 });

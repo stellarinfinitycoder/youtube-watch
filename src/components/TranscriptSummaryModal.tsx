@@ -1,8 +1,7 @@
 import { Button, Checkbox, Input, Modal, Select, Space, Typography } from "antd";
-import { Suspense, lazy, memo, useMemo } from "react";
+import { memo } from "react";
 import type { VideoItem } from "../types/youtube";
 import {
-  looksLikeMarkdown,
   NEW_SUMMARY_FORMAT_OPTION,
   NEW_SUMMARY_MODEL_OPTION,
   SUMMARY_MODE_OPTION_PREFIX,
@@ -12,7 +11,6 @@ import {
 } from "../hooks/useTranscriptSummary";
 
 const { Text } = Typography;
-const SummaryMarkdownRenderer = lazy(() => import("./SummaryMarkdownRenderer"));
 
 type TranscriptSummaryModalProps = {
   transcriptVideo: VideoItem;
@@ -74,7 +72,6 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
     isTranscriptCopied,
     summaryLoading,
     summaryText,
-    summaryKeyPoints,
     summaryError,
     summaryModel,
     isPublishingSummary,
@@ -111,27 +108,11 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
     deleteSummaryFormatAndClose
   } = props;
 
-  const combinedSummary = useMemo(() => {
-    const pointsBlock =
-      summaryKeyPoints.length > 0 ? summaryKeyPoints.map((point) => `- ${point}`).join("\n") : "";
-    return [summaryText, pointsBlock].filter(Boolean).join("\n\n").trim();
-  }, [summaryKeyPoints, summaryText]);
-  const markdownMode = useMemo(
-    () => looksLikeMarkdown(combinedSummary),
-    [combinedSummary]
-  );
   const plainSummaryText = summaryText.trim();
-  const plainSummaryPoints = useMemo(
-    () =>
-      summaryKeyPoints
-        .map((point) => point.trim())
-        .filter((point) => point.length > 0),
-    [summaryKeyPoints]
-  );
   const showPublishButton =
     transcriptViewMode === "summary" &&
     (hasPublishableSummary || isPublishingSummary || publishSummaryFeedback !== null);
-  const hasSummaryContent = plainSummaryText.length > 0 || plainSummaryPoints.length > 0;
+  const hasSummaryContent = plainSummaryText.length > 0;
   const isSummaryModeSelectorUsable =
     transcriptViewMode === "summary" && !isSummaryPromptEditMode && hasSummaryContent;
 
@@ -286,7 +267,7 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                         summaryHydrating ||
                         transcriptHydrating ||
                         !!summaryError ||
-                        (summaryText.trim().length === 0 && summaryKeyPoints.length === 0)
+                        summaryText.trim().length === 0
                       : summaryHydrating ||
                         transcriptHydrating ||
                         transcriptLoading ||
@@ -470,37 +451,9 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
         ) : (
           <>
             {!summaryLoading && summaryError ? <Text type="danger">{summaryError}</Text> : null}
-            {!summaryLoading && !summaryError && (summaryText || summaryKeyPoints.length > 0) ? (
+            {!summaryLoading && !summaryError && summaryText ? (
               <div className="summary-content">
-                {!markdownMode ? (
-                  <>
-                    {plainSummaryText ? <p className="summary-paragraph">{plainSummaryText}</p> : null}
-                    {plainSummaryPoints.length > 0 ? (
-                      <ul className="summary-points">
-                        {plainSummaryPoints.map((point, index) => (
-                          <li key={`${index}-${point.slice(0, 24)}`}>{point}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </>
-                ) : (
-                  <Suspense
-                    fallback={
-                      <>
-                        {plainSummaryText ? <p className="summary-paragraph">{plainSummaryText}</p> : null}
-                        {plainSummaryPoints.length > 0 ? (
-                          <ul className="summary-points">
-                            {plainSummaryPoints.map((point, index) => (
-                              <li key={`${index}-${point.slice(0, 24)}`}>{point}</li>
-                            ))}
-                          </ul>
-                        ) : null}
-                      </>
-                    }
-                  >
-                    <SummaryMarkdownRenderer content={combinedSummary} />
-                  </Suspense>
-                )}
+                <pre className="summary-raw-text">{plainSummaryText}</pre>
               </div>
             ) : null}
           </>

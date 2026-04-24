@@ -44,7 +44,7 @@ describe("useTranscriptSummary", () => {
     await writeCachedTranscript(video.videoId, "Cached transcript body");
     await writeCachedSummaryForTranscript(video.videoId, "Cached transcript body", defaultPromptCacheKey, {
       summary: "Cached summary body",
-      keyPoints: ["Cached point"],
+      keyPoints: [],
       model: "openai/gpt-4o-mini"
     });
 
@@ -68,14 +68,14 @@ describe("useTranscriptSummary", () => {
     expect(result.current.transcriptHydrating).toBe(false);
     expect(result.current.transcriptText).toBe("");
     expect(result.current.summaryText).toBe("Cached summary body");
-    expect(result.current.summaryKeyPoints).toEqual(["Cached point"]);
+    expect(result.current.summaryKeyPoints).toEqual([]);
     expect(fetchSummaryMock).not.toHaveBeenCalled();
   });
 
   it("opens from direct cached summary without transcript fetch, then lazily fetches transcript on transcript view", async () => {
     await writeCachedSummaryForTranscript(video.videoId, "Fetched transcript body", defaultPromptCacheKey, {
       summary: "Fetched summary body",
-      keyPoints: ["Fetched point"],
+      keyPoints: [],
       model: "openai/gpt-4o-mini"
     });
     let resolveTranscript: ((value: { videoId: string; text: string }) => void) | null = null;
@@ -135,7 +135,7 @@ describe("useTranscriptSummary", () => {
   it("regenerates from direct cached summary by fetching transcript first, then summary", async () => {
     await writeCachedSummaryForTranscript(video.videoId, "Fetched transcript body", defaultPromptCacheKey, {
       summary: "Fetched summary body",
-      keyPoints: ["Fetched point"],
+      keyPoints: [],
       model: "openai/gpt-4o-mini"
     });
     let resolveTranscript: ((value: { videoId: string; text: string }) => void) | null = null;
@@ -201,15 +201,15 @@ describe("useTranscriptSummary", () => {
 
     await act(async () => {
       resolveSummary?.({
-        summary: "Regenerated summary body",
-        keyPoints: ["Regenerated point"],
+        summary: "Regenerated summary body\n\n- Model formatted point",
+        keyPoints: [],
         model: "openai/gpt-4o-mini"
       });
     });
 
     expect(result.current.summaryLoading).toBe(false);
-    expect(result.current.summaryText).toBe("Regenerated summary body");
-    expect(result.current.summaryKeyPoints).toEqual(["Regenerated point"]);
+    expect(result.current.summaryText).toBe("Regenerated summary body\n\n- Model formatted point");
+    expect(result.current.summaryKeyPoints).toEqual([]);
     expect(result.current.transcriptText).toBe("Fetched transcript body");
   });
 
@@ -312,7 +312,7 @@ describe("useTranscriptSummary", () => {
     await writeCachedTranscript(video.videoId, "Cached transcript body");
     await writeCachedSummaryForTranscript(video.videoId, "Cached transcript body", defaultPromptCacheKey, {
       summary: "Cached summary body",
-      keyPoints: ["Cached point"],
+      keyPoints: [],
       model: "openai/gpt-4o-mini"
     });
 

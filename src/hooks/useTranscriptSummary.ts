@@ -379,8 +379,7 @@ export function useTranscriptSummary() {
   const activeSummaryPrompt = activeSummaryFormat.prompt;
   const activeSummaryModel = (activeSummaryFormat.model ?? "").trim();
 
-  const hasPublishableSummary =
-    summaryText.trim().length > 0 || summaryKeyPoints.some((point) => point.trim().length > 0);
+  const hasPublishableSummary = summaryText.trim().length > 0;
   const isSummaryBusy = transcriptViewMode === "summary" && summaryLoading;
 
   useEffect(() => {
@@ -642,15 +641,12 @@ export function useTranscriptSummary() {
         model: modelToUse || undefined
       });
       const nextSummary = payload.summary.trim();
-      const nextKeyPoints = payload.keyPoints
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0);
-      if (!nextSummary && nextKeyPoints.length === 0) {
+      if (!nextSummary) {
         setSummaryError("No summary.");
         return;
       }
       setSummaryText(nextSummary);
-      setSummaryKeyPoints(nextKeyPoints);
+      setSummaryKeyPoints([]);
       setSummaryModel(payload.model);
       await writeCachedSummaryForTranscript(
         transcriptVideo.videoId,
@@ -658,7 +654,7 @@ export function useTranscriptSummary() {
         `${promptToUse}\n__MODEL__:${modelToUse || ""}`,
         {
           summary: nextSummary,
-          keyPoints: nextKeyPoints,
+          keyPoints: [],
           model: payload.model
         }
       );
@@ -962,13 +958,7 @@ export function useTranscriptSummary() {
   };
 
   const buildSummaryTextForPublish = (): string => {
-    const summary = summaryText.trim();
-    const points = summaryKeyPoints
-      .map((point) => point.trim())
-      .filter((point) => point.length > 0);
-    const pointsBlock =
-      points.length > 0 ? `\n\n${points.map((point) => `- ${point}`).join("\n")}` : "";
-    return `${summary}${pointsBlock}`.trim();
+    return summaryText.trim();
   };
 
   const publishCurrentVideoSummary = async (): Promise<void> => {
@@ -1012,13 +1002,7 @@ export function useTranscriptSummary() {
 
   const getVisibleTranscriptPanelText = (): string => {
     if (transcriptViewMode === "summary") {
-      const summary = summaryText.trim();
-      const points = summaryKeyPoints
-        .map((point) => point.trim())
-        .filter((point) => point.length > 0);
-      const pointsBlock =
-        points.length > 0 ? `\n\n${points.map((point) => `- ${point}`).join("\n")}` : "";
-      return `${summary}${pointsBlock}`.trim();
+      return summaryText.trim();
     }
     return transcriptText.trim();
   };

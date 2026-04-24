@@ -1,9 +1,8 @@
 import { Button, Modal, Select, Typography } from "antd";
-import { Suspense, lazy, memo, useMemo } from "react";
-import { looksLikeMarkdown, type SummaryFormat } from "../hooks/useTranscriptSummary";
+import { memo } from "react";
+import type { SummaryFormat } from "../hooks/useTranscriptSummary";
 
 const { Text } = Typography;
-const SummaryMarkdownRenderer = lazy(() => import("./SummaryMarkdownRenderer"));
 
 type BoardSummaryAggregateModalProps = {
   open: boolean;
@@ -25,7 +24,6 @@ function BoardSummaryAggregateModalComponent({
   loading,
   error,
   summaryText,
-  summaryKeyPoints,
   summaryModel,
   summaryFormats,
   selectedSummaryFormatId,
@@ -34,20 +32,7 @@ function BoardSummaryAggregateModalComponent({
   onCancel,
   onCopy
 }: BoardSummaryAggregateModalProps) {
-  const combinedSummary = useMemo(() => {
-    const pointsBlock =
-      summaryKeyPoints.length > 0 ? summaryKeyPoints.map((point) => `- ${point}`).join("\n") : "";
-    return [summaryText, pointsBlock].filter(Boolean).join("\n\n").trim();
-  }, [summaryKeyPoints, summaryText]);
-  const markdownMode = useMemo(() => looksLikeMarkdown(combinedSummary), [combinedSummary]);
   const plainSummaryText = summaryText.trim();
-  const plainSummaryPoints = useMemo(
-    () =>
-      summaryKeyPoints
-        .map((point) => point.trim())
-        .filter((point) => point.length > 0),
-    [summaryKeyPoints]
-  );
 
   return (
     <Modal
@@ -86,7 +71,7 @@ function BoardSummaryAggregateModalComponent({
                 className={`column-move-btn transcript-copy-btn ${isCopied ? "is-copied" : ""}`}
                 aria-label="Copy summaries summary"
                 onClick={() => void onCopy()}
-                disabled={loading || !!error || combinedSummary.length === 0}
+                disabled={loading || !!error || plainSummaryText.length === 0}
               >
                 {isCopied ? (
                   <span className="btn-icon btn-icon-check" aria-hidden />
@@ -107,37 +92,9 @@ function BoardSummaryAggregateModalComponent({
     >
       <div className="transcript-modal-body">
         {!loading && error ? <Text type="danger">{error}</Text> : null}
-        {!loading && !error && combinedSummary ? (
+        {!loading && !error && plainSummaryText ? (
           <div className="summary-content">
-            {!markdownMode ? (
-              <>
-                {plainSummaryText ? <p className="summary-paragraph">{plainSummaryText}</p> : null}
-                {plainSummaryPoints.length > 0 ? (
-                  <ul className="summary-points">
-                    {plainSummaryPoints.map((point, index) => (
-                      <li key={`${index}-${point.slice(0, 24)}`}>{point}</li>
-                    ))}
-                  </ul>
-                ) : null}
-              </>
-            ) : (
-              <Suspense
-                fallback={
-                  <>
-                    {plainSummaryText ? <p className="summary-paragraph">{plainSummaryText}</p> : null}
-                    {plainSummaryPoints.length > 0 ? (
-                      <ul className="summary-points">
-                        {plainSummaryPoints.map((point, index) => (
-                          <li key={`${index}-${point.slice(0, 24)}`}>{point}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </>
-                }
-              >
-                <SummaryMarkdownRenderer content={combinedSummary} />
-              </Suspense>
-            )}
+            <pre className="summary-raw-text">{plainSummaryText}</pre>
           </div>
         ) : null}
       </div>

@@ -2791,22 +2791,19 @@ function App() {
           model: modelText || undefined
         });
         const nextSummary = payload.summary.trim();
-        const nextKeyPoints = payload.keyPoints
-          .map((item) => item.trim())
-          .filter((item) => item.length > 0);
-        if (!nextSummary && nextKeyPoints.length === 0) {
+        if (!nextSummary) {
           throw new Error("No summary.");
         }
 
         await writeCachedSummaryForTranscript(video.videoId, transcriptText, promptCacheKey, {
           summary: nextSummary,
-          keyPoints: nextKeyPoints,
+          keyPoints: [],
           model: payload.model
         });
         updateBatchItem(index, {
           status: "done",
           summary: nextSummary,
-          keyPoints: nextKeyPoints,
+          keyPoints: [],
           error: null
         });
       } catch (error) {
@@ -3039,10 +3036,7 @@ function App() {
         model: (resolvedSummaryFormat.model ?? "").trim() || undefined
       });
       const nextSummary = payload.summary.trim();
-      const nextKeyPoints = payload.keyPoints
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0);
-      if (!nextSummary && nextKeyPoints.length === 0) {
+      if (!nextSummary) {
         throw new Error("No summary.");
       }
       setBoardSummaryAggregateState({
@@ -3050,7 +3044,7 @@ function App() {
         loading: false,
         error: null,
         summaryText: nextSummary,
-        keyPoints: nextKeyPoints,
+        keyPoints: [],
         model: payload.model,
         selectedFormatId,
         items
@@ -3085,13 +3079,7 @@ function App() {
     if (!state) {
       return;
     }
-    const normalizedKeyPoints = state.keyPoints
-      .map((point) => point.trim())
-      .filter((point) => point.length > 0);
-    const text = [state.summaryText.trim(), normalizedKeyPoints.map((point) => `- ${point}`).join("\n")]
-      .filter(Boolean)
-      .join("\n\n")
-      .trim();
+    const text = state.summaryText.trim();
     if (!text) {
       return;
     }
@@ -3101,16 +3089,10 @@ function App() {
     const fallbackSummaryHtml = state.summaryText.trim()
       ? `<p style="margin:0 0 10px;">${escapeHtml(state.summaryText.trim()).replace(/\n/g, "<br />")}</p>`
       : "";
-    const fallbackKeyPointsHtml =
-      normalizedKeyPoints.length > 0
-        ? `<ul style="margin:0;padding-left:20px;">${normalizedKeyPoints
-            .map((point) => `<li>${escapeHtml(point)}</li>`)
-            .join("")}</ul>`
-        : "";
     const html =
       renderedSummaryContent instanceof HTMLElement
         ? `<div>${renderedSummaryContent.innerHTML}</div>`
-        : ["<div>", fallbackSummaryHtml, fallbackKeyPointsHtml, "</div>"].join("");
+        : ["<div>", fallbackSummaryHtml, "</div>"].join("");
     try {
       if (
         navigator.clipboard &&

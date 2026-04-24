@@ -2019,6 +2019,16 @@ body {
   line-height: 1.55;
 }
 
+.summary-raw-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
 .summary-points {
   margin: 0;
   padding-left: 18px;
