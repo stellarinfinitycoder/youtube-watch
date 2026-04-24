@@ -34,7 +34,7 @@ describe("BoardSummaryAggregateModal", () => {
     );
   });
 
-  it("renders the selected format and notifies on change", async () => {
+  it("renders markdown summary content and notifies on format change", async () => {
     const onSummaryFormatChange = vi.fn();
 
     render(
@@ -42,8 +42,8 @@ describe("BoardSummaryAggregateModal", () => {
         open
         loading={false}
         error={null}
-        summaryText="Combined summary"
-        summaryKeyPoints={["First point"]}
+        summaryText={"## Combined summary\n\n- First point"}
+        summaryKeyPoints={[]}
         summaryModel="openai/gpt-4o-mini"
         summaryFormats={summaryFormats}
         selectedSummaryFormatId="summary-default"
@@ -55,6 +55,8 @@ describe("BoardSummaryAggregateModal", () => {
     );
 
     expect(screen.getByText("SUMMARY")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Combined summary" })).toBeInTheDocument();
+    expect(screen.getByRole("listitem")).toHaveTextContent("First point");
 
     fireEvent.mouseDown(screen.getByRole("combobox", { name: "Summary of summaries format" }));
     fireEvent.click(await screen.findByText("ALT"));

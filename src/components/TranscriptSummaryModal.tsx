@@ -1,5 +1,5 @@
 import { Button, Checkbox, Input, Modal, Select, Space, Typography } from "antd";
-import { memo } from "react";
+import { Suspense, lazy, memo } from "react";
 import type { VideoItem } from "../types/youtube";
 import {
   NEW_SUMMARY_FORMAT_OPTION,
@@ -11,6 +11,7 @@ import {
 } from "../hooks/useTranscriptSummary";
 
 const { Text } = Typography;
+const SummaryMarkdownRenderer = lazy(() => import("./SummaryMarkdownRenderer"));
 
 type TranscriptSummaryModalProps = {
   transcriptVideo: VideoItem;
@@ -453,7 +454,9 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
             {!summaryLoading && summaryError ? <Text type="danger">{summaryError}</Text> : null}
             {!summaryLoading && !summaryError && summaryText ? (
               <div className="summary-content">
-                <pre className="summary-raw-text">{plainSummaryText}</pre>
+                <Suspense fallback={<pre className="summary-raw-text">{plainSummaryText}</pre>}>
+                  <SummaryMarkdownRenderer content={plainSummaryText} />
+                </Suspense>
               </div>
             ) : null}
           </>

@@ -88,7 +88,7 @@ describe("TranscriptSummaryModal", () => {
     expect(screen.getByRole("button", { name: "Copy summary" })).toBeDisabled();
   });
 
-  it("keeps the summary format selector enabled in summary mode without transcript text", () => {
+  it("keeps the summary format selector enabled and renders markdown summaries", async () => {
     render(
       <TranscriptSummaryModal
         transcriptVideo={{
@@ -108,7 +108,7 @@ describe("TranscriptSummaryModal", () => {
         transcriptViewMode="summary"
         isTranscriptCopied={false}
         summaryLoading={false}
-        summaryText={"Cached summary body\n\n- Model formatted point"}
+        summaryText={"# Cached summary body\n\n- Model formatted point"}
         summaryKeyPoints={[]}
         summaryError={null}
         summaryModel="openai/gpt-4o-mini"
@@ -150,7 +150,7 @@ describe("TranscriptSummaryModal", () => {
     expect(screen.getByRole("combobox", { name: "Transcript view mode" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Copy summary" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Regenerate summary" })).toBeEnabled();
-    const rawSummary = document.querySelector(".summary-raw-text");
-    expect(rawSummary?.textContent).toBe("Cached summary body\n\n- Model formatted point");
+    expect(await screen.findByRole("heading", { name: "Cached summary body" })).toBeInTheDocument();
+    expect(screen.getByRole("listitem")).toHaveTextContent("Model formatted point");
   });
 });

@@ -1,8 +1,9 @@
 import { Button, Modal, Select, Typography } from "antd";
-import { memo } from "react";
+import { Suspense, lazy, memo } from "react";
 import type { SummaryFormat } from "../hooks/useTranscriptSummary";
 
 const { Text } = Typography;
+const SummaryMarkdownRenderer = lazy(() => import("./SummaryMarkdownRenderer"));
 
 type BoardSummaryAggregateModalProps = {
   open: boolean;
@@ -94,7 +95,9 @@ function BoardSummaryAggregateModalComponent({
         {!loading && error ? <Text type="danger">{error}</Text> : null}
         {!loading && !error && plainSummaryText ? (
           <div className="summary-content">
-            <pre className="summary-raw-text">{plainSummaryText}</pre>
+            <Suspense fallback={<pre className="summary-raw-text">{plainSummaryText}</pre>}>
+              <SummaryMarkdownRenderer content={plainSummaryText} />
+            </Suspense>
           </div>
         ) : null}
       </div>
