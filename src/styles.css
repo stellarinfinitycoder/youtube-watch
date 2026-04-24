@@ -1689,11 +1689,27 @@ body {
 }
 
 .transcript-modal .ant-modal-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
   padding-top: 8px !important;
 }
 
+.transcript-modal .ant-modal {
+  max-height: calc(100dvh - 32px);
+}
+
+.transcript-modal .ant-modal-content {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+}
+
 .transcript-modal-body {
-  max-height: 68vh;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -2791,6 +2807,20 @@ body {
     width: calc(100vw - 6px) !important;
     max-width: calc(100vw - 6px) !important;
     margin: 0 auto !important;
+    top: 0;
+    padding-bottom: 0;
+  }
+
+  .transcript-modal .ant-modal-content {
+    padding: 6px !important;
+  }
+
+  .transcript-modal .ant-modal-header {
+    padding: 28px 0 6px !important;
+  }
+
+  .transcript-modal .ant-modal-body {
+    padding: 0 !important;
   }
 
   .save-video-modal .ant-modal-content {

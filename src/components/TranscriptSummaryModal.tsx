@@ -1,6 +1,7 @@
 import { Button, Checkbox, Input, Modal, Select, Space, Typography } from "antd";
 import { Suspense, lazy, memo } from "react";
 import type { VideoItem } from "../types/youtube";
+import { RESPONSIVE_SUMMARY_MODAL_WIDTH } from "./modalSizing";
 import {
   NEW_SUMMARY_FORMAT_OPTION,
   NEW_SUMMARY_MODEL_OPTION,
@@ -329,7 +330,7 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
       open
       onCancel={onCancel}
       footer={null}
-      width={900}
+      width={RESPONSIVE_SUMMARY_MODAL_WIDTH}
       destroyOnHidden
       className="transcript-modal"
     >

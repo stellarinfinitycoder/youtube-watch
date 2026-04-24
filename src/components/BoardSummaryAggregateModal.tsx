@@ -1,6 +1,7 @@
 import { Button, Modal, Select, Typography } from "antd";
 import { Suspense, lazy, memo } from "react";
 import type { SummaryFormat } from "../hooks/useTranscriptSummary";
+import { RESPONSIVE_SUMMARY_MODAL_WIDTH } from "./modalSizing";
 
 const { Text } = Typography;
 const SummaryMarkdownRenderer = lazy(() => import("./SummaryMarkdownRenderer"));
@@ -87,7 +88,7 @@ function BoardSummaryAggregateModalComponent({
       open={open}
       onCancel={onCancel}
       footer={null}
-      width={900}
+      width={RESPONSIVE_SUMMARY_MODAL_WIDTH}
       destroyOnHidden
       className="transcript-modal board-summary-aggregate-modal"
     >
