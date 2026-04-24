@@ -2041,7 +2041,7 @@ body {
   word-break: break-word;
   color: var(--text);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.55;
 }
 
@@ -2058,7 +2058,7 @@ body {
 
 .summary-markdown {
   color: var(--text);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.55;
 }
 
@@ -2080,7 +2080,7 @@ body {
 }
 
 .summary-markdown li {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
 }
 
@@ -2343,13 +2343,28 @@ body {
   }
 }
 
-.summary-markdown h2 {
+.summary-markdown h1,
+.summary-markdown h2,
+.summary-markdown h3 {
   margin: 0 0 10px;
-  color: var(--amber);
-  font-size: 16px;
   line-height: 1.3;
   font-weight: 700;
+}
+
+.summary-markdown h1 {
+  color: var(--amber);
+  font-size: 20px;
+}
+
+.summary-markdown h2 {
+  color: var(--amber);
+  font-size: 18px;
   text-transform: uppercase;
+}
+
+.summary-markdown h3 {
+  color: var(--text);
+  font-size: 16px;
 }
 
 .publisher-edit-modal .ant-input,
