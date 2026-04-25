@@ -2131,6 +2131,8 @@ body {
 }
 
 .board-summary-page {
+  --board-summary-page-width: min(1200px, 70vw);
+  --board-summary-page-gutter: max(0px, calc((100vw - var(--board-summary-page-width)) / 2 - 12px));
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2142,9 +2144,10 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
+  width: var(--board-summary-page-width);
+  max-width: calc(100vw - 24px);
+  margin-left: var(--board-summary-page-gutter);
+  margin-right: 0;
 }
 
 .board-summary-page-title-row {
@@ -2188,9 +2191,10 @@ body {
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
+  width: var(--board-summary-page-width);
+  max-width: calc(100vw - 24px);
+  margin-left: var(--board-summary-page-gutter);
+  margin-right: 0;
   background: var(--shell);
   border: 1px solid var(--amber);
   box-shadow: inset 0 0 0 1px rgba(255, 143, 31, 0.14);
@@ -2312,6 +2316,7 @@ body {
   display: flex;
   align-items: center;
   min-height: 28px;
+  padding-left: 5%;
 }
 
 .board-summary-row-copy-btn.is-copied {
