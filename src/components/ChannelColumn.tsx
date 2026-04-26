@@ -1,6 +1,7 @@
 import { Alert, Button, Empty, Form, Input, List, Skeleton, Space, Spin, Typography } from "antd";
 import { memo, useMemo } from "react";
 import { buildChannelAvatarProxyUrl } from "../api/youtube";
+import { selectChannelThumbnailUrl } from "../domain/boardAssets";
 import type { VideoItem } from "../types/youtube";
 import { LazyRender } from "./LazyRender";
 import type { ColumnStateLike, InlineMetaFeedback } from "./boardColumnsShared";
@@ -89,9 +90,10 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
   } = props;
 
   const brokenThumbKey = `${activeBoardId}:${column.id}`;
-  const rawChannelThumbToShow =
-    column.lastGoodChannelThumbnailUrl ||
-    (brokenChannelThumbnailKeys.includes(brokenThumbKey) ? "" : column.channelThumbnailUrl || "");
+  const rawChannelThumbToShow = selectChannelThumbnailUrl(
+    column,
+    brokenChannelThumbnailKeys.includes(brokenThumbKey)
+  );
   const channelThumbToShow = buildChannelAvatarProxyUrl(rawChannelThumbToShow);
   const hasHandleInput = column.handleInput.trim().length > 0;
   const hasChannelPlaylistVideos = filteredVideos.length > 0;

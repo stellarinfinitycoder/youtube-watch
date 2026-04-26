@@ -1,6 +1,7 @@
 import { Button } from "antd";
 import { memo } from "react";
 import { buildChannelAvatarProxyUrl } from "../api/youtube";
+import { selectChannelThumbnailUrl } from "../domain/boardAssets";
 import type { VideoItem } from "../types/youtube";
 import type { ColumnStateLike, InlineMetaFeedback } from "./boardColumnsShared";
 import { ChannelColumn } from "./ChannelColumn";
@@ -202,11 +203,10 @@ function BoardColumnsComponent({
                 <div className="hidden-channel-thumbs">
                   {hiddenColumns.map((column, index) => {
                     const brokenKey = `${activeBoardId}:${column.id}`;
-                    const rawThumbnailUrl =
-                      column.lastGoodChannelThumbnailUrl ||
-                      (brokenChannelThumbnailKeys.includes(brokenKey)
-                        ? ""
-                        : column.channelThumbnailUrl || "");
+                    const rawThumbnailUrl = selectChannelThumbnailUrl(
+                      column,
+                      brokenChannelThumbnailKeys.includes(brokenKey)
+                    );
                     const thumbnailUrl = buildChannelAvatarProxyUrl(rawThumbnailUrl);
                     const rawName = column.currentHandle.trim() || column.handleInput.trim();
                     const displayName = rawName ? (rawName.startsWith("@") ? rawName : `@${rawName}`) : `CHANNEL ${index + 1}`;

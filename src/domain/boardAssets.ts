@@ -7,6 +7,7 @@ export type BoardAssetPreloadColumn = {
 
 type CollectBoardAssetPreloadUrlsArgs<TColumn extends BoardAssetPreloadColumn> = {
   visibleColumns: TColumn[];
+  hiddenColumns?: TColumn[];
   filteredVideosByColumnId: Map<string, VideoItem[]>;
   getColumnAvatarSrc: (column: TColumn) => string;
   getVideoThumbnailSrc: (video: VideoItem) => string;
@@ -26,6 +27,7 @@ function addUniqueUrl(target: string[], seen: Set<string>, rawUrl: string): void
 
 export function collectBoardAssetPreloadUrls<TColumn extends BoardAssetPreloadColumn>({
   visibleColumns,
+  hiddenColumns = [],
   filteredVideosByColumnId,
   getColumnAvatarSrc,
   getVideoThumbnailSrc,
@@ -35,6 +37,9 @@ export function collectBoardAssetPreloadUrls<TColumn extends BoardAssetPreloadCo
   const seen = new Set<string>();
 
   visibleColumns.forEach((column) => {
+    addUniqueUrl(urls, seen, getColumnAvatarSrc(column));
+  });
+  hiddenColumns.forEach((column) => {
     addUniqueUrl(urls, seen, getColumnAvatarSrc(column));
   });
 
@@ -58,4 +63,23 @@ export function collectBoardAssetPreloadUrls<TColumn extends BoardAssetPreloadCo
   }
 
   return urls;
+}
+
+export function selectChannelThumbnailUrl(
+  column: {
+    channelThumbnailUrl: string;
+    lastGoodChannelThumbnailUrl: string;
+  },
+  isBroken: boolean
+): string {
+  const lastGoodChannelThumbnailUrl = column.lastGoodChannelThumbnailUrl.trim();
+  if (lastGoodChannelThumbnailUrl) {
+    return lastGoodChannelThumbnailUrl;
+  }
+
+  if (isBroken) {
+    return "";
+  }
+
+  return column.channelThumbnailUrl.trim();
 }

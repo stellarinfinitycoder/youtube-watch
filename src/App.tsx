@@ -57,7 +57,7 @@ import {
   updateBoardById,
   updateBoardColumnById
 } from "./domain/boards";
-import { collectBoardAssetPreloadUrls } from "./domain/boardAssets";
+import { collectBoardAssetPreloadUrls, selectChannelThumbnailUrl } from "./domain/boardAssets";
 import {
   CHANNEL_VIDEO_WINDOW_OPTIONS,
   DEFAULT_VIDEO_WINDOW_DAYS,
@@ -4507,11 +4507,10 @@ function App() {
       }
 
       const brokenKey = `${board.id}:${column.id}`;
-      const rawThumbnailUrl =
-        column.lastGoodChannelThumbnailUrl ||
-        (brokenChannelThumbnailKeys.includes(brokenKey)
-          ? ""
-          : column.channelThumbnailUrl || "");
+      const rawThumbnailUrl = selectChannelThumbnailUrl(
+        column,
+        brokenChannelThumbnailKeys.includes(brokenKey)
+      );
       return buildChannelAvatarProxyUrl(rawThumbnailUrl);
     },
     [brokenChannelThumbnailKeys]
@@ -4532,6 +4531,7 @@ function App() {
       });
       const urls = collectBoardAssetPreloadUrls({
         visibleColumns: derivedData.visibleColumns,
+        hiddenColumns: derivedData.hiddenColumns,
         filteredVideosByColumnId: derivedData.filteredVideosByColumnId,
         getColumnAvatarSrc: (column) => getBoardColumnAvatarPreloadSrc(board, column),
         getVideoThumbnailSrc
