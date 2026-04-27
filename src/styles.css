@@ -744,7 +744,6 @@ body {
   border: 1px solid var(--amber-soft);
   background: var(--surface);
   padding: 10px;
-  min-height: 640px;
   box-shadow: 0 1px 0 rgba(91, 58, 18, 0.28);
 }
 
