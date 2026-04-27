@@ -65,6 +65,20 @@ export function collectBoardAssetPreloadUrls<TColumn extends BoardAssetPreloadCo
   return urls;
 }
 
+export function collectColumnAvatarPreloadUrls<TColumn>(
+  columns: TColumn[],
+  getColumnAvatarSrc: (column: TColumn) => string
+): string[] {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+
+  columns.forEach((column) => {
+    addUniqueUrl(urls, seen, getColumnAvatarSrc(column));
+  });
+
+  return urls;
+}
+
 export function selectChannelThumbnailUrl(
   column: {
     channelThumbnailUrl: string;

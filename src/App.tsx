@@ -57,7 +57,11 @@ import {
   updateBoardById,
   updateBoardColumnById
 } from "./domain/boards";
-import { collectBoardAssetPreloadUrls, selectChannelThumbnailUrl } from "./domain/boardAssets";
+import {
+  collectBoardAssetPreloadUrls,
+  collectColumnAvatarPreloadUrls,
+  selectChannelThumbnailUrl
+} from "./domain/boardAssets";
 import {
   CHANNEL_VIDEO_WINDOW_OPTIONS,
   DEFAULT_VIDEO_WINDOW_DAYS,
@@ -1603,6 +1607,7 @@ function App() {
   const boardSummaryCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const activeLogoSpinCountRef = useRef(0);
   const preloadedImageUrlsRef = useRef<Set<string>>(new Set());
+  const preloadingImageUrlsRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const initialBoardsState = fixtureMode ? createFixtureBoardsState() : getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
   const [appPath, setAppPath] = useState<string>(() =>
@@ -4488,16 +4493,26 @@ function App() {
     if (preloadedImageUrlsRef.current.has(normalized)) {
       return Promise.resolve(true);
     }
-    return new Promise((resolve) => {
+    const inFlight = preloadingImageUrlsRef.current.get(normalized);
+    if (inFlight) {
+      return inFlight;
+    }
+    const preloadPromise = new Promise<boolean>((resolve) => {
       const image = new Image();
       image.decoding = "async";
       image.onload = () => {
         preloadedImageUrlsRef.current.add(normalized);
+        preloadingImageUrlsRef.current.delete(normalized);
         resolve(true);
       };
-      image.onerror = () => resolve(false);
+      image.onerror = () => {
+        preloadingImageUrlsRef.current.delete(normalized);
+        resolve(false);
+      };
       image.src = normalized;
     });
+    preloadingImageUrlsRef.current.set(normalized, preloadPromise);
+    return preloadPromise;
   }, []);
 
   const getBoardColumnAvatarPreloadSrc = useCallback(
@@ -4549,6 +4564,23 @@ function App() {
       preloadImage
     ]
   );
+
+  const preloadAllChannelAvatars = useCallback((): void => {
+    boards
+      .filter((board) => board.kind === "channels")
+      .forEach((board) => {
+        const urls = collectColumnAvatarPreloadUrls(board.columns, (column) =>
+          getBoardColumnAvatarPreloadSrc(board, column)
+        );
+        urls.forEach((url) => {
+          void preloadImage(url);
+        });
+      });
+  }, [boards, getBoardColumnAvatarPreloadSrc, preloadImage]);
+
+  useEffect(() => {
+    preloadAllChannelAvatars();
+  }, [preloadAllChannelAvatars]);
 
   const preloadDisplayedBoardAssets = useCallback((): void => {
     const activeIndex = displayedBoards.findIndex((board) => board.id === activeBoardId);

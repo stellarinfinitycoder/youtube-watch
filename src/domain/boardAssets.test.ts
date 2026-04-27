@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { collectBoardAssetPreloadUrls, selectChannelThumbnailUrl } from "./boardAssets";
+import {
+  collectBoardAssetPreloadUrls,
+  collectColumnAvatarPreloadUrls,
+  selectChannelThumbnailUrl
+} from "./boardAssets";
 import type { VideoItem } from "../types/youtube";
 
 function createVideo(videoId: string, thumbnailUrl = `https://img.test/${videoId}.jpg`): VideoItem {
@@ -97,6 +101,31 @@ describe("board asset preload collection", () => {
       "https://img.test/shared-avatar.jpg",
       "https://img.test/hidden-avatar.jpg",
       "https://img.test/visible-video.jpg"
+    ]);
+  });
+
+  it("collects avatar-only preload URLs across all columns without video thumbnails", () => {
+    const columns = [
+      {
+        id: "visible",
+        videos: [createVideo("visible-video", "https://img.test/visible-video.jpg")],
+        avatar: "https://img.test/shared-avatar.jpg"
+      },
+      {
+        id: "hidden",
+        videos: [createVideo("hidden-video", "https://img.test/hidden-video.jpg")],
+        avatar: "https://img.test/shared-avatar.jpg"
+      },
+      {
+        id: "hidden-two",
+        videos: [createVideo("hidden-video-two", "https://img.test/hidden-video-two.jpg")],
+        avatar: "https://img.test/hidden-avatar.jpg"
+      }
+    ];
+
+    expect(collectColumnAvatarPreloadUrls(columns, (column) => column.avatar)).toEqual([
+      "https://img.test/shared-avatar.jpg",
+      "https://img.test/hidden-avatar.jpg"
     ]);
   });
 
