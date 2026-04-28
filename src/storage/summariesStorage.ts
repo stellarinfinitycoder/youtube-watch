@@ -26,6 +26,11 @@ export type StoredSummaryCacheEntry = {
   entry: SummaryCacheEntry;
 };
 
+export type SummaryVideoLatestCacheEntry = {
+  videoId: string;
+  latestCachedAt: number;
+};
+
 function getStorage(): Storage | null {
   if (typeof window === "undefined") {
     return null;
@@ -220,6 +225,39 @@ export async function listCachedSummariesForVideo(
   return legacyEntries;
 }
 
+export async function listLatestCachedSummaryVideos(): Promise<SummaryVideoLatestCacheEntry[]> {
+  await migrateLegacySummaryCache();
+  const summaryKeys = await getAllCacheKeys(SUMMARIES_STORE_NAME);
+  const latestByVideoId = new Map<string, number>();
+
+  await Promise.all(
+    summaryKeys.map(async (key) => {
+      const separatorIndex = key.lastIndexOf(":");
+      if (separatorIndex <= 0) {
+        return;
+      }
+      const videoId = key.slice(0, separatorIndex).trim();
+      if (!videoId) {
+        return;
+      }
+      const entry = normalizeSummaryCacheEntry(
+        await getCacheValue<SummaryCacheEntry>(SUMMARIES_STORE_NAME, key)
+      );
+      if (!entry) {
+        return;
+      }
+      const previous = latestByVideoId.get(videoId) ?? 0;
+      if (entry.cachedAt > previous) {
+        latestByVideoId.set(videoId, entry.cachedAt);
+      }
+    })
+  );
+
+  return [...latestByVideoId.entries()]
+    .map(([videoId, latestCachedAt]) => ({ videoId, latestCachedAt }))
+    .sort((a, b) => b.latestCachedAt - a.latestCachedAt);
+}
+
 export async function writeCachedSummary(
   videoId: string,
   promptHash: string,
@@ -246,6 +284,29 @@ export async function writeCachedSummary(
   } catch {
     // Ignore fallback write failures.
   }
+}
+
+export async function deleteCachedSummary(
+  videoId: string,
+  promptHash: string
+): Promise<boolean> {
+  const normalizedVideoId = videoId.trim();
+  const normalizedPromptHash = promptHash.trim();
+  if (normalizedVideoId.length === 0 || normalizedPromptHash.length === 0) {
+    return false;
+  }
+
+  await migrateLegacySummaryCache();
+  const compositeKey = `${normalizedVideoId}:${normalizedPromptHash}`;
+  const existing = await getCacheValue<SummaryCacheEntry>(SUMMARIES_STORE_NAME, compositeKey);
+  await deleteCacheValue(SUMMARIES_STORE_NAME, compositeKey);
+
+  const storage = getStorage();
+  const legacyKey = getSummaryCacheKey(normalizedVideoId, normalizedPromptHash);
+  const hadLegacyEntry = storage?.getItem(legacyKey) !== null;
+  storage?.removeItem(legacyKey);
+
+  return existing !== null || hadLegacyEntry;
 }
 
 export async function clearAllCachedSummaries(): Promise<boolean> {

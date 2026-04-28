@@ -3,7 +3,9 @@ import { waitFor } from "@testing-library/react";
 import { resetCacheDbForTests } from "./indexedDbCache";
 import {
   clearAllCachedSummaries,
+  deleteCachedSummary,
   listCachedSummariesForVideo,
+  listLatestCachedSummaryVideos,
   readCachedSummary,
   SUMMARY_CACHE_KEY_PREFIX,
   SUMMARY_FORMATS_STORAGE_KEY,
@@ -78,6 +80,61 @@ describe("summariesStorage", () => {
         }
       }
     ]);
+  });
+
+  it("groups cached summary videos by latest cache date", async () => {
+    await writeCachedSummary("video-1", "prompt-a", {
+      ...payload,
+      promptHash: "prompt-a",
+      cachedAt: 10
+    });
+    await writeCachedSummary("video-1", "prompt-b", {
+      ...payload,
+      promptHash: "prompt-b",
+      cachedAt: 30
+    });
+    await writeCachedSummary("video-2", "prompt-a", {
+      ...payload,
+      promptHash: "prompt-a",
+      cachedAt: 20
+    });
+
+    await expect(listLatestCachedSummaryVideos()).resolves.toEqual([
+      { videoId: "video-1", latestCachedAt: 30 },
+      { videoId: "video-2", latestCachedAt: 20 }
+    ]);
+  });
+
+  it("deletes one cached summary without touching other summaries", async () => {
+    await writeCachedSummary("video-1", "prompt-a", {
+      ...payload,
+      promptHash: "prompt-a",
+      cachedAt: 10
+    });
+    await writeCachedSummary("video-1", "prompt-b", {
+      ...payload,
+      promptHash: "prompt-b",
+      cachedAt: 20
+    });
+    await writeCachedSummary("video-2", "prompt-a", {
+      ...payload,
+      promptHash: "prompt-a",
+      cachedAt: 30
+    });
+
+    await expect(deleteCachedSummary("video-1", "prompt-a")).resolves.toBe(true);
+
+    await expect(readCachedSummary("video-1", "prompt-a")).resolves.toBeNull();
+    await expect(readCachedSummary("video-1", "prompt-b")).resolves.toEqual({
+      ...payload,
+      promptHash: "prompt-b",
+      cachedAt: 20
+    });
+    await expect(readCachedSummary("video-2", "prompt-a")).resolves.toEqual({
+      ...payload,
+      promptHash: "prompt-a",
+      cachedAt: 30
+    });
   });
 
   it("migrates legacy localStorage summary cache entries", async () => {

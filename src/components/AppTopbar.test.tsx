@@ -36,6 +36,7 @@ describe("AppTopbar", () => {
         moveBoard={() => undefined}
         openRenameBoardModal={() => undefined}
         columnScopeFilter={[]}
+        isColumnScopeDisabled={false}
         columnScopeDropdownListHeight={240}
         formatColumnScopeSummary={() => "ALL"}
         columnScopeOptions={[]}
@@ -65,6 +66,7 @@ describe("AppTopbar", () => {
         canOpenMaintenanceBoardDurationBackfill={true}
         canOpenMaintenanceRefreshBoardAvatars={true}
         shownVideosTotal={5}
+        areBoardActionsDisabled={false}
         scrollToEdge={() => undefined}
         scrollColumns={() => undefined}
       />
@@ -90,5 +92,137 @@ describe("AppTopbar", () => {
     expect(screen.getByText("MAX SAVED VIDEO AGE: UNLIMITED")).toBeInTheDocument();
     expect(screen.getByText("VERSION: dev-build")).toBeInTheDocument();
     expect(screen.queryByText("FETCH ALL NEW VIDEOS FOR THIS BOARD.")).not.toBeInTheDocument();
+  });
+
+  it("shows summaries as a board option without board action controls", () => {
+    const handleBoardSelectChange = vi.fn();
+
+    render(
+      <AppTopbar
+        buildInfoLabel="dev-build"
+        lastApiQueryUnits={0}
+        totalApiQueryUnits={0}
+        topBarLogoSrc="/svg/logo-dev.svg"
+        isLogoSpinning={false}
+        isSavedBoardActive={false}
+        topbarLastFetchLabel="-"
+        fetchAllColumns={() => undefined}
+        activeBoardId="board-1"
+        displayedBoards={[
+          { id: "board-1", name: "Board", kind: "channels" },
+          { id: "__summaries_board__", name: "Summaries", kind: "summaries" }
+        ]}
+        newBoardOptionValue="__new__"
+        boardDropdownListHeight={320}
+        handleBoardSelectChange={handleBoardSelectChange}
+        onBoardSelectorPrewarm={() => undefined}
+        blurActiveTopbarControl={() => undefined}
+        moveBoard={() => undefined}
+        openRenameBoardModal={() => undefined}
+        columnScopeFilter={[]}
+        isColumnScopeDisabled={false}
+        columnScopeDropdownListHeight={240}
+        formatColumnScopeSummary={() => "ALL"}
+        columnScopeOptions={[]}
+        onColumnScopeChange={() => undefined}
+        videoFilter="all"
+        onVideoFilterChange={() => undefined}
+        videoWindowDays={30}
+        onVideoWindowChange={() => undefined}
+        savedVideoWindowSelectOptions={[]}
+        channelVideoWindowSelectOptions={[]}
+        videoDurationFilter={[]}
+        onVideoDurationChange={() => undefined}
+        formatDurationFilterSummary={() => "ANY"}
+        videoDurationFilterOptions={[]}
+        startBoardSummaryBatch={() => undefined}
+        isBoardSummaryBatchRunning={false}
+        playAllVideos={() => undefined}
+        copyAllShownBoardLinks={async () => undefined}
+        copiedLinkVideoId={null}
+        openBulkWatchBoardAction={() => undefined}
+        openMaintenanceMenuExport={() => undefined}
+        openMaintenanceMenuRestore={() => undefined}
+        openMaintenanceMenuLogs={() => undefined}
+        openMaintenanceMenuBoardDurationBackfill={() => undefined}
+        openMaintenanceMenuRefreshBoardAvatars={() => undefined}
+        openMaintenanceMenuDeleteSummaries={() => undefined}
+        canOpenMaintenanceBoardDurationBackfill={false}
+        canOpenMaintenanceRefreshBoardAvatars={false}
+        shownVideosTotal={1}
+        areBoardActionsDisabled={false}
+        scrollToEdge={() => undefined}
+        scrollColumns={() => undefined}
+      />
+    );
+
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Board selector" }));
+    fireEvent.click(screen.getByText("SUMMARIES"));
+
+    expect(handleBoardSelectChange).toHaveBeenCalledWith("__summaries_board__");
+    expect(screen.queryByRole("button", { name: "Edit Summaries" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Move Summaries up" })).not.toBeInTheDocument();
+  });
+
+  it("renders a disabled channel scope select with all channels label", () => {
+    render(
+      <AppTopbar
+        buildInfoLabel="dev-build"
+        lastApiQueryUnits={0}
+        totalApiQueryUnits={0}
+        topBarLogoSrc="/svg/logo-dev.svg"
+        isLogoSpinning={false}
+        isSavedBoardActive={false}
+        topbarLastFetchLabel="-"
+        fetchAllColumns={() => undefined}
+        activeBoardId="__summaries_board__"
+        displayedBoards={[{ id: "__summaries_board__", name: "Summaries", kind: "summaries" }]}
+        newBoardOptionValue="__new__"
+        boardDropdownListHeight={320}
+        handleBoardSelectChange={() => undefined}
+        onBoardSelectorPrewarm={() => undefined}
+        blurActiveTopbarControl={() => undefined}
+        moveBoard={() => undefined}
+        openRenameBoardModal={() => undefined}
+        columnScopeFilter={["__all__"]}
+        isColumnScopeDisabled={true}
+        columnScopeDropdownListHeight={72}
+        formatColumnScopeSummary={() => "ALL CHANNELS"}
+        columnScopeOptions={[{ value: "__all__", label: "ALL CHANNELS" }]}
+        onColumnScopeChange={() => undefined}
+        videoFilter="all"
+        onVideoFilterChange={() => undefined}
+        videoWindowDays={30}
+        onVideoWindowChange={() => undefined}
+        savedVideoWindowSelectOptions={[]}
+        channelVideoWindowSelectOptions={[]}
+        videoDurationFilter={[]}
+        onVideoDurationChange={() => undefined}
+        formatDurationFilterSummary={() => "ANY"}
+        videoDurationFilterOptions={[]}
+        startBoardSummaryBatch={() => undefined}
+        isBoardSummaryBatchRunning={false}
+        playAllVideos={() => undefined}
+        copyAllShownBoardLinks={async () => undefined}
+        copiedLinkVideoId={null}
+        openBulkWatchBoardAction={() => undefined}
+        openMaintenanceMenuExport={() => undefined}
+        openMaintenanceMenuRestore={() => undefined}
+        openMaintenanceMenuLogs={() => undefined}
+        openMaintenanceMenuBoardDurationBackfill={() => undefined}
+        openMaintenanceMenuRefreshBoardAvatars={() => undefined}
+        openMaintenanceMenuDeleteSummaries={() => undefined}
+        canOpenMaintenanceBoardDurationBackfill={false}
+        canOpenMaintenanceRefreshBoardAvatars={false}
+        shownVideosTotal={1}
+        areBoardActionsDisabled={true}
+        scrollToEdge={() => undefined}
+        scrollColumns={() => undefined}
+      />
+    );
+
+    const channelScopeSelect = screen.getByTestId("topbar-channel-scope-select");
+    expect(channelScopeSelect).toHaveClass("ant-select-disabled");
+    expect(screen.getByText("ALL CHANNELS")).toBeInTheDocument();
   });
 });

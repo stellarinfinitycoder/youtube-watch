@@ -28,6 +28,7 @@ import { AppTopbar } from "./components/AppTopbar";
 import { BoardColumns } from "./components/BoardColumns";
 import { BoardSummaryBatchPage, type BoardSummaryBatchItem } from "./components/BoardSummaryBatchModal";
 import { BoardSummaryAggregateModal } from "./components/BoardSummaryAggregateModal";
+import { SummariesColumn } from "./components/SummariesColumn";
 const TranscriptSummaryModal = lazy(() => import("./components/TranscriptSummaryModal"));
 import { VideoPlayerModal } from "./components/VideoPlayerModal";
 import {
@@ -37,6 +38,9 @@ import {
 } from "./storage/boardsStorage";
 import {
   clearAllCachedSummaries,
+  deleteCachedSummary,
+  listCachedSummariesForVideo,
+  listLatestCachedSummaryVideos,
   readCachedSummary
 } from "./storage/summariesStorage";
 import {
@@ -103,6 +107,11 @@ import {
   sortSavedVideosByMode,
   type SavedSortMode
 } from "./domain/savedLists";
+import {
+  buildStoredSummaryDisplayEntries,
+  buildSummariesBoardVideos,
+  type StoredSummaryDisplayEntry
+} from "./domain/summariesBoard";
 import {
   DEFAULT_SUMMARY_PROMPT,
   getDefaultSummaryFormat,
@@ -435,6 +444,7 @@ type AppAgentApi = {
 };
 
 const NEW_BOARD_OPTION_VALUE = "__new__";
+const SUMMARIES_BOARD_ID = "__summaries_board__";
 const COLUMN_SCOPE_ALL = "__all__";
 const COLUMN_SCOPE_NOT_EMPTY = "__not_empty__";
 
@@ -1653,6 +1663,18 @@ function App() {
   const [boardSummaryAggregateState, setBoardSummaryAggregateState] =
     useState<BoardSummaryAggregateState | null>(null);
   const [isBoardSummaryAggregateCopied, setIsBoardSummaryAggregateCopied] = useState(false);
+  const [summaryVideoCacheEntries, setSummaryVideoCacheEntries] = useState<
+    Array<{ videoId: string; latestCachedAt: number }>
+  >([]);
+  const [summariesVideoFilter, setSummariesVideoFilter] = useState<VideoFilter>("all");
+  const [summariesVideoWindowDays, setSummariesVideoWindowDays] =
+    useState<VideoWindowFilter>("all");
+  const [summariesVideoDurationFilter, setSummariesVideoDurationFilter] =
+    useState<VideoDurationFilter>(["all"]);
+  const [selectedSummariesVideoId, setSelectedSummariesVideoId] = useState<string | null>(null);
+  const [selectedSummaryEntries, setSelectedSummaryEntries] = useState<StoredSummaryDisplayEntry[]>([]);
+  const [selectedSummaryLoading, setSelectedSummaryLoading] = useState(false);
+  const [selectedSummaryError, setSelectedSummaryError] = useState<string | null>(null);
   const boardSummaryBatchRunIdRef = useRef(0);
   const boardSummaryAggregateCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const [pendingSummarySaveRemovalVideoId, setPendingSummarySaveRemovalVideoId] = useState<string | null>(null);
@@ -1750,6 +1772,21 @@ function App() {
   const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
   const [playlistChannelLabel, setPlaylistChannelLabel] = useState<string>("");
   const [playlistOrderLabel, setPlaylistOrderLabel] = useState<string>("NEWEST FIRST");
+
+  const refreshSummaryVideoCacheEntries = useCallback(async (): Promise<void> => {
+    setSummaryVideoCacheEntries(await listLatestCachedSummaryVideos());
+  }, []);
+
+  useEffect(() => {
+    void refreshSummaryVideoCacheEntries();
+  }, [refreshSummaryVideoCacheEntries]);
+  const reloadSelectedSummaryEntries = useCallback(
+    async (videoId: string): Promise<StoredSummaryDisplayEntry[]> => {
+      const entries = await listCachedSummariesForVideo(videoId);
+      return buildStoredSummaryDisplayEntries(entries, summaryFormats);
+    },
+    [summaryFormats]
+  );
   const [brokenChannelThumbnailKeys, setBrokenChannelThumbnailKeys] = useState<string[]>(
     []
   );
@@ -1759,11 +1796,20 @@ function App() {
     Array<{ boardId: string; id: string; handle: string }>
   >([]);
   const activeBoard =
-    boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
+    activeBoardId === SUMMARIES_BOARD_ID
+      ? null
+      : boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
+  const summariesBoardOption = {
+    id: SUMMARIES_BOARD_ID,
+    name: "Summaries",
+    kind: "summaries" as const
+  };
   const displayedBoards = [
     ...boards.filter((board) => board.kind !== "saved"),
-    ...boards.filter((board) => board.kind === "saved")
+    ...boards.filter((board) => board.kind === "saved"),
+    summariesBoardOption
   ];
+  const isSummariesBoardActive = activeBoardId === SUMMARIES_BOARD_ID;
   const savedBoard = boards.find((board) => board.kind === "saved") ?? null;
   const isSavedBoardActive = activeBoard?.kind === "saved";
   const savedBoardColumns = savedBoard?.columns ?? [];
@@ -1828,9 +1874,9 @@ function App() {
     : "";
   const movingChannelNameDisplay = movingChannelName.toUpperCase();
   const watchedVideos = activeBoard?.watchedVideos ?? {};
-  const videoDurationFilter = normalizeVideoDurationFilter(
-    activeBoard?.videoDurationFilter
-  );
+  const videoDurationFilter = isSummariesBoardActive
+    ? normalizeVideoDurationFilter(summariesVideoDurationFilter)
+    : normalizeVideoDurationFilter(activeBoard?.videoDurationFilter);
   const boardDropdownListHeight = Math.max(
     BOARD_DROPDOWN_ITEM_HEIGHT + BOARD_DROPDOWN_PADDING,
     Math.min(displayedBoards.length + 1, BOARD_DROPDOWN_MAX_VISIBLE) *
@@ -1841,8 +1887,12 @@ function App() {
     playlistIndex >= 0 &&
     playlistQueue.length > 0 &&
     playlistIndex < playlistQueue.length;
-  const videoFilter = activeBoard?.videoFilter ?? "new";
-  const videoWindowDays = activeBoard
+  const videoFilter = isSummariesBoardActive
+    ? summariesVideoFilter
+    : activeBoard?.videoFilter ?? "new";
+  const videoWindowDays = isSummariesBoardActive
+    ? summariesVideoWindowDays
+    : activeBoard
     ? normalizeVideoWindowFilterForKind(activeBoard.kind, activeBoard.videoWindowDays)
     : DEFAULT_VIDEO_WINDOW_DAYS;
   const getSourceVideosForBoard = useCallback(
@@ -1876,6 +1926,86 @@ function App() {
     forceVisibleColumnIds: fetchAllVisibleColumnIds,
     errorVisibleColumnIds: fetchAllErrorVisibleColumnIds
   });
+  const summariesBoardVideos = useMemo(
+    () => buildSummariesBoardVideos(boards, summaryVideoCacheEntries),
+    [boards, summaryVideoCacheEntries]
+  );
+  const filteredSummariesBoardVideos = useMemo(() => {
+    const now = Date.now();
+    return summariesBoardVideos.filter(({ video, isWatched }) => {
+      if (!matchesVideoWindowFilter(getVideoPublishedTime(video), videoWindowDays, now)) {
+        return false;
+      }
+      if (!matchesDurationFilter(video.durationSeconds, videoDurationFilter)) {
+        return false;
+      }
+      if (videoFilter === "all") {
+        return true;
+      }
+      if (videoFilter === "watched") {
+        return isWatched;
+      }
+      return !isWatched;
+    });
+  }, [summariesBoardVideos, videoDurationFilter, videoFilter, videoWindowDays]);
+  useEffect(() => {
+    if (!isSummariesBoardActive) {
+      return;
+    }
+    const firstVideoId = filteredSummariesBoardVideos[0]?.video.videoId ?? null;
+    if (firstVideoId === null) {
+      if (selectedSummariesVideoId !== null) {
+        setSelectedSummariesVideoId(null);
+      }
+      return;
+    }
+    const hasSelectedVideo = filteredSummariesBoardVideos.some(
+      ({ video }) => video.videoId === selectedSummariesVideoId
+    );
+    if (!hasSelectedVideo) {
+      setSelectedSummariesVideoId(firstVideoId);
+    }
+  }, [filteredSummariesBoardVideos, isSummariesBoardActive, selectedSummariesVideoId]);
+  useEffect(() => {
+    if (!isSummariesBoardActive || selectedSummariesVideoId === null) {
+      setSelectedSummaryEntries([]);
+      setSelectedSummaryLoading(false);
+      setSelectedSummaryError(null);
+      return;
+    }
+
+    let isCancelled = false;
+    setSelectedSummaryLoading(true);
+    setSelectedSummaryError(null);
+    void reloadSelectedSummaryEntries(selectedSummariesVideoId)
+      .then((entries) => {
+        if (isCancelled) {
+          return;
+        }
+        setSelectedSummaryEntries(entries);
+      })
+      .catch((error) => {
+        if (isCancelled) {
+          return;
+        }
+        setSelectedSummaryEntries([]);
+        setSelectedSummaryError(
+          error instanceof Error ? error.message : "Unable to load stored summaries."
+        );
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setSelectedSummaryLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isSummariesBoardActive, reloadSelectedSummaryEntries, selectedSummariesVideoId]);
+  const effectiveShownVideosTotal = isSummariesBoardActive
+    ? filteredSummariesBoardVideos.length
+    : shownVideosTotal;
   const boardSummaryChannelScopeLabel = formatColumnScopeSummary(
     columnScopeFilter,
     isSavedBoardActive,
@@ -1928,6 +2058,26 @@ function App() {
     Math.min(columnScopeOptions.length, CHANNEL_SCOPE_DROPDOWN_MAX_VISIBLE) *
       BOARD_DROPDOWN_ITEM_HEIGHT +
     BOARD_DROPDOWN_PADDING;
+  const effectiveColumnScopeFilter = isSummariesBoardActive
+    ? [COLUMN_SCOPE_ALL]
+    : columnScopeFilter;
+  const effectiveColumnScopeOptions = isSummariesBoardActive
+    ? [{ value: COLUMN_SCOPE_ALL, label: "ALL CHANNELS" }]
+    : columnScopeOptions;
+  const effectiveChannelScopeDropdownListHeight =
+    Math.min(effectiveColumnScopeOptions.length, CHANNEL_SCOPE_DROPDOWN_MAX_VISIBLE) *
+      BOARD_DROPDOWN_ITEM_HEIGHT +
+    BOARD_DROPDOWN_PADDING;
+  const formatEffectiveColumnScopeSummary = (): string =>
+    isSummariesBoardActive
+      ? "ALL CHANNELS"
+      : formatColumnScopeSummary(
+          columnScopeFilter,
+          isSavedBoardActive,
+          columns,
+          COLUMN_SCOPE_ALL,
+          COLUMN_SCOPE_NOT_EMPTY
+        );
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
@@ -1999,6 +2149,9 @@ function App() {
 
   useEffect(() => {
     if (boards.length === 0) {
+      return;
+    }
+    if (activeBoardId === SUMMARIES_BOARD_ID) {
       return;
     }
     if (!boards.some((board) => board.id === activeBoardId)) {
@@ -2092,9 +2245,11 @@ function App() {
       try {
         const persistedBoards = toPersistedBoards(boards);
         const boardsPayload = JSON.stringify(persistedBoards);
+        const persistedActiveBoardId =
+          activeBoardId === SUMMARIES_BOARD_ID ? boards[0]?.id ?? "" : activeBoardId;
         const didPersist = persistBoardsPayload(
           boardsPayload,
-          activeBoardId,
+          persistedActiveBoardId,
           () => false
         );
         if (!didPersist) {
@@ -2802,6 +2957,7 @@ function App() {
           keyPoints: [],
           model: payload.model
         });
+        void refreshSummaryVideoCacheEntries();
         updateBatchItem(index, {
           status: "done",
           summary: nextSummary,
@@ -3564,6 +3720,30 @@ function App() {
     setActiveVideoSource("summaries");
   };
 
+  const selectSummariesBoardVideo = (video: VideoItem): void => {
+    setSelectedSummariesVideoId(video.videoId);
+  };
+
+  const deleteSelectedStoredSummary = async (promptHash: string): Promise<void> => {
+    if (!selectedSummariesVideoId) {
+      return;
+    }
+    setSelectedSummaryLoading(true);
+    setSelectedSummaryError(null);
+    try {
+      await deleteCachedSummary(selectedSummariesVideoId, promptHash);
+      const nextEntries = await reloadSelectedSummaryEntries(selectedSummariesVideoId);
+      setSelectedSummaryEntries(nextEntries);
+      await refreshSummaryVideoCacheEntries();
+    } catch (error) {
+      setSelectedSummaryError(
+        error instanceof Error ? error.message : "Unable to delete stored summary."
+      );
+    } finally {
+      setSelectedSummaryLoading(false);
+    }
+  };
+
   const toggleVideoFullscreen = (): void => {
     const fullscreenTarget = videoModalWrapRef.current;
     if (!fullscreenTarget) {
@@ -3659,6 +3839,13 @@ function App() {
   };
 
   const toggleWatched = (videoId: string): void => {
+    if (isSummariesBoardActive) {
+      const summaryVideo = filteredSummariesBoardVideos.find(
+        (item) => item.video.videoId === videoId
+      );
+      setWatchedStatusAcrossBoards([videoId], !(summaryVideo?.isWatched ?? false));
+      return;
+    }
     if (!activeBoard) {
       return;
     }
@@ -4112,6 +4299,12 @@ function App() {
       createBoard();
       return;
     }
+    if (value === SUMMARIES_BOARD_ID) {
+      clearFetchAllVisibilityState();
+      void refreshSummaryVideoCacheEntries();
+      setActiveBoardId(value);
+      return;
+    }
     clearFetchAllVisibilityState();
     preloadBoardAssets(value);
     setActiveBoardId(value);
@@ -4232,6 +4425,7 @@ function App() {
   const handleClearAllCachedSummaries = async (): Promise<void> => {
     try {
       await clearAllCachedSummaries();
+      await refreshSummaryVideoCacheEntries();
       setIsDeleteSummariesModalOpen(false);
     } catch {
       setIsDeleteSummariesModalOpen(false);
@@ -5297,6 +5491,11 @@ function App() {
   };
 
   const handleVideoFilterSelect = (value: VideoFilter): void => {
+    if (isSummariesBoardActive) {
+      setSummariesVideoFilter(value);
+      blurActiveTopbarControl();
+      return;
+    }
     if (!activeBoard) {
       return;
     }
@@ -5309,6 +5508,11 @@ function App() {
   };
 
   const handleVideoWindowSelect = (value: VideoWindowFilter): void => {
+    if (isSummariesBoardActive) {
+      setSummariesVideoWindowDays(value);
+      blurActiveTopbarControl();
+      return;
+    }
     if (!activeBoard) {
       return;
     }
@@ -5321,6 +5525,13 @@ function App() {
   };
 
   const handleVideoDurationSelect = (value: string[]): void => {
+    if (isSummariesBoardActive) {
+      setSummariesVideoDurationFilter((previous) =>
+        resolveVideoDurationFilterSelection(value, previous)
+      );
+      blurActiveTopbarControl();
+      return;
+    }
     if (!activeBoard) {
       return;
     }
@@ -5454,7 +5665,7 @@ function App() {
             isSavedBoardActive={isSavedBoardActive}
             topbarLastFetchLabel={topbarLastFetchLabel}
             fetchAllColumns={fetchAllColumns}
-            activeBoardId={activeBoard?.id}
+            activeBoardId={isSummariesBoardActive ? SUMMARIES_BOARD_ID : activeBoard?.id}
             displayedBoards={displayedBoards}
             newBoardOptionValue={NEW_BOARD_OPTION_VALUE}
             boardDropdownListHeight={boardDropdownListHeight}
@@ -5463,25 +5674,20 @@ function App() {
             blurActiveTopbarControl={blurActiveTopbarControl}
             moveBoard={moveBoard}
             openRenameBoardModal={openRenameBoardModal}
-            columnScopeFilter={columnScopeFilter}
-            columnScopeDropdownListHeight={channelScopeDropdownListHeight}
-            formatColumnScopeSummary={() =>
-              formatColumnScopeSummary(
-                columnScopeFilter,
-                isSavedBoardActive,
-                columns,
-                COLUMN_SCOPE_ALL,
-                COLUMN_SCOPE_NOT_EMPTY
-              )
-            }
-            columnScopeOptions={columnScopeOptions}
+            columnScopeFilter={effectiveColumnScopeFilter}
+            isColumnScopeDisabled={isSummariesBoardActive}
+            columnScopeDropdownListHeight={effectiveChannelScopeDropdownListHeight}
+            formatColumnScopeSummary={formatEffectiveColumnScopeSummary}
+            columnScopeOptions={effectiveColumnScopeOptions}
             onColumnScopeChange={handleColumnScopeChange}
             videoFilter={videoFilter}
             onVideoFilterChange={handleVideoFilterSelect}
             videoWindowDays={videoWindowDays}
             onVideoWindowChange={(value) => handleVideoWindowSelect(value as VideoWindowFilter)}
             savedVideoWindowSelectOptions={SAVED_VIDEO_WINDOW_SELECT_OPTIONS}
-            channelVideoWindowSelectOptions={CHANNEL_VIDEO_WINDOW_SELECT_OPTIONS}
+            channelVideoWindowSelectOptions={
+              isSummariesBoardActive ? SAVED_VIDEO_WINDOW_SELECT_OPTIONS : CHANNEL_VIDEO_WINDOW_SELECT_OPTIONS
+            }
             videoDurationFilter={videoDurationFilter}
             onVideoDurationChange={handleVideoDurationSelect}
             formatDurationFilterSummary={() => formatDurationFilterSummary(videoDurationFilter)}
@@ -5500,7 +5706,8 @@ function App() {
             openMaintenanceMenuDeleteSummaries={() => setIsDeleteSummariesModalOpen(true)}
             canOpenMaintenanceBoardDurationBackfill={activeBoardDurationBackfillIds.length > 0}
             canOpenMaintenanceRefreshBoardAvatars={activeBoardAvatarRefreshIds.length > 0}
-            shownVideosTotal={shownVideosTotal}
+            shownVideosTotal={effectiveShownVideosTotal}
+            areBoardActionsDisabled={isSummariesBoardActive}
             scrollToEdge={scrollToEdge}
             scrollColumns={scrollColumns}
           />
@@ -5630,7 +5837,30 @@ function App() {
         />
       ) : null}
 
-      {!isBoardSummariesPage ? (
+      {!isBoardSummariesPage && isSummariesBoardActive ? (
+        <SummariesColumn
+          activeBoardId={SUMMARIES_BOARD_ID}
+          videos={filteredSummariesBoardVideos}
+          selectedVideoId={selectedSummariesVideoId}
+          selectedSummaryEntries={selectedSummaryEntries}
+          selectedSummaryLoading={selectedSummaryLoading}
+          selectedSummaryError={selectedSummaryError}
+          copiedLinkVideoId={copiedLinkVideoId}
+          saveDestinationColumnsLength={saveDestinationColumns.length}
+          videoStatsBackfillInFlight={videoStatsBackfillInFlight}
+          videoMetaFeedbackById={videoMetaFeedbackById}
+          formatVideoMeta={formatVideoMeta}
+          backfillVideoStats={backfillVideoStats}
+          getVideoThumbnailSrc={getVideoThumbnailSrc}
+          handleVideoThumbnailError={handleVideoThumbnailError}
+          openTranscript={openTranscript}
+          copyVideoLink={copyVideoLink}
+          openSaveVideoModal={openSaveVideoModalFromSummaries}
+          toggleWatched={toggleWatched}
+          openVideo={selectSummariesBoardVideo}
+          deleteStoredSummary={deleteSelectedStoredSummary}
+        />
+      ) : !isBoardSummariesPage ? (
         <BoardColumns
           scrollRef={scrollRef}
           activeBoardId={activeBoardId}

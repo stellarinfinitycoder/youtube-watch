@@ -7,7 +7,7 @@ const { Text } = Typography;
 type BoardOption = {
   id: string;
   name: string;
-  kind: "channels" | "saved";
+  kind: "channels" | "saved" | "summaries";
 };
 
 type AppTopbarProps = {
@@ -29,6 +29,7 @@ type AppTopbarProps = {
   moveBoard: (boardId: string, direction: "up" | "down") => void;
   openRenameBoardModal: (boardId: string) => void;
   columnScopeFilter: string[];
+  isColumnScopeDisabled: boolean;
   columnScopeDropdownListHeight: number;
   formatColumnScopeSummary: () => string;
   columnScopeOptions: Array<{ value: string; label: string }>;
@@ -58,6 +59,7 @@ type AppTopbarProps = {
   canOpenMaintenanceBoardDurationBackfill: boolean;
   canOpenMaintenanceRefreshBoardAvatars: boolean;
   shownVideosTotal: number;
+  areBoardActionsDisabled: boolean;
   scrollToEdge: (direction: "start" | "end") => void;
   scrollColumns: (direction: "left" | "right") => void;
 };
@@ -81,6 +83,7 @@ function AppTopbarComponent({
   moveBoard,
   openRenameBoardModal,
   columnScopeFilter,
+  isColumnScopeDisabled,
   columnScopeDropdownListHeight,
   formatColumnScopeSummary,
   columnScopeOptions,
@@ -110,10 +113,12 @@ function AppTopbarComponent({
   canOpenMaintenanceBoardDurationBackfill,
   canOpenMaintenanceRefreshBoardAvatars,
   shownVideosTotal,
+  areBoardActionsDisabled,
   scrollToEdge,
   scrollColumns
 }: AppTopbarProps) {
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+  const channelBoardCount = displayedBoards.filter((board) => board.kind === "channels").length;
   const maintenanceMenuItems: MenuProps["items"] = [
     { key: "backup", label: "BACKUP" },
     { key: "restore", label: "RESTORE" },
@@ -194,7 +199,7 @@ function AppTopbarComponent({
           <Select.Option key={board.id} value={board.id} title={board.name.toUpperCase()}>
             <div className="board-option-row">
               <span className="board-option-name">{board.name.toUpperCase()}</span>
-              {board.kind !== "saved" ? (
+              {board.kind === "channels" ? (
                 <div className="board-option-actions">
                   <button
                     type="button"
@@ -217,7 +222,7 @@ function AppTopbarComponent({
                     type="button"
                     className="board-option-move-btn"
                     aria-label={`Move ${board.name} down`}
-                    disabled={boardIndex === displayedBoards.length - 2}
+                    disabled={boardIndex >= channelBoardCount - 1}
                     onMouseDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -259,6 +264,7 @@ function AppTopbarComponent({
         mode="multiple"
         value={columnScopeFilter}
         onChange={onColumnScopeChange}
+        disabled={isColumnScopeDisabled}
         aria-label="Channel scope filter"
         className="video-filter-select channel-scope-select"
         data-testid="topbar-channel-scope-select"
@@ -311,7 +317,7 @@ function AppTopbarComponent({
         onClick={startBoardSummaryBatch}
         aria-label="Summarize all shown videos"
         className="nav-btn top-summary-btn"
-        disabled={shownVideosTotal === 0 || isBoardSummaryBatchRunning}
+        disabled={shownVideosTotal === 0 || isBoardSummaryBatchRunning || areBoardActionsDisabled}
         data-testid="topbar-summarize-all"
       >
         <span className="btn-icon btn-icon-transcript" aria-hidden />
@@ -321,6 +327,7 @@ function AppTopbarComponent({
         onClick={playAllVideos}
         aria-label="Play all videos"
         className="nav-btn"
+        disabled={areBoardActionsDisabled}
         data-testid="topbar-play-all"
       >
         <span className="btn-icon btn-icon-play" aria-hidden />
@@ -332,7 +339,7 @@ function AppTopbarComponent({
         className={`nav-btn link-copy-btn ${
           copiedLinkVideoId === `board-links:${activeBoardId}` ? "is-copied" : ""
         }`}
-        disabled={shownVideosTotal === 0}
+        disabled={shownVideosTotal === 0 || areBoardActionsDisabled}
         data-testid="topbar-copy-all-links"
       >
         <span className="btn-icon btn-icon-link" aria-hidden />
@@ -343,7 +350,7 @@ function AppTopbarComponent({
           onClick={openBulkWatchBoardAction}
           aria-label={`Mark all shown videos ${videoFilter === "watched" ? "new" : "watched"}`}
           className="nav-btn top-wa-btn"
-          disabled={videoFilter === "all" || shownVideosTotal === 0}
+          disabled={videoFilter === "all" || shownVideosTotal === 0 || areBoardActionsDisabled}
           data-testid="topbar-mark-all"
         >
           {videoFilter === "watched" ? (

@@ -9,6 +9,7 @@ export type VideoTileProps = {
   boardId: string;
   column: ColumnStateLike;
   isSavedBoardActive: boolean;
+  isActive?: boolean;
   video: VideoItem;
   isWatched: boolean;
   isMetaRefreshInFlight: boolean;
@@ -37,6 +38,7 @@ function VideoTileComponent({
   boardId,
   column,
   isSavedBoardActive,
+  isActive = false,
   video,
   isWatched,
   isMetaRefreshInFlight,
@@ -63,7 +65,7 @@ function VideoTileComponent({
   return (
     <List.Item
       key={video.videoId}
-      className="video-tile-item"
+      className={`video-tile-item ${isActive ? "is-active" : ""}`}
       data-url={video.videoUrl}
       data-video-id={video.videoId}
       data-board-id={boardId}
@@ -223,6 +225,7 @@ function areEqual(prev: VideoTileProps, next: VideoTileProps): boolean {
     prev.column.currentHandle === next.column.currentHandle &&
     prev.column.handleInput === next.column.handleInput &&
     prev.isSavedBoardActive === next.isSavedBoardActive &&
+    prev.isActive === next.isActive &&
     prev.video === next.video &&
     prev.isWatched === next.isWatched &&
     prev.isMetaRefreshInFlight === next.isMetaRefreshInFlight &&

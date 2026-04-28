@@ -14,6 +14,7 @@ import {
 } from "../storage/summariesStorage";
 import { readCachedTranscript, writeCachedTranscript } from "../storage/transcriptsStorage";
 import type { VideoItem } from "../types/youtube";
+import { buildStoredSummaryDisplayEntries } from "../domain/summariesBoard";
 
 const DEFAULT_SUMMARY_FORMAT_ID = "summary-default";
 export const NEW_SUMMARY_FORMAT_OPTION = "__new_summary_format__";
@@ -269,22 +270,6 @@ function getSummaryFormatPromptHash(format: SummaryFormat): string {
   return hashText(buildSummaryPromptCacheKey(format.prompt, format.model ?? ""));
 }
 
-function formatStoredSummaryModelLabel(model: string): string {
-  const trimmed = model.trim();
-  if (!trimmed) {
-    return "DEFAULT";
-  }
-  const parts = trimmed.split("/");
-  return (parts[parts.length - 1] ?? trimmed).toUpperCase();
-}
-
-function formatStoredSummaryDate(cachedAt: number): string {
-  if (!Number.isFinite(cachedAt) || cachedAt <= 0) {
-    return "UNKNOWN DATE";
-  }
-  return new Date(cachedAt).toISOString().slice(0, 10);
-}
-
 function buildAllStoredSummariesText(options: StoredSummaryOption[]): string {
   return options
     .map((option) => [`## ${option.label}`, option.summary.trim()].filter(Boolean).join("\n\n"))
@@ -296,42 +281,7 @@ async function buildStoredSummaryOptions(
   formats: SummaryFormat[]
 ): Promise<StoredSummaryOption[]> {
   const entries = await listCachedSummariesForVideo(videoId);
-  const formatByPromptHash = new Map(
-    formats.map((format) => [getSummaryFormatPromptHash(format), format])
-  );
-  const formatIndexById = new Map(formats.map((format, index) => [format.id, index]));
-
-  return entries
-    .map((item): StoredSummaryOption => {
-      const formatMatch = formatByPromptHash.get(item.promptHash) ?? null;
-      const formatName = formatMatch?.name.trim() || "STORED SUMMARY";
-      const modelLabel = formatStoredSummaryModelLabel(item.entry.model);
-      const dateLabel = formatStoredSummaryDate(item.entry.cachedAt);
-      return {
-        id: item.promptHash,
-        label: `${formatName.toUpperCase()} - ${modelLabel} - ${dateLabel}`,
-        summary: item.entry.summary,
-        keyPoints: item.entry.keyPoints,
-        model: item.entry.model,
-        cachedAt: item.entry.cachedAt,
-        promptHash: item.promptHash,
-        summaryFormatId: formatMatch?.id ?? null
-      };
-    })
-    .sort((a, b) => {
-      const aFormatIndex =
-        a.summaryFormatId === null
-          ? Number.MAX_SAFE_INTEGER
-          : (formatIndexById.get(a.summaryFormatId) ?? Number.MAX_SAFE_INTEGER);
-      const bFormatIndex =
-        b.summaryFormatId === null
-          ? Number.MAX_SAFE_INTEGER
-          : (formatIndexById.get(b.summaryFormatId) ?? Number.MAX_SAFE_INTEGER);
-      if (aFormatIndex !== bFormatIndex) {
-        return aFormatIndex - bFormatIndex;
-      }
-      return a.cachedAt - b.cachedAt;
-    });
+  return buildStoredSummaryDisplayEntries(entries, formats);
 }
 
 export function readCachedSummaryForTranscript(
