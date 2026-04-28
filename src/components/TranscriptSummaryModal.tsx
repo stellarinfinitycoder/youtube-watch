@@ -6,8 +6,11 @@ import {
   NEW_SUMMARY_FORMAT_OPTION,
   NEW_SUMMARY_MODEL_OPTION,
   SUMMARY_MODE_OPTION_PREFIX,
+  STORED_SUMMARY_OPTION_PREFIX,
+  ALL_STORED_SUMMARIES_OPTION_ID,
   type SummaryFormat,
-  type SummaryModelPreset
+  type SummaryModelPreset,
+  type StoredSummaryOption
 } from "../hooks/useTranscriptSummary";
 
 const { Text } = Typography;
@@ -29,6 +32,8 @@ type TranscriptSummaryModalProps = {
   summaryModel: string;
   summaryFormats: SummaryFormat[];
   summaryModelPresets: SummaryModelPreset[];
+  storedSummaryOptions: StoredSummaryOption[];
+  activeStoredSummaryOptionId: string | null;
   activeSummaryFormat: SummaryFormat;
   isSummaryPromptEditMode: boolean;
   editingSummaryFormatId: string | null;
@@ -73,6 +78,8 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
     summaryModel,
     summaryFormats,
     summaryModelPresets,
+    storedSummaryOptions,
+    activeStoredSummaryOptionId,
     activeSummaryFormat,
     isSummaryPromptEditMode,
     editingSummaryFormatId,
@@ -139,7 +146,9 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                     ? NEW_SUMMARY_FORMAT_OPTION
                     : transcriptViewMode === "transcript"
                       ? "transcript"
-                      : `${SUMMARY_MODE_OPTION_PREFIX}${activeSummaryFormat.id}`
+                      : activeStoredSummaryOptionId
+                        ? `${STORED_SUMMARY_OPTION_PREFIX}${activeStoredSummaryOptionId}`
+                        : `${SUMMARY_MODE_OPTION_PREFIX}${activeSummaryFormat.id}`
                 }
                 onChange={(value) => void handleTranscriptViewModeChange(value)}
                 aria-label="Transcript view mode"
@@ -228,6 +237,35 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                     </div>
                   </Select.Option>
                 ))}
+                {storedSummaryOptions.length > 0 ? (
+                  <Select.Option value="__stored_summaries_label__" title="STORED SUMMARIES" disabled>
+                    <span className="summary-format-section-label">STORED SUMMARIES</span>
+                  </Select.Option>
+                ) : null}
+                {storedSummaryOptions.length > 0 ? (
+                  <Select.Option
+                    value={`${STORED_SUMMARY_OPTION_PREFIX}${ALL_STORED_SUMMARIES_OPTION_ID}`}
+                    title="ALL SUMMARIES"
+                  >
+                    ALL SUMMARIES
+                  </Select.Option>
+                ) : null}
+                {storedSummaryOptions.map((option) => {
+                  const optionFormat = summaryFormats.find(
+                    (format) => format.id === option.summaryFormatId
+                  );
+                  return (
+                    <Select.Option
+                      key={option.id}
+                      value={`${STORED_SUMMARY_OPTION_PREFIX}${option.id}`}
+                      title={(optionFormat?.name ?? "STORED SUMMARY").toUpperCase()}
+                    >
+                      <div className="stored-summary-option-row">
+                        <span className="stored-summary-option-label">{option.label}</span>
+                      </div>
+                    </Select.Option>
+                  );
+                })}
                 <Select.Option value={NEW_SUMMARY_FORMAT_OPTION} title="NEW FORMAT">
                   NEW FORMAT
                 </Select.Option>

@@ -1,7 +1,9 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ALL_STORED_SUMMARIES_OPTION_ID,
   DEFAULT_SUMMARY_PROMPT,
+  STORED_SUMMARY_OPTION_PREFIX,
   useTranscriptSummary,
   writeCachedSummaryForTranscript
 } from "./useTranscriptSummary";
@@ -336,6 +338,146 @@ describe("useTranscriptSummary", () => {
       expect(result.current.summaryText).toBe("");
       expect(result.current.summaryKeyPoints).toEqual([]);
     });
+    expect(fetchSummaryMock).not.toHaveBeenCalled();
+  });
+
+  it("loads stored summary options and selects one without generating", async () => {
+    const { result } = renderHook(() => useTranscriptSummary());
+
+    act(() => {
+      result.current.setSummaryFormats([
+        {
+          id: "summary-default",
+          name: "SUMMARY",
+          prompt: DEFAULT_SUMMARY_PROMPT,
+          model: "",
+          isDefault: true,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: "summary-alt",
+          name: "ALT",
+          prompt: "Alternate prompt",
+          model: "google/gemini-2.5-flash",
+          isDefault: false,
+          createdAt: 2,
+          updatedAt: 2
+        }
+      ]);
+    });
+
+    await writeCachedTranscript(video.videoId, "Cached transcript body");
+    await writeCachedSummaryForTranscript(video.videoId, "Cached transcript body", defaultPromptCacheKey, {
+      summary: "Cached default summary",
+      keyPoints: [],
+      model: "openai/gpt-4o-mini"
+    });
+    await writeCachedSummaryForTranscript(
+      video.videoId,
+      "Cached transcript body",
+      "Alternate prompt\n__MODEL__:google/gemini-2.5-flash",
+      {
+        summary: "Cached alt summary",
+        keyPoints: ["Alt point"],
+        model: "google/gemini-2.5-flash"
+      }
+    );
+
+    act(() => {
+      void result.current.openTranscript(video);
+    });
+
+    const todayLabel = new Date().toISOString().slice(0, 10);
+    await waitFor(() => {
+      expect(result.current.storedSummaryOptions.map((option) => option.label)).toEqual([
+        `SUMMARY - GPT-4O-MINI - ${todayLabel}`,
+        `ALT - GEMINI-2.5-FLASH - ${todayLabel}`
+      ]);
+    });
+
+    const altOption = result.current.storedSummaryOptions.find(
+      (option) => option.summaryFormatId === "summary-alt"
+    );
+    expect(altOption).toBeDefined();
+
+    await act(async () => {
+      await result.current.handleTranscriptViewModeChange(
+        `${STORED_SUMMARY_OPTION_PREFIX}${altOption?.id ?? ""}`
+      );
+    });
+
+    expect(result.current.activeStoredSummaryOptionId).toBe(altOption?.id);
+    expect(result.current.activeSummaryFormat.id).toBe("summary-alt");
+    expect(result.current.summaryText).toBe("Cached alt summary");
+    expect(result.current.summaryKeyPoints).toEqual(["Alt point"]);
+    expect(fetchSummaryMock).not.toHaveBeenCalled();
+  });
+
+  it("shows all stored summary outputs together", async () => {
+    const { result } = renderHook(() => useTranscriptSummary());
+
+    act(() => {
+      result.current.setSummaryFormats([
+        {
+          id: "summary-default",
+          name: "SUMMARY",
+          prompt: DEFAULT_SUMMARY_PROMPT,
+          model: "",
+          isDefault: true,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: "summary-alt",
+          name: "ALT",
+          prompt: "Alternate prompt",
+          model: "",
+          isDefault: false,
+          createdAt: 2,
+          updatedAt: 2
+        }
+      ]);
+    });
+
+    await writeCachedTranscript(video.videoId, "Cached transcript body");
+    await writeCachedSummaryForTranscript(video.videoId, "Cached transcript body", defaultPromptCacheKey, {
+      summary: "Default stored output",
+      keyPoints: [],
+      model: "openai/gpt-4o-mini"
+    });
+    await writeCachedSummaryForTranscript(
+      video.videoId,
+      "Cached transcript body",
+      "Alternate prompt\n__MODEL__:",
+      {
+        summary: "Alternate stored output",
+        keyPoints: [],
+        model: "google/gemini-2.5-flash"
+      }
+    );
+
+    act(() => {
+      void result.current.openTranscript(video);
+    });
+
+    await waitFor(() => {
+      expect(result.current.storedSummaryOptions).toHaveLength(2);
+    });
+
+    await act(async () => {
+      await result.current.handleTranscriptViewModeChange(
+        `${STORED_SUMMARY_OPTION_PREFIX}${ALL_STORED_SUMMARIES_OPTION_ID}`
+      );
+    });
+
+    expect(result.current.activeStoredSummaryOptionId).toBe(ALL_STORED_SUMMARIES_OPTION_ID);
+    expect(result.current.summaryText).toContain("## SUMMARY - GPT-4O-MINI");
+    expect(result.current.summaryText).toContain("Default stored output");
+    expect(result.current.summaryText).toContain("## ALT - GEMINI-2.5-FLASH");
+    expect(result.current.summaryText).toContain("Alternate stored output");
+    expect(result.current.summaryText).toContain("---");
+    expect(result.current.summaryModel).toBe("");
     expect(fetchSummaryMock).not.toHaveBeenCalled();
   });
 

@@ -1818,6 +1818,29 @@ body {
   width: 100%;
 }
 
+.summary-format-dropdown .board-option-edit-btn .btn-icon {
+  background: var(--text) !important;
+}
+
+.summary-format-section-label {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.stored-summary-option-row {
+  min-width: 0;
+  width: 100%;
+}
+
+.stored-summary-option-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .summary-format-dropdown .rc-virtual-list-scrollbar {
   width: 0 !important;
   opacity: 0 !important;

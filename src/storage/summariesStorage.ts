@@ -20,6 +20,12 @@ export type SummaryCacheEntry = {
   cachedAt: number;
 };
 
+export type StoredSummaryCacheEntry = {
+  key: string;
+  promptHash: string;
+  entry: SummaryCacheEntry;
+};
+
 function getStorage(): Storage | null {
   if (typeof window === "undefined") {
     return null;
@@ -145,6 +151,73 @@ export async function readCachedSummary(
   } catch {
     return null;
   }
+}
+
+export async function listCachedSummariesForVideo(
+  videoId: string
+): Promise<StoredSummaryCacheEntry[]> {
+  const normalizedVideoId = videoId.trim();
+  if (normalizedVideoId.length === 0) {
+    return [];
+  }
+
+  await migrateLegacySummaryCache();
+  const keyPrefix = `${normalizedVideoId}:`;
+  const summaryKeys = await getAllCacheKeys(SUMMARIES_STORE_NAME);
+  const indexedDbEntries = await Promise.all(
+    summaryKeys
+      .filter((key) => key.startsWith(keyPrefix))
+      .map(async (key): Promise<StoredSummaryCacheEntry | null> => {
+        const entry = normalizeSummaryCacheEntry(
+          await getCacheValue<SummaryCacheEntry>(SUMMARIES_STORE_NAME, key)
+        );
+        if (!entry) {
+          return null;
+        }
+        return {
+          key,
+          promptHash: key.slice(keyPrefix.length),
+          entry
+        };
+      })
+  );
+  const normalizedIndexedDbEntries = indexedDbEntries.filter(
+    (item): item is StoredSummaryCacheEntry => item !== null
+  );
+  if (normalizedIndexedDbEntries.length > 0) {
+    return normalizedIndexedDbEntries;
+  }
+
+  const storage = getStorage();
+  if (!storage) {
+    return [];
+  }
+
+  const legacyPrefix = getSummaryCacheKey(normalizedVideoId, "");
+  const legacyEntries: StoredSummaryCacheEntry[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (!key?.startsWith(legacyPrefix)) {
+      continue;
+    }
+    try {
+      const raw = storage.getItem(key);
+      const entry = raw ? normalizeSummaryCacheEntry(JSON.parse(raw) as unknown) : null;
+      if (!entry) {
+        continue;
+      }
+      const promptHash = key.slice(legacyPrefix.length);
+      legacyEntries.push({
+        key: `${normalizedVideoId}:${promptHash}`,
+        promptHash,
+        entry
+      });
+    } catch {
+      // Ignore malformed legacy entries.
+    }
+  }
+
+  return legacyEntries;
 }
 
 export async function writeCachedSummary(

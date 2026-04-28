@@ -1713,6 +1713,8 @@ function App() {
     summaryModel,
     summaryFormats,
     summaryModelPresets,
+    storedSummaryOptions,
+    activeStoredSummaryOptionId,
     activeSummaryFormat,
     activeSummaryFormatId,
     isSummaryPromptEditMode,
@@ -5574,6 +5576,8 @@ function App() {
             summaryModel={summaryModel}
             summaryFormats={summaryFormats}
             summaryModelPresets={summaryModelPresets}
+            storedSummaryOptions={storedSummaryOptions}
+            activeStoredSummaryOptionId={activeStoredSummaryOptionId}
             activeSummaryFormat={activeSummaryFormat}
             isSummaryPromptEditMode={isSummaryPromptEditMode}
             editingSummaryFormatId={editingSummaryFormatId}

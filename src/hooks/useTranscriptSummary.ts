@@ -4,6 +4,7 @@ import {
   SUMMARY_FORMATS_STORAGE_KEY,
   SUMMARY_MODEL_PRESETS_STORAGE_KEY,
   SUMMARY_PROMPT_STORAGE_KEY,
+  listCachedSummariesForVideo,
   readCachedSummary as readCachedSummaryEntry,
   readStoredJson,
   readStoredString,
@@ -18,6 +19,8 @@ const DEFAULT_SUMMARY_FORMAT_ID = "summary-default";
 export const NEW_SUMMARY_FORMAT_OPTION = "__new_summary_format__";
 export const NEW_SUMMARY_MODEL_OPTION = "__new_summary_model__";
 export const SUMMARY_MODE_OPTION_PREFIX = "summary:";
+export const STORED_SUMMARY_OPTION_PREFIX = "stored-summary:";
+export const ALL_STORED_SUMMARIES_OPTION_ID = "__all_summaries__";
 
 export const DEFAULT_SUMMARY_PROMPT = [
   "Focus on practical takeaways.",
@@ -51,6 +54,17 @@ export type SummaryFormat = {
 export type SummaryModelPreset = {
   value: string;
   label: string;
+};
+
+export type StoredSummaryOption = {
+  id: string;
+  label: string;
+  summary: string;
+  keyPoints: string[];
+  model: string;
+  cachedAt: number;
+  promptHash: string;
+  summaryFormatId: string | null;
 };
 
 export type InlineMetaFeedback = {
@@ -247,6 +261,79 @@ function readStoredSummaryFormats(): SummaryFormat[] {
   );
 }
 
+function buildSummaryPromptCacheKey(prompt: string, model: string): string {
+  return `${prompt.trim()}\n__MODEL__:${model.trim() || ""}`;
+}
+
+function getSummaryFormatPromptHash(format: SummaryFormat): string {
+  return hashText(buildSummaryPromptCacheKey(format.prompt, format.model ?? ""));
+}
+
+function formatStoredSummaryModelLabel(model: string): string {
+  const trimmed = model.trim();
+  if (!trimmed) {
+    return "DEFAULT";
+  }
+  const parts = trimmed.split("/");
+  return (parts[parts.length - 1] ?? trimmed).toUpperCase();
+}
+
+function formatStoredSummaryDate(cachedAt: number): string {
+  if (!Number.isFinite(cachedAt) || cachedAt <= 0) {
+    return "UNKNOWN DATE";
+  }
+  return new Date(cachedAt).toISOString().slice(0, 10);
+}
+
+function buildAllStoredSummariesText(options: StoredSummaryOption[]): string {
+  return options
+    .map((option) => [`## ${option.label}`, option.summary.trim()].filter(Boolean).join("\n\n"))
+    .join("\n\n---\n\n");
+}
+
+async function buildStoredSummaryOptions(
+  videoId: string,
+  formats: SummaryFormat[]
+): Promise<StoredSummaryOption[]> {
+  const entries = await listCachedSummariesForVideo(videoId);
+  const formatByPromptHash = new Map(
+    formats.map((format) => [getSummaryFormatPromptHash(format), format])
+  );
+  const formatIndexById = new Map(formats.map((format, index) => [format.id, index]));
+
+  return entries
+    .map((item): StoredSummaryOption => {
+      const formatMatch = formatByPromptHash.get(item.promptHash) ?? null;
+      const formatName = formatMatch?.name.trim() || "STORED SUMMARY";
+      const modelLabel = formatStoredSummaryModelLabel(item.entry.model);
+      const dateLabel = formatStoredSummaryDate(item.entry.cachedAt);
+      return {
+        id: item.promptHash,
+        label: `${formatName.toUpperCase()} - ${modelLabel} - ${dateLabel}`,
+        summary: item.entry.summary,
+        keyPoints: item.entry.keyPoints,
+        model: item.entry.model,
+        cachedAt: item.entry.cachedAt,
+        promptHash: item.promptHash,
+        summaryFormatId: formatMatch?.id ?? null
+      };
+    })
+    .sort((a, b) => {
+      const aFormatIndex =
+        a.summaryFormatId === null
+          ? Number.MAX_SAFE_INTEGER
+          : (formatIndexById.get(a.summaryFormatId) ?? Number.MAX_SAFE_INTEGER);
+      const bFormatIndex =
+        b.summaryFormatId === null
+          ? Number.MAX_SAFE_INTEGER
+          : (formatIndexById.get(b.summaryFormatId) ?? Number.MAX_SAFE_INTEGER);
+      if (aFormatIndex !== bFormatIndex) {
+        return aFormatIndex - bFormatIndex;
+      }
+      return a.cachedAt - b.cachedAt;
+    });
+}
+
 export function readCachedSummaryForTranscript(
   videoId: string,
   transcriptText: string,
@@ -314,6 +401,10 @@ export function useTranscriptSummary() {
   const [summaryFormats, setSummaryFormats] = useState<SummaryFormat[]>(readStoredSummaryFormats);
   const [summaryModelPresets, setSummaryModelPresets] = useState<SummaryModelPreset[]>(
     readStoredSummaryModelPresets
+  );
+  const [storedSummaryOptions, setStoredSummaryOptions] = useState<StoredSummaryOption[]>([]);
+  const [activeStoredSummaryOptionId, setActiveStoredSummaryOptionId] = useState<string | null>(
+    null
   );
   const [activeSummaryFormatId, setActiveSummaryFormatId] = useState<string>(() =>
     getDefaultSummaryFormat(readStoredSummaryFormats()).id
@@ -391,12 +482,45 @@ export function useTranscriptSummary() {
     setSummaryModel(cached.model);
   };
 
+  const refreshStoredSummaryOptions = async (
+    videoId: string,
+    formats = summaryFormats,
+    requestId = transcriptRequestIdRef.current
+  ): Promise<StoredSummaryOption[]> => {
+    const options = await buildStoredSummaryOptions(videoId, formats);
+    if (requestId === transcriptRequestIdRef.current) {
+      setStoredSummaryOptions(options);
+      setActiveStoredSummaryOptionId((previous) =>
+        previous &&
+        (previous === ALL_STORED_SUMMARIES_OPTION_ID
+          ? options.length > 0
+          : options.some((option) => option.id === previous))
+          ? previous
+          : null
+      );
+      if (activeStoredSummaryOptionId === ALL_STORED_SUMMARIES_OPTION_ID) {
+        setSummaryText(buildAllStoredSummariesText(options));
+        setSummaryKeyPoints([]);
+        setSummaryError(null);
+        setSummaryModel("");
+      }
+    }
+    return options;
+  };
+
+  useEffect(() => {
+    if (!transcriptVideo) {
+      return;
+    }
+    void refreshStoredSummaryOptions(transcriptVideo.videoId, summaryFormats);
+  }, [summaryFormats, transcriptVideo?.videoId]);
+
   const readDirectCachedSummary = async (
     videoId: string,
     promptText: string,
     modelText: string
   ): Promise<SummaryCacheEntry | null> => {
-    const promptCacheKey = `${promptText}\n__MODEL__:${modelText || ""}`;
+    const promptCacheKey = buildSummaryPromptCacheKey(promptText, modelText);
     const promptHash = hashText(promptCacheKey);
     return readCachedSummaryEntry(videoId, promptHash);
   };
@@ -410,7 +534,7 @@ export function useTranscriptSummary() {
     const cached = await readCachedSummaryForTranscript(
       videoId,
       transcriptBody,
-      `${promptText}\n__MODEL__:${modelText || ""}`
+      buildSummaryPromptCacheKey(promptText, modelText)
     );
     if (!cached) {
       return false;
@@ -482,6 +606,7 @@ export function useTranscriptSummary() {
   const openTranscript = async (video: VideoItem, _sourceHandleRaw?: string): Promise<void> => {
     const currentDefaultSummaryFormat = getDefaultSummaryFormat(summaryFormats);
     setActiveSummaryFormatId(currentDefaultSummaryFormat.id);
+    setActiveStoredSummaryOptionId(null);
     setEditingSummaryFormatId(currentDefaultSummaryFormat.id);
     setTranscriptVideo(video);
     setTranscriptViewMode("summary");
@@ -505,9 +630,11 @@ export function useTranscriptSummary() {
     setSummaryKeyPoints([]);
     setSummaryError(null);
     setSummaryModel("");
+    setStoredSummaryOptions([]);
     transcriptRequestIdRef.current += 1;
     const requestId = transcriptRequestIdRef.current;
     try {
+      await refreshStoredSummaryOptions(video.videoId, summaryFormats, requestId);
       const directCachedSummary = await readDirectCachedSummary(
         video.videoId,
         currentDefaultSummaryFormat.prompt,
@@ -578,12 +705,15 @@ export function useTranscriptSummary() {
       );
       if (directCachedSummary) {
         hydrateSummaryCacheEntry(directCachedSummary);
+        setActiveStoredSummaryOptionId(null);
+        await refreshStoredSummaryOptions(transcriptVideo.videoId);
         return;
       }
       setSummaryText("");
       setSummaryKeyPoints([]);
       setSummaryError(null);
       setSummaryModel("");
+      setActiveStoredSummaryOptionId(null);
       return;
     }
 
@@ -614,16 +744,18 @@ export function useTranscriptSummary() {
       setSummaryText(nextSummary);
       setSummaryKeyPoints([]);
       setSummaryModel(payload.model);
+      setActiveStoredSummaryOptionId(null);
       await writeCachedSummaryForTranscript(
         transcriptVideo.videoId,
         ensuredTranscriptText,
-        `${promptToUse}\n__MODEL__:${modelToUse || ""}`,
+        buildSummaryPromptCacheKey(promptToUse, modelToUse),
         {
           summary: nextSummary,
           keyPoints: [],
           model: payload.model
         }
       );
+      await refreshStoredSummaryOptions(transcriptVideo.videoId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Summary failed.";
       setSummaryError(message);
@@ -659,6 +791,7 @@ export function useTranscriptSummary() {
     hydrateSummaryFormatDrafts(format);
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
+    setActiveStoredSummaryOptionId(null);
     setSummaryText("");
     setSummaryKeyPoints([]);
     setSummaryError(null);
@@ -668,6 +801,41 @@ export function useTranscriptSummary() {
       promptOverride: format.prompt,
       modelOverride: format.model
     });
+  };
+
+  const selectStoredSummaryOption = async (optionId: string): Promise<void> => {
+    if (optionId === ALL_STORED_SUMMARIES_OPTION_ID) {
+      if (storedSummaryOptions.length === 0) {
+        return;
+      }
+      setActiveStoredSummaryOptionId(ALL_STORED_SUMMARIES_OPTION_ID);
+      setIsSummaryPromptEditMode(false);
+      setTranscriptViewMode("summary");
+      setSummaryText(buildAllStoredSummariesText(storedSummaryOptions));
+      setSummaryKeyPoints([]);
+      setSummaryError(null);
+      setSummaryModel("");
+      return;
+    }
+
+    const option = storedSummaryOptions.find((item) => item.id === optionId);
+    if (!option) {
+      return;
+    }
+    if (option.summaryFormatId) {
+      const format = summaryFormats.find((item) => item.id === option.summaryFormatId);
+      if (format) {
+        setActiveSummaryFormatId(format.id);
+        hydrateSummaryFormatDrafts(format);
+      }
+    }
+    setActiveStoredSummaryOptionId(option.id);
+    setIsSummaryPromptEditMode(false);
+    setTranscriptViewMode("summary");
+    setSummaryText(option.summary);
+    setSummaryKeyPoints(option.keyPoints);
+    setSummaryError(null);
+    setSummaryModel(option.model);
   };
 
   const moveSummaryFormat = (formatId: string, direction: "up" | "down"): void => {
@@ -687,12 +855,14 @@ export function useTranscriptSummary() {
 
   const handleTranscriptViewModeChange = async (mode: "transcript" | "summary" | string): Promise<void> => {
     if (mode === NEW_SUMMARY_FORMAT_OPTION) {
+      setActiveStoredSummaryOptionId(null);
       setTranscriptViewMode("summary");
       openSummaryFormatEditor(null);
       return;
     }
     if (mode === "transcript") {
       setIsSummaryPromptEditMode(false);
+      setActiveStoredSummaryOptionId(null);
       if (transcriptViewMode === "transcript") {
         return;
       }
@@ -704,6 +874,10 @@ export function useTranscriptSummary() {
     }
     if (mode.startsWith(SUMMARY_MODE_OPTION_PREFIX)) {
       await switchToSummaryFormat(mode.slice(SUMMARY_MODE_OPTION_PREFIX.length));
+      return;
+    }
+    if (mode.startsWith(STORED_SUMMARY_OPTION_PREFIX)) {
+      await selectStoredSummaryOption(mode.slice(STORED_SUMMARY_OPTION_PREFIX.length));
       return;
     }
     setIsSummaryPromptEditMode(false);
@@ -975,6 +1149,8 @@ export function useTranscriptSummary() {
     setSummaryKeyPoints([]);
     setSummaryError(null);
     setSummaryModel("");
+    setStoredSummaryOptions([]);
+    setActiveStoredSummaryOptionId(null);
     setIsSummaryPromptEditMode(false);
     hydrateSummaryFormatDrafts(nextActiveSummaryFormat);
   };
@@ -1005,6 +1181,8 @@ export function useTranscriptSummary() {
     summaryModel,
     summaryFormats,
     summaryModelPresets,
+    storedSummaryOptions,
+    activeStoredSummaryOptionId,
     activeSummaryFormat,
     activeSummaryFormatId,
     isSummaryPromptEditMode,

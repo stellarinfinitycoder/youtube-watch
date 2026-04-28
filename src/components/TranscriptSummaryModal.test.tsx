@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import TranscriptSummaryModal from "./TranscriptSummaryModal";
 import { RESPONSIVE_SUMMARY_MODAL_WIDTH } from "./modalSizing";
@@ -87,6 +88,8 @@ describe("TranscriptSummaryModal", () => {
         summaryModel=""
         summaryFormats={[summaryFormat]}
         summaryModelPresets={[]}
+        storedSummaryOptions={[]}
+        activeStoredSummaryOptionId={null}
         activeSummaryFormat={summaryFormat}
         isSummaryPromptEditMode={false}
         editingSummaryFormatId={summaryFormat.id}
@@ -148,6 +151,8 @@ describe("TranscriptSummaryModal", () => {
         summaryModel=""
         summaryFormats={[summaryFormat]}
         summaryModelPresets={[]}
+        storedSummaryOptions={[]}
+        activeStoredSummaryOptionId={null}
         activeSummaryFormat={summaryFormat}
         isSummaryPromptEditMode={false}
         editingSummaryFormatId={summaryFormat.id}
@@ -210,6 +215,8 @@ describe("TranscriptSummaryModal", () => {
         summaryModel="openai/gpt-4o-mini"
         summaryFormats={[summaryFormat]}
         summaryModelPresets={[]}
+        storedSummaryOptions={[]}
+        activeStoredSummaryOptionId={null}
         activeSummaryFormat={summaryFormat}
         isSummaryPromptEditMode={false}
         editingSummaryFormatId={summaryFormat.id}
@@ -252,5 +259,85 @@ describe("TranscriptSummaryModal", () => {
     ).toEqual(["Transcript view mode", "Regenerate summary", "Copy summary"]);
     expect(await screen.findByRole("heading", { name: "Cached summary body" })).toBeInTheDocument();
     expect(screen.getByRole("listitem")).toHaveTextContent("Model formatted point");
+  });
+
+  it("renders stored summary options in the mode dropdown", async () => {
+    const user = userEvent.setup();
+    const handleTranscriptViewModeChange = vi.fn(async () => undefined);
+
+    render(
+      <TranscriptSummaryModal
+        transcriptVideo={{
+          videoId: "video-1",
+          title: "Example video",
+          publishedAt: "2026-04-10T10:00:00Z",
+          thumbnailUrl: "https://img.test/video-1.jpg",
+          channelTitle: "Example Channel",
+          videoUrl: "https://www.youtube.com/watch?v=video-1",
+          viewCount: 100
+        }}
+        summaryHydrating={false}
+        transcriptHydrating={false}
+        transcriptLoading={false}
+        transcriptText=""
+        transcriptError={null}
+        transcriptViewMode="summary"
+        isTranscriptCopied={false}
+        summaryLoading={false}
+        summaryText="Plain summary"
+        summaryKeyPoints={[]}
+        summaryError={null}
+        summaryModel="openai/gpt-4o-mini"
+        summaryFormats={[summaryFormat]}
+        summaryModelPresets={[]}
+        storedSummaryOptions={[
+          {
+            id: "stored-default",
+            label: "SUMMARY - GPT-4O-MINI - 2026-04-28",
+            summary: "Stored summary body",
+            keyPoints: [],
+            model: "openai/gpt-4o-mini",
+            cachedAt: 1777334400000,
+            promptHash: "stored-default",
+            summaryFormatId: summaryFormat.id
+          }
+        ]}
+        activeStoredSummaryOptionId={null}
+        activeSummaryFormat={summaryFormat}
+        isSummaryPromptEditMode={false}
+        editingSummaryFormatId={summaryFormat.id}
+        summaryFormatNameDraft={summaryFormat.name}
+        summaryPromptDraft={summaryFormat.prompt}
+        summaryFormatModelDraft={summaryFormat.model}
+        isNewSummaryModelDraftMode={false}
+        summaryFormatDefaultDraft
+        isSummaryBusy={false}
+        onCancel={() => undefined}
+        setSummaryFormatNameDraft={() => undefined}
+        setSummaryPromptDraft={() => undefined}
+        setSummaryFormatModelDraft={() => undefined}
+        setIsNewSummaryModelDraftMode={() => undefined}
+        setSummaryFormatDefaultDraft={() => undefined}
+        setActiveSummaryFormatId={() => undefined}
+        setIsSummaryPromptEditMode={() => undefined}
+        cancelSummaryFormatEditing={() => undefined}
+        handleTranscriptViewModeChange={handleTranscriptViewModeChange}
+        copyTranscriptText={async () => undefined}
+        regenerateSummary={async () => undefined}
+        openSummaryFormatEditor={() => undefined}
+        moveSummaryFormat={() => undefined}
+        removeSummaryModelPreset={() => undefined}
+        saveSummaryPromptAndClose={async () => undefined}
+        deleteSummaryFormatAndClose={() => undefined}
+      />
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "Transcript view mode" }));
+
+    expect(await screen.findByText("STORED SUMMARIES")).toBeInTheDocument();
+    expect(await screen.findByText("ALL SUMMARIES")).toBeInTheDocument();
+    await user.click(await screen.findByText("SUMMARY - GPT-4O-MINI - 2026-04-28"));
+
+    expect(handleTranscriptViewModeChange).toHaveBeenCalledWith("stored-summary:stored-default");
   });
 });
