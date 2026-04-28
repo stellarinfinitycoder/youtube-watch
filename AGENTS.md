@@ -10,6 +10,8 @@ Purpose: practical guardrails for AI/code agents working in this repository.
 
 - App: React + TypeScript + Ant Design (Vite).
 - API routes: `api/*` (Vercel/server-side).
+- Keep Vercel serverless function count compatible with the Hobby plan. Prefer consolidating related endpoints through existing dispatcher functions instead of adding deployable files under `api/`.
+- Keep tests outside `api/` so Vercel does not treat them as functions.
 - Main UI entry is `src/App.tsx`; keep changes modular and avoid unnecessary growth in this file.
 
 ## Environment
@@ -53,6 +55,7 @@ If a step is skipped, state exactly why.
 - Do not perform destructive git commands (`reset --hard`, force pushes, history rewrites) unless explicitly requested.
 - Do not revert user-authored unrelated local changes.
 - Keep commits focused and atomic when asked to commit.
+- GitHub remote is `origin` at `https://github.com/stellarinfinitycoder/youtube-watch.git`.
 - Do not push, deploy, or trigger release workflows unless explicitly requested.
 
 ## When Stuck

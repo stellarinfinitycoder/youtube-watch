@@ -1,8 +1,36 @@
 {
   "rewrites": [
     {
-      "source": "/api/youtube/:route*",
-      "destination": "/api/youtube?route=:route*"
+      "source": "/api/youtube/resolve",
+      "destination": "/api/youtube?route=resolve"
+    },
+    {
+      "source": "/api/youtube/resolve-input",
+      "destination": "/api/youtube?route=resolve-input"
+    },
+    {
+      "source": "/api/youtube/latest",
+      "destination": "/api/youtube?route=latest"
+    },
+    {
+      "source": "/api/youtube/latest-by-channel",
+      "destination": "/api/youtube?route=latest-by-channel"
+    },
+    {
+      "source": "/api/youtube/discover-by-playlist",
+      "destination": "/api/youtube?route=discover-by-playlist"
+    },
+    {
+      "source": "/api/youtube/view-counts",
+      "destination": "/api/youtube?route=view-counts"
+    },
+    {
+      "source": "/api/youtube/channel-avatar",
+      "destination": "/api/youtube?route=channel-avatar"
+    },
+    {
+      "source": "/api/youtube/transcript",
+      "destination": "/api/youtube?route=transcript"
     },
     {
       "source": "/rss.xml",
