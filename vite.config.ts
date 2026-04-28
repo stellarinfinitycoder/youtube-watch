@@ -41,15 +41,6 @@ export default defineConfig(({ mode }) => {
             if (id.includes("node_modules/react-markdown") || id.includes("node_modules/remark-gfm")) {
               return "markdown-vendor";
             }
-            if (
-              id.includes("/src/pages/PublisherAdminPage.tsx") ||
-              id.includes("/src/pages/PublicNewsPage.tsx") ||
-              id.includes("/src/api/publisher.ts") ||
-              id.includes("/src/api/publisherPublish.ts") ||
-              id.includes("/src/types/publisher.ts")
-            ) {
-              return "publisher";
-            }
             return undefined;
           }
         }

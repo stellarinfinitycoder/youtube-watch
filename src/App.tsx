@@ -1711,8 +1711,6 @@ function App() {
     summaryKeyPoints,
     summaryError,
     summaryModel,
-    isPublishingSummary,
-    publishSummaryFeedback,
     summaryFormats,
     summaryModelPresets,
     activeSummaryFormat,
@@ -1724,7 +1722,6 @@ function App() {
     summaryFormatModelDraft,
     isNewSummaryModelDraftMode,
     summaryFormatDefaultDraft,
-    hasPublishableSummary,
     isSummaryBusy,
     setSummaryFormatNameDraft,
     setSummaryPromptDraft,
@@ -1735,13 +1732,11 @@ function App() {
     setActiveSummaryFormatId,
     setIsSummaryPromptEditMode,
     cancelSummaryFormatEditing,
-    clearPublishFeedback,
     openTranscript,
     closeTranscriptModal,
     handleTranscriptViewModeChange,
     copyTranscriptText,
     regenerateSummary,
-    publishCurrentVideoSummary,
     openSummaryFormatEditor,
     moveSummaryFormat,
     removeSummaryModelPreset,
@@ -5577,8 +5572,6 @@ function App() {
             summaryKeyPoints={summaryKeyPoints}
             summaryError={summaryError}
             summaryModel={summaryModel}
-            isPublishingSummary={isPublishingSummary}
-            publishSummaryFeedback={publishSummaryFeedback}
             summaryFormats={summaryFormats}
             summaryModelPresets={summaryModelPresets}
             activeSummaryFormat={activeSummaryFormat}
@@ -5589,7 +5582,6 @@ function App() {
             summaryFormatModelDraft={summaryFormatModelDraft}
             isNewSummaryModelDraftMode={isNewSummaryModelDraftMode}
             summaryFormatDefaultDraft={summaryFormatDefaultDraft}
-            hasPublishableSummary={hasPublishableSummary}
             isSummaryBusy={isSummaryBusy}
             onCancel={closeTranscriptModal}
             setSummaryFormatNameDraft={setSummaryFormatNameDraft}
@@ -5603,7 +5595,6 @@ function App() {
             handleTranscriptViewModeChange={handleTranscriptViewModeChange}
             copyTranscriptText={copyTranscriptText}
             regenerateSummary={regenerateSummary}
-            publishCurrentVideoSummary={publishCurrentVideoSummary}
             openSummaryFormatEditor={openSummaryFormatEditor}
             moveSummaryFormat={moveSummaryFormat}
             removeSummaryModelPreset={removeSummaryModelPreset}

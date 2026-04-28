@@ -31,34 +31,6 @@
     {
       "source": "/api/youtube/transcript",
       "destination": "/api/youtube?route=transcript"
-    },
-    {
-      "source": "/rss.xml",
-      "destination": "/api/rss"
-    },
-    {
-      "source": "/news",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/news/(.*)",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/admin/rssfeed",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/admin/rssfeed/(.*)",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/admin/publisher",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/admin/publisher/(.*)",
-      "destination": "/index.html"
     }
   ]
 }

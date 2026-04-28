@@ -9,8 +9,6 @@ For setup/deploy steps, see [README.md](./README.md).
 - Route-gated entrypoint is `src/main.tsx`.
 - Route mapping:
 1. `/` -> main app (`src/App.tsx`)
-2. `/admin/rssfeed` and `/admin/publisher` -> publisher admin page (`src/pages/PublisherAdminPage.tsx`)
-3. `/news` and `/news/*` -> public news page (`src/pages/PublicNewsPage.tsx`)
 
 ## Runtime Boundaries
 
@@ -20,7 +18,6 @@ For setup/deploy steps, see [README.md](./README.md).
 - External integrations:
 1. YouTube endpoints (channel/video metadata and transcript sources)
 2. OpenRouter (summary generation)
-3. Vercel KV (publisher storage)
 
 ## Frontend Structure
 
@@ -43,12 +40,6 @@ For setup/deploy steps, see [README.md](./README.md).
 2. `src/api/youtube.ts`
 3. `api/transcript.ts` or `api/summarize.ts`
 4. `api/_lib/transcript.ts` and/or OpenRouter
-
-- Publisher flow:
-1. Admin UI (`src/pages/PublisherAdminPage.tsx`)
-2. `src/api/publisher.ts`
-3. `api/publisher.ts`
-4. `api/_lib/publisher-store.ts` (Vercel KV)
 
 ## State And Persistence
 

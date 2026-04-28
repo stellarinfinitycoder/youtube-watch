@@ -73,7 +73,6 @@ Completed:
 
 Notes:
 1. `usePersistedState` was intentionally skipped. It does not currently remove enough real complexity to justify another abstraction.
-2. Publisher/admin logic remains isolated in [src/pages/PublisherAdminPage.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/pages/PublisherAdminPage.tsx), which is sufficient for this phase.
 
 ## Phase 4
 Goal: optimize heavy board views.
@@ -121,7 +120,6 @@ Goal: reduce initial-load bundle size without mixing it into runtime rendering w
 
 1. Lazy-load:
    - [src/components/TranscriptSummaryModal.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/components/TranscriptSummaryModal.tsx)
-   - [src/pages/PublisherAdminPage.tsx](/Users/vitaly/Desktop/Vibecoding/Youtube%20Watch/src/pages/PublisherAdminPage.tsx)
 2. Consider manual chunking only after lazy-loading the heavy rarely used flows.
 
 ## Best immediate implementation scope

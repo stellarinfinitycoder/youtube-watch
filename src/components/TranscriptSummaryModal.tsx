@@ -6,7 +6,6 @@ import {
   NEW_SUMMARY_FORMAT_OPTION,
   NEW_SUMMARY_MODEL_OPTION,
   SUMMARY_MODE_OPTION_PREFIX,
-  type InlineMetaFeedback,
   type SummaryFormat,
   type SummaryModelPreset
 } from "../hooks/useTranscriptSummary";
@@ -28,8 +27,6 @@ type TranscriptSummaryModalProps = {
   summaryKeyPoints: string[];
   summaryError: string | null;
   summaryModel: string;
-  isPublishingSummary: boolean;
-  publishSummaryFeedback: InlineMetaFeedback | null;
   summaryFormats: SummaryFormat[];
   summaryModelPresets: SummaryModelPreset[];
   activeSummaryFormat: SummaryFormat;
@@ -40,7 +37,6 @@ type TranscriptSummaryModalProps = {
   summaryFormatModelDraft: string;
   isNewSummaryModelDraftMode: boolean;
   summaryFormatDefaultDraft: boolean;
-  hasPublishableSummary: boolean;
   isSummaryBusy: boolean;
   onCancel: () => void;
   setSummaryFormatNameDraft: (value: string) => void;
@@ -54,7 +50,6 @@ type TranscriptSummaryModalProps = {
   handleTranscriptViewModeChange: (value: "transcript" | "summary" | string) => Promise<void>;
   copyTranscriptText: () => Promise<void>;
   regenerateSummary: () => Promise<void>;
-  publishCurrentVideoSummary: () => Promise<void>;
   openSummaryFormatEditor: (formatId: string | null) => void;
   moveSummaryFormat: (formatId: string, direction: "up" | "down") => void;
   removeSummaryModelPreset: (modelValue: string) => void;
@@ -76,8 +71,6 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
     summaryText,
     summaryError,
     summaryModel,
-    isPublishingSummary,
-    publishSummaryFeedback,
     summaryFormats,
     summaryModelPresets,
     activeSummaryFormat,
@@ -88,7 +81,6 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
     summaryFormatModelDraft,
     isNewSummaryModelDraftMode,
     summaryFormatDefaultDraft,
-    hasPublishableSummary,
     isSummaryBusy,
     onCancel,
     setSummaryFormatNameDraft,
@@ -102,7 +94,6 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
     handleTranscriptViewModeChange,
     copyTranscriptText,
     regenerateSummary,
-    publishCurrentVideoSummary,
     openSummaryFormatEditor,
     moveSummaryFormat,
     removeSummaryModelPreset,
@@ -111,9 +102,6 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
   } = props;
 
   const plainSummaryText = summaryText.trim();
-  const showPublishButton =
-    transcriptViewMode === "summary" &&
-    (hasPublishableSummary || isPublishingSummary || publishSummaryFeedback !== null);
   const hasSummaryContent = plainSummaryText.length > 0;
   const isSummaryModeSelectorUsable =
     transcriptViewMode === "summary" && !isSummaryPromptEditMode && hasSummaryContent;
@@ -132,18 +120,8 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
             {!transcriptLoading && !summaryHydrating && !transcriptHydrating && summaryLoading ? (
               <Text className="video-meta-feedback is-info">SUMMARIZING...</Text>
             ) : null}
-            {publishSummaryFeedback ? (
-              <Text className={`video-meta-feedback is-${publishSummaryFeedback.kind}`}>
-                {publishSummaryFeedback.text}
-              </Text>
-            ) : null}
-            {isPublishingSummary ? (
-              <Text className="video-meta-feedback is-info">PUBLISHING...</Text>
-            ) : null}
             {!transcriptLoading &&
             !summaryLoading &&
-            !isPublishingSummary &&
-            !publishSummaryFeedback &&
             transcriptViewMode === "summary" &&
             !isSummaryPromptEditMode &&
             summaryModel ? (
@@ -256,6 +234,23 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
               </Select>
               <Button
                 htmlType="button"
+                className="column-move-btn transcript-regenerate-btn"
+                aria-label="Regenerate summary"
+                onClick={() => void regenerateSummary()}
+                disabled={
+                  transcriptViewMode === "transcript" ||
+                  isSummaryBusy ||
+                  isSummaryPromptEditMode ||
+                  summaryHydrating ||
+                  transcriptHydrating ||
+                  transcriptLoading ||
+                  !!transcriptError
+                }
+              >
+                <span className="btn-icon btn-icon-fetch" aria-hidden />
+              </Button>
+              <Button
+                htmlType="button"
                 className={`column-move-btn transcript-copy-btn ${
                   isTranscriptCopied ? "is-copied" : ""
                 }`}
@@ -283,46 +278,6 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                   <span className="btn-icon btn-icon-copy" aria-hidden />
                 )}
               </Button>
-              <Button
-                htmlType="button"
-                className="column-move-btn transcript-regenerate-btn"
-                aria-label="Regenerate summary"
-                onClick={() => void regenerateSummary()}
-                disabled={
-                  transcriptViewMode === "transcript" ||
-                  isSummaryBusy ||
-                  isSummaryPromptEditMode ||
-                  summaryHydrating ||
-                  transcriptHydrating ||
-                  transcriptLoading ||
-                  !!transcriptError
-                }
-              >
-                <span className="btn-icon btn-icon-fetch" aria-hidden />
-              </Button>
-              {showPublishButton ? (
-                <Button
-                  htmlType="button"
-                  className="column-move-btn transcript-publish-btn"
-                  aria-label="Publish summary"
-                  onClick={() => void publishCurrentVideoSummary()}
-                  disabled={
-                    isSummaryBusy ||
-                    isSummaryPromptEditMode ||
-                    isPublishingSummary ||
-                    summaryHydrating ||
-                    transcriptHydrating ||
-                    transcriptLoading ||
-                    !!transcriptError ||
-                    !hasPublishableSummary
-                  }
-                >
-                  <span
-                    className={`btn-icon btn-icon-feed ${isPublishingSummary ? "is-spinning" : ""}`}
-                    aria-hidden
-                  />
-                </Button>
-              ) : null}
             </div>
           </div>
         </div>

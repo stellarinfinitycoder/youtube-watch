@@ -31,11 +31,6 @@ cp .env.example .env
 YOUTUBE_API_KEY=your_youtube_data_api_key_here
 OPENROUTER_API_KEY=your_openrouter_api_key_here
 OPENROUTER_DEFAULT_MODEL=openai/gpt-4o-mini
-PUBLISHER_ADMIN_PASSWORD=your_admin_password_here
-PUBLISHER_SESSION_SECRET=your_random_session_secret_here
-KV_REST_API_URL=your_vercel_kv_rest_url
-KV_REST_API_TOKEN=your_vercel_kv_rest_token
-PUBLIC_SITE_URL=https://your-domain.com
 ```
 
 ## Run
@@ -53,17 +48,6 @@ Set environment variable in Vercel project:
 - `YOUTUBE_API_KEY`
 - `OPENROUTER_API_KEY`
 - `OPENROUTER_DEFAULT_MODEL` (optional)
-- `PUBLISHER_ADMIN_PASSWORD`
-- `PUBLISHER_SESSION_SECRET`
-- `KV_REST_API_URL`
-- `KV_REST_API_TOKEN`
-- `PUBLIC_SITE_URL` (for RSS links)
-
-Publisher surfaces:
-
-- Admin: `/admin/rssfeed`
-- Public news: `/news`
-- Public RSS: `/rss.xml`
 
 The key is used server-side only and is not exposed to browser clients.
 

@@ -13,7 +13,6 @@ import {
 } from "../storage/summariesStorage";
 import { readCachedTranscript, writeCachedTranscript } from "../storage/transcriptsStorage";
 import type { VideoItem } from "../types/youtube";
-import { normalizeHandle } from "../utils/handle";
 
 const DEFAULT_SUMMARY_FORMAT_ID = "summary-default";
 export const NEW_SUMMARY_FORMAT_OPTION = "__new_summary_format__";
@@ -290,17 +289,6 @@ export function writeCachedSummaryForTranscript(
   return writeCachedSummaryEntry(videoId, promptHash, cacheEntry);
 }
 
-function normalizePublishStatusText(value: string): string {
-  const next = value.trim();
-  if (!next) {
-    return next;
-  }
-  if (next.endsWith("...")) {
-    return next;
-  }
-  return next.replace(/[.]+$/, "");
-}
-
 export function useTranscriptSummary() {
   const transcriptRequestIdRef = useRef(0);
   const transcriptCopyFeedbackTimeoutRef = useRef<number | null>(null);
@@ -314,7 +302,6 @@ export function useTranscriptSummary() {
   const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [transcriptText, setTranscriptText] = useState("");
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
-  const [transcriptSourceHandle, setTranscriptSourceHandle] = useState("");
   const [transcriptViewMode, setTranscriptViewMode] = useState<"transcript" | "summary">(
     "transcript"
   );
@@ -324,10 +311,6 @@ export function useTranscriptSummary() {
   const [summaryKeyPoints, setSummaryKeyPoints] = useState<string[]>([]);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [summaryModel, setSummaryModel] = useState("");
-  const [isPublishingSummary, setIsPublishingSummary] = useState(false);
-  const [publishSummaryFeedback, setPublishSummaryFeedback] = useState<InlineMetaFeedback | null>(
-    null
-  );
   const [summaryFormats, setSummaryFormats] = useState<SummaryFormat[]>(readStoredSummaryFormats);
   const [summaryModelPresets, setSummaryModelPresets] = useState<SummaryModelPreset[]>(
     readStoredSummaryModelPresets
@@ -379,7 +362,6 @@ export function useTranscriptSummary() {
   const activeSummaryPrompt = activeSummaryFormat.prompt;
   const activeSummaryModel = (activeSummaryFormat.model ?? "").trim();
 
-  const hasPublishableSummary = summaryText.trim().length > 0;
   const isSummaryBusy = transcriptViewMode === "summary" && summaryLoading;
 
   useEffect(() => {
@@ -396,10 +378,6 @@ export function useTranscriptSummary() {
   useEffect(() => {
     writeStoredJson(SUMMARY_MODEL_PRESETS_STORAGE_KEY, summaryModelPresets);
   }, [summaryModelPresets]);
-
-  const clearPublishFeedback = (): void => {
-    setPublishSummaryFeedback(null);
-  };
 
   const yieldForHydration = async (minimumMs = 0): Promise<void> =>
     new Promise((resolve) => {
@@ -501,17 +479,7 @@ export function useTranscriptSummary() {
     }
   };
 
-  const openTranscript = async (video: VideoItem, sourceHandleRaw?: string): Promise<void> => {
-    let normalizedSourceHandle = "";
-    const candidate = (sourceHandleRaw ?? "").trim();
-    if (candidate) {
-      try {
-        normalizedSourceHandle = normalizeHandle(candidate);
-      } catch {
-        normalizedSourceHandle = candidate.startsWith("@") ? candidate : `@${candidate}`;
-      }
-    }
-    setTranscriptSourceHandle(normalizedSourceHandle);
+  const openTranscript = async (video: VideoItem, _sourceHandleRaw?: string): Promise<void> => {
     const currentDefaultSummaryFormat = getDefaultSummaryFormat(summaryFormats);
     setActiveSummaryFormatId(currentDefaultSummaryFormat.id);
     setEditingSummaryFormatId(currentDefaultSummaryFormat.id);
@@ -537,8 +505,6 @@ export function useTranscriptSummary() {
     setSummaryKeyPoints([]);
     setSummaryError(null);
     setSummaryModel("");
-    setIsPublishingSummary(false);
-    setPublishSummaryFeedback(null);
     transcriptRequestIdRef.current += 1;
     const requestId = transcriptRequestIdRef.current;
     try {
@@ -720,7 +686,6 @@ export function useTranscriptSummary() {
   };
 
   const handleTranscriptViewModeChange = async (mode: "transcript" | "summary" | string): Promise<void> => {
-    clearPublishFeedback();
     if (mode === NEW_SUMMARY_FORMAT_OPTION) {
       setTranscriptViewMode("summary");
       openSummaryFormatEditor(null);
@@ -746,7 +711,6 @@ export function useTranscriptSummary() {
   };
 
   const regenerateSummary = async (): Promise<void> => {
-    clearPublishFeedback();
     setIsSummaryPromptEditMode(false);
     setTranscriptViewMode("summary");
     await loadSummary({ force: true });
@@ -798,7 +762,6 @@ export function useTranscriptSummary() {
   };
 
   const saveSummaryPromptAndClose = async (): Promise<void> => {
-    clearPublishFeedback();
     const nextName = (
       typeof summaryFormatNameDraftRef.current === "string"
         ? summaryFormatNameDraftRef.current
@@ -957,49 +920,6 @@ export function useTranscriptSummary() {
     setSummaryModel("");
   };
 
-  const buildSummaryTextForPublish = (): string => {
-    return summaryText.trim();
-  };
-
-  const publishCurrentVideoSummary = async (): Promise<void> => {
-    if (!transcriptVideo) {
-      return;
-    }
-    const summaryForPublish = buildSummaryTextForPublish();
-    if (!summaryForPublish || isPublishingSummary) {
-      return;
-    }
-
-    setPublishSummaryFeedback(null);
-    setIsPublishingSummary(true);
-    try {
-      const { publishVideoSummary } = await import("../api/publisherPublish");
-      await publishVideoSummary({
-        videoId: transcriptVideo.videoId,
-        videoUrl: transcriptVideo.videoUrl,
-        title: transcriptVideo.title,
-        summary: summaryForPublish,
-        thumbnailUrl: transcriptVideo.thumbnailUrl,
-        channelTitle: transcriptSourceHandle || transcriptVideo.channelTitle,
-        publishedAt: transcriptVideo.publishedAt,
-        durationSeconds: transcriptVideo.durationSeconds ?? null,
-        viewCount: transcriptVideo.viewCount ?? null
-      });
-      setPublishSummaryFeedback({
-        kind: "success",
-        text: "PUBLISHED"
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Publish failed.";
-      setPublishSummaryFeedback({
-        kind: "error",
-        text: normalizePublishStatusText(message)
-      });
-    } finally {
-      setIsPublishingSummary(false);
-    }
-  };
-
   const getVisibleTranscriptPanelText = (): string => {
     if (transcriptViewMode === "summary") {
       return summaryText.trim();
@@ -1008,7 +928,6 @@ export function useTranscriptSummary() {
   };
 
   const copyTranscriptText = async (): Promise<void> => {
-    clearPublishFeedback();
     const text = getVisibleTranscriptPanelText();
     if (!text) {
       return;
@@ -1056,8 +975,6 @@ export function useTranscriptSummary() {
     setSummaryKeyPoints([]);
     setSummaryError(null);
     setSummaryModel("");
-    setIsPublishingSummary(false);
-    setPublishSummaryFeedback(null);
     setIsSummaryPromptEditMode(false);
     hydrateSummaryFormatDrafts(nextActiveSummaryFormat);
   };
@@ -1086,8 +1003,6 @@ export function useTranscriptSummary() {
     summaryKeyPoints,
     summaryError,
     summaryModel,
-    isPublishingSummary,
-    publishSummaryFeedback,
     summaryFormats,
     summaryModelPresets,
     activeSummaryFormat,
@@ -1099,7 +1014,6 @@ export function useTranscriptSummary() {
     summaryFormatModelDraft,
     isNewSummaryModelDraftMode,
     summaryFormatDefaultDraft,
-    hasPublishableSummary,
     isSummaryBusy,
     setSummaryFormatNameDraft,
     setSummaryPromptDraft,
@@ -1110,13 +1024,11 @@ export function useTranscriptSummary() {
     setActiveSummaryFormatId,
     setEditingSummaryFormatId,
     setIsSummaryPromptEditMode,
-    clearPublishFeedback,
     openTranscript,
     closeTranscriptModal,
     handleTranscriptViewModeChange,
     copyTranscriptText,
     regenerateSummary,
-    publishCurrentVideoSummary,
     openSummaryFormatEditor,
     moveSummaryFormat,
     removeSummaryModelPreset,

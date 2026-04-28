@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import TranscriptSummaryModal from "./TranscriptSummaryModal";
+import { RESPONSIVE_SUMMARY_MODAL_WIDTH } from "./modalSizing";
 
 vi.mock("antd", async () => {
   const actual = await vi.importActual<typeof import("antd")>("antd");
@@ -84,8 +85,6 @@ describe("TranscriptSummaryModal", () => {
         summaryKeyPoints={[]}
         summaryError={null}
         summaryModel=""
-        isPublishingSummary={false}
-        publishSummaryFeedback={null}
         summaryFormats={[summaryFormat]}
         summaryModelPresets={[]}
         activeSummaryFormat={summaryFormat}
@@ -96,7 +95,6 @@ describe("TranscriptSummaryModal", () => {
         summaryFormatModelDraft={summaryFormat.model}
         isNewSummaryModelDraftMode={false}
         summaryFormatDefaultDraft
-        hasPublishableSummary={false}
         isSummaryBusy={false}
         onCancel={() => undefined}
         setSummaryFormatNameDraft={() => undefined}
@@ -110,7 +108,6 @@ describe("TranscriptSummaryModal", () => {
         handleTranscriptViewModeChange={async () => undefined}
         copyTranscriptText={async () => undefined}
         regenerateSummary={async () => undefined}
-        publishCurrentVideoSummary={async () => undefined}
         openSummaryFormatEditor={() => undefined}
         moveSummaryFormat={() => undefined}
         removeSummaryModelPreset={() => undefined}
@@ -149,8 +146,6 @@ describe("TranscriptSummaryModal", () => {
         summaryKeyPoints={[]}
         summaryError={null}
         summaryModel=""
-        isPublishingSummary={false}
-        publishSummaryFeedback={null}
         summaryFormats={[summaryFormat]}
         summaryModelPresets={[]}
         activeSummaryFormat={summaryFormat}
@@ -161,7 +156,6 @@ describe("TranscriptSummaryModal", () => {
         summaryFormatModelDraft={summaryFormat.model}
         isNewSummaryModelDraftMode={false}
         summaryFormatDefaultDraft
-        hasPublishableSummary
         isSummaryBusy={false}
         onCancel={() => undefined}
         setSummaryFormatNameDraft={() => undefined}
@@ -175,7 +169,6 @@ describe("TranscriptSummaryModal", () => {
         handleTranscriptViewModeChange={async () => undefined}
         copyTranscriptText={async () => undefined}
         regenerateSummary={async () => undefined}
-        publishCurrentVideoSummary={async () => undefined}
         openSummaryFormatEditor={() => undefined}
         moveSummaryFormat={() => undefined}
         removeSummaryModelPreset={() => undefined}
@@ -187,7 +180,7 @@ describe("TranscriptSummaryModal", () => {
     const modalRoot = screen.getByRole("dialog").closest(".transcript-modal");
     expect(modalRoot).toHaveAttribute(
       "data-modal-width",
-      "min(1480px, 70vw)"
+      RESPONSIVE_SUMMARY_MODAL_WIDTH
     );
   });
 
@@ -215,8 +208,6 @@ describe("TranscriptSummaryModal", () => {
         summaryKeyPoints={[]}
         summaryError={null}
         summaryModel="openai/gpt-4o-mini"
-        isPublishingSummary={false}
-        publishSummaryFeedback={null}
         summaryFormats={[summaryFormat]}
         summaryModelPresets={[]}
         activeSummaryFormat={summaryFormat}
@@ -227,7 +218,6 @@ describe("TranscriptSummaryModal", () => {
         summaryFormatModelDraft={summaryFormat.model}
         isNewSummaryModelDraftMode={false}
         summaryFormatDefaultDraft
-        hasPublishableSummary
         isSummaryBusy={false}
         onCancel={() => undefined}
         setSummaryFormatNameDraft={() => undefined}
@@ -241,7 +231,6 @@ describe("TranscriptSummaryModal", () => {
         handleTranscriptViewModeChange={async () => undefined}
         copyTranscriptText={async () => undefined}
         regenerateSummary={async () => undefined}
-        publishCurrentVideoSummary={async () => undefined}
         openSummaryFormatEditor={() => undefined}
         moveSummaryFormat={() => undefined}
         removeSummaryModelPreset={() => undefined}
@@ -253,6 +242,14 @@ describe("TranscriptSummaryModal", () => {
     expect(screen.getByRole("combobox", { name: "Transcript view mode" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Copy summary" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Regenerate summary" })).toBeEnabled();
+    const controls = screen
+      .getByRole("combobox", { name: "Transcript view mode" })
+      .closest(".transcript-modal-header-controls");
+    expect(
+      Array.from(controls?.children ?? []).map((child) =>
+        child instanceof HTMLElement ? child.getAttribute("aria-label") : null
+      )
+    ).toEqual(["Transcript view mode", "Regenerate summary", "Copy summary"]);
     expect(await screen.findByRole("heading", { name: "Cached summary body" })).toBeInTheDocument();
     expect(screen.getByRole("listitem")).toHaveTextContent("Model formatted point");
   });
