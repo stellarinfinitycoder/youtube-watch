@@ -30,7 +30,7 @@ For setup/deploy basics, see [README.md](./README.md).
 - `src/domain/*`: pure transforms and business rules.
 - `src/storage/*`: persistence reads/writes and stored value normalization.
 - `src/api/*`: fetch wrappers, request helpers, and client-side error handling.
-- `api/*`: request validation, auth checks, external calls, and normalized JSON responses.
+- `api/*`: request validation, auth checks, external calls, and normalized JSON responses. Keep YouTube subroute behavior consolidated in `api/youtube.ts` to stay under Vercel Hobby function limits.
 
 ## Error Handling
 

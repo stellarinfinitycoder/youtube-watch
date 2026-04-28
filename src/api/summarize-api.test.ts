@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import handler from "./summarize";
+import handler from "../../api/summarize";
 
 const originalFetch = global.fetch;
 const originalApiKey = process.env.OPENROUTER_API_KEY;

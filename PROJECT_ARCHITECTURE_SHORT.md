@@ -15,7 +15,7 @@ For setup/deploy steps, see [README.md](./README.md).
 ## Runtime Boundaries
 
 - Browser UI, state, and client orchestration live in `src/*`.
-- Server/API handlers live in `api/*`.
+- Server/API handlers live in `api/*`; YouTube subroutes are dispatched by `api/youtube.ts`.
 - Shared server helpers live in `api/_lib/*`.
 - External integrations:
 1. YouTube endpoints (channel/video metadata and transcript sources)
@@ -35,7 +35,7 @@ For setup/deploy steps, see [README.md](./README.md).
 - Channel/video discovery:
 1. UI actions in app/components
 2. `src/api/youtube.ts`
-3. `api/youtube/*`
+3. `api/youtube.ts`
 4. YouTube endpoints
 
 - Transcript and summary:

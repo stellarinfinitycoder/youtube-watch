@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/youtube/:route*",
+      "destination": "/api/youtube?route=:route*"
+    },
+    {
       "source": "/rss.xml",
       "destination": "/api/rss"
     },
