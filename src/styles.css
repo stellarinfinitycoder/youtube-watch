@@ -1703,6 +1703,32 @@ body {
   overflow-x: hidden;
 }
 
+.transcript-modal:not(.board-summary-aggregate-modal) .transcript-modal-body {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 143, 31, 0.6) rgba(255, 143, 31, 0.08);
+}
+
+.transcript-modal:not(.board-summary-aggregate-modal) .transcript-modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.transcript-modal:not(.board-summary-aggregate-modal) .transcript-modal-body::-webkit-scrollbar-track {
+  background: rgba(255, 143, 31, 0.08);
+  border-left: 1px solid rgba(255, 143, 31, 0.16);
+}
+
+.transcript-modal:not(.board-summary-aggregate-modal) .transcript-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 143, 31, 0.58);
+  border: 2px solid #0b0b0d;
+  background-clip: padding-box;
+}
+
+.transcript-modal:not(.board-summary-aggregate-modal) .transcript-modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 143, 31, 0.78);
+  background-clip: padding-box;
+}
+
 .board-summary-aggregate-modal .transcript-modal-body {
   margin-right: -24px;
   padding: 0 36px 0 0;
