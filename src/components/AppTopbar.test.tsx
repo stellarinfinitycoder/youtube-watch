@@ -224,5 +224,14 @@ describe("AppTopbar", () => {
     const channelScopeSelect = screen.getByTestId("topbar-channel-scope-select");
     expect(channelScopeSelect).toHaveClass("ant-select-disabled");
     expect(screen.getByText("ALL CHANNELS")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Summarize all shown videos" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Play all videos" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy all shown links on board" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mark all shown videos watched" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Scroll columns to first" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Scroll columns left" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Scroll columns right" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Scroll columns to last" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open maintenance menu" })).toBeInTheDocument();
   });
 });
