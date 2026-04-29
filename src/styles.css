@@ -1952,16 +1952,40 @@ body {
   background-clip: padding-box;
 }
 
+.summaries-detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .summaries-detail-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
+.summaries-detail-title-card,
 .summaries-detail-card {
   border: 1px solid rgba(190, 139, 79, 0.38);
   background: #15110e;
   padding: 12px 70px;
+}
+
+.summaries-detail-title-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.summaries-detail-video-title.ant-typography {
+  display: block;
+  min-width: 0;
+  flex: 1 1 auto;
+  color: var(--cream);
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .summaries-detail-card-title-row {
@@ -1977,8 +2001,13 @@ body {
   flex: 1 1 auto;
   color: var(--amber);
   font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 800;
+}
+
+.summaries-detail-card-meta.ant-typography {
+  display: block;
+  font-weight: 400;
 }
 
 .summaries-detail-summary.summary-content {

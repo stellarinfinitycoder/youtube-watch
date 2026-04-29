@@ -30,6 +30,7 @@ type SummariesColumnProps = {
   toggleWatched: (videoId: string) => void;
   openVideo: (video: VideoItem) => void;
   deleteStoredSummary: (promptHash: string) => Promise<void>;
+  deleteAllStoredSummaries: () => Promise<void>;
 };
 
 function escapeHtml(value: string): string {
@@ -42,19 +43,60 @@ function escapeHtml(value: string): string {
 }
 
 function formatStoredSummaryCopyText(entry: StoredSummaryDisplayEntry): string {
-  return [`## ${entry.label}`, entry.summary.trim()].filter(Boolean).join("\n\n");
+  const labelParts = getStoredSummaryLabelParts(entry.label);
+  const heading = [`## ${labelParts.name}`, labelParts.meta].filter(Boolean).join("\n");
+  return [heading, entry.summary.trim()].filter(Boolean).join("\n\n");
+}
+
+function formatStoredSummariesCopyText(entries: StoredSummaryDisplayEntry[]): string {
+  return entries
+    .map(formatStoredSummaryCopyText)
+    .filter((text) => text.trim().length > 0)
+    .join("\n\n---\n\n");
 }
 
 function formatStoredSummaryCopyHtml(entry: StoredSummaryDisplayEntry): string {
+  const labelParts = getStoredSummaryLabelParts(entry.label);
   const summaryHtml = entry.summary.trim()
     ? `<p style="margin:0;">${escapeHtml(entry.summary.trim()).replace(/\n/g, "<br />")}</p>`
     : "";
+  const metaHtml = labelParts.meta
+    ? `<div style="margin:4px 0 0;font-size:12px;line-height:1.45;color:#c08f56;font-weight:400;">${escapeHtml(labelParts.meta)}</div>`
+    : "";
   return [
     "<div>",
-    `<h3 style="margin:0 0 8px;font-size:16px;font-weight:700;">${escapeHtml(entry.label)}</h3>`,
+    `<h3 style="margin:0 0 8px;font-size:16px;font-weight:700;">${escapeHtml(labelParts.name)}${metaHtml}</h3>`,
     summaryHtml,
     "</div>"
   ].join("");
+}
+
+function formatStoredSummariesCopyHtml(entries: StoredSummaryDisplayEntry[]): string {
+  return entries.map(formatStoredSummaryCopyHtml).join('<hr style="margin:16px 0;" />');
+}
+
+function formatSummaryLabelDateForMeta(value: string): string {
+  if (value === "UNKNOWN DATE") {
+    return "--.--";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "--.--";
+  }
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  return `${dd}.${mm}`;
+}
+
+function getStoredSummaryLabelParts(label: string): { name: string; meta: string | null } {
+  const match = label.match(/^(.*) - (.+) - (\d{4}-\d{2}-\d{2}|UNKNOWN DATE)$/);
+  if (!match) {
+    return { name: label, meta: null };
+  }
+  return {
+    name: match[1] ?? label,
+    meta: `${match[2] ?? ""} | ${formatSummaryLabelDateForMeta(match[3] ?? "")}`.trim()
+  };
 }
 
 function SummariesColumnComponent({
@@ -77,7 +119,8 @@ function SummariesColumnComponent({
   openSaveVideoModal,
   toggleWatched,
   openVideo,
-  deleteStoredSummary
+  deleteStoredSummary,
+  deleteAllStoredSummaries
 }: SummariesColumnProps) {
   const [copiedSummaryPromptHash, setCopiedSummaryPromptHash] = useState<string | null>(null);
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
@@ -128,6 +171,52 @@ function SummariesColumnComponent({
     }
 
     setCopiedSummaryPromptHash(entry.promptHash);
+    if (copyFeedbackTimeoutRef.current) {
+      window.clearTimeout(copyFeedbackTimeoutRef.current);
+    }
+    copyFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setCopiedSummaryPromptHash(null);
+      copyFeedbackTimeoutRef.current = null;
+    }, SUMMARY_COPY_FEEDBACK_MS);
+  };
+
+  const copyAllStoredSummaries = async (): Promise<void> => {
+    const text = formatStoredSummariesCopyText(selectedSummaryEntries);
+    const html = formatStoredSummariesCopyHtml(selectedSummaryEntries);
+    if (!text) {
+      return;
+    }
+
+    try {
+      if (
+        navigator.clipboard &&
+        typeof navigator.clipboard.write === "function" &&
+        typeof ClipboardItem !== "undefined"
+      ) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([text], { type: "text/plain" }),
+            "text/html": new Blob([html], { type: "text/html" })
+          })
+        ]);
+      } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard API unavailable.");
+      }
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "true");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+
+    setCopiedSummaryPromptHash("__all__");
     if (copyFeedbackTimeoutRef.current) {
       window.clearTimeout(copyFeedbackTimeoutRef.current);
     }
@@ -218,7 +307,34 @@ function SummariesColumnComponent({
             ) : selectedSummaryVideo === null ? (
               <Empty description="Select a video" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
-              <>
+              <div className="summaries-detail-content">
+                <div className="summaries-detail-title-card">
+                  <Text className="summaries-detail-video-title">{selectedSummaryVideo.title}</Text>
+                  <Button
+                    htmlType="button"
+                    className={`column-move-btn transcript-copy-btn board-summary-copy-btn board-summary-row-copy-btn ${
+                      copiedSummaryPromptHash === "__all__" ? "is-copied" : ""
+                    }`}
+                    aria-label={`Copy all summaries for ${selectedSummaryVideo.title}`}
+                    disabled={selectedSummaryLoading || selectedSummaryEntries.length === 0}
+                    onClick={() => void copyAllStoredSummaries()}
+                  >
+                    {copiedSummaryPromptHash === "__all__" ? (
+                      <span className="btn-icon btn-icon-check" aria-hidden />
+                    ) : (
+                      <span className="btn-icon btn-icon-copy" aria-hidden />
+                    )}
+                  </Button>
+                  <Button
+                    htmlType="button"
+                    className="remove-column-btn"
+                    aria-label={`Delete all summaries for ${selectedSummaryVideo.title}`}
+                    disabled={selectedSummaryLoading || selectedSummaryEntries.length === 0}
+                    onClick={() => void deleteAllStoredSummaries()}
+                  >
+                    <span className="btn-icon btn-icon-delete" aria-hidden />
+                  </Button>
+                </div>
                 {selectedSummaryLoading ? (
                   <Text className="video-meta-feedback is-info">LOADING SUMMARIES...</Text>
                 ) : selectedSummaryError ? (
@@ -229,10 +345,18 @@ function SummariesColumnComponent({
                   <div className="summaries-detail-list">
                     {selectedSummaryEntries.map((entry) => {
                       const summaryText = entry.summary.trim();
+                      const labelParts = getStoredSummaryLabelParts(entry.label);
                       return (
                         <article className="summaries-detail-card" key={entry.id}>
                           <div className="summaries-detail-card-title-row">
-                            <Text className="summaries-detail-card-label">{entry.label}</Text>
+                            <Text className="summaries-detail-card-label">
+                              <span className="summaries-detail-card-label-name">{labelParts.name}</span>
+                              {labelParts.meta ? (
+                                <Text className="video-meta summaries-detail-card-meta">
+                                  {labelParts.meta}
+                                </Text>
+                              ) : null}
+                            </Text>
                             <Button
                               htmlType="button"
                               className={`column-move-btn transcript-copy-btn board-summary-copy-btn board-summary-row-copy-btn ${
@@ -268,7 +392,7 @@ function SummariesColumnComponent({
                     })}
                   </div>
                 )}
-              </>
+              </div>
             )}
           </section>
         </section>

@@ -3760,6 +3760,28 @@ function App() {
     }
   };
 
+  const deleteAllSelectedStoredSummaries = async (): Promise<void> => {
+    if (!selectedSummariesVideoId || selectedSummaryEntries.length === 0) {
+      return;
+    }
+    setSelectedSummaryLoading(true);
+    setSelectedSummaryError(null);
+    try {
+      await Promise.all(
+        selectedSummaryEntries.map((entry) => deleteCachedSummary(selectedSummariesVideoId, entry.promptHash))
+      );
+      const nextEntries = await reloadSelectedSummaryEntries(selectedSummariesVideoId);
+      setSelectedSummaryEntries(nextEntries);
+      await refreshSummaryVideoCacheEntries();
+    } catch (error) {
+      setSelectedSummaryError(
+        error instanceof Error ? error.message : "Unable to delete stored summaries."
+      );
+    } finally {
+      setSelectedSummaryLoading(false);
+    }
+  };
+
   const toggleVideoFullscreen = (): void => {
     const fullscreenTarget = videoModalWrapRef.current;
     if (!fullscreenTarget) {
@@ -5875,6 +5897,7 @@ function App() {
           toggleWatched={toggleWatched}
           openVideo={selectSummariesBoardVideo}
           deleteStoredSummary={deleteSelectedStoredSummary}
+          deleteAllStoredSummaries={deleteAllSelectedStoredSummaries}
         />
       ) : !isBoardSummariesPage ? (
         <BoardColumns

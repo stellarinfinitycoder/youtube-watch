@@ -13,6 +13,13 @@ import {
 const originalFetch = global.fetch;
 const defaultPromptCacheKey = `${DEFAULT_SUMMARY_PROMPT}\n__MODEL__:`;
 
+function getVideoTileByTitle(title: string): HTMLElement | undefined {
+  return screen
+    .getAllByText(title)
+    .map((element) => element.closest(".video-tile-item"))
+    .find((element): element is HTMLElement => element instanceof HTMLElement);
+}
+
 function writeBoards(): void {
   window.localStorage.setItem(
     "youtube-watch:boards:v1",
@@ -116,7 +123,7 @@ describe("App summaries board", () => {
     expect(channelScopeSelect).toHaveClass("ant-select-disabled");
     expect(screen.getByText("ALL CHANNELS")).toBeInTheDocument();
     expect(await screen.findByText("Newer cached summary body")).toBeInTheDocument();
-    expect(screen.getByText("Newer Summarized Video").closest(".video-tile-item")).toHaveClass("is-active");
+    expect(getVideoTileByTitle("Newer Summarized Video")).toHaveClass("is-active");
 
     const olderVideoButtons = screen.getAllByRole("button", { name: "Older Summarized Video" });
     expect(olderVideoButtons).toHaveLength(2);
@@ -126,7 +133,7 @@ describe("App summaries board", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
-    expect(screen.getByText("Older Summarized Video").closest(".video-tile-item")).toHaveClass("is-active");
+    expect(getVideoTileByTitle("Older Summarized Video")).toHaveClass("is-active");
 
     await user.click(screen.getByRole("button", { name: "Delete STORED SUMMARY - GPT-4O-MINI - 1970-01-01" }));
 
@@ -135,7 +142,7 @@ describe("App summaries board", () => {
     });
     expect(screen.queryByText("Older Summarized Video")).not.toBeInTheDocument();
     expect(await screen.findByText("Newer cached summary body")).toBeInTheDocument();
-    expect(screen.getByText("Newer Summarized Video").closest(".video-tile-item")).toHaveClass("is-active");
+    expect(getVideoTileByTitle("Newer Summarized Video")).toHaveClass("is-active");
   });
 
   it("refreshes the selected video summaries after generating a new individual summary", async () => {
@@ -198,10 +205,6 @@ describe("App summaries board", () => {
 
     expect(await within(dialog).findByText("Fresh generated summary body")).toBeInTheDocument();
     expect(await within(detailPane).findByText("Fresh generated summary body")).toBeInTheDocument();
-    const selectedTile = screen
-      .getAllByText("Newer Summarized Video")
-      .map((element) => element.closest(".video-tile-item"))
-      .find((element): element is HTMLElement => element instanceof HTMLElement);
-    expect(selectedTile).toHaveClass("is-active");
+    expect(getVideoTileByTitle("Newer Summarized Video")).toHaveClass("is-active");
   });
 });

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { SummariesColumn } from "./SummariesColumn";
@@ -32,6 +32,7 @@ const summaryVideo: SummariesBoardVideo = {
 describe("SummariesColumn", () => {
   it("renders channel-style video tiles, selected state, and stored summaries without column action buttons", async () => {
     const deleteStoredSummary = vi.fn();
+    const deleteAllStoredSummaries = vi.fn();
 
     render(
       <SummariesColumn
@@ -66,11 +67,15 @@ describe("SummariesColumn", () => {
         toggleWatched={() => undefined}
         openVideo={() => undefined}
         deleteStoredSummary={deleteStoredSummary}
+        deleteAllStoredSummaries={deleteAllStoredSummaries}
       />
     );
 
-    expect(screen.getByText("Summarized Video")).toBeInTheDocument();
-    expect(screen.getByText("TLDR - GPT-4O-MINI - 2026-04-28")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Stored summaries")).getByText("Summarized Video")).toBeInTheDocument();
+    expect(screen.getByText("TLDR")).toBeInTheDocument();
+    const summaryMeta = screen.getByText("GPT-4O-MINI | 28.04");
+    expect(summaryMeta).toBeInTheDocument();
+    expect(summaryMeta).toHaveClass("video-meta");
     expect(await screen.findByText("Cached summary text")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open transcript for Summarized Video" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Summarized Video" })).toBeInTheDocument();
@@ -80,11 +85,25 @@ describe("SummariesColumn", () => {
     const copySummaryButton = screen.getByRole("button", {
       name: "Copy TLDR - GPT-4O-MINI - 2026-04-28"
     });
+    const copyAllButton = screen.getByRole("button", {
+      name: "Copy all summaries for Summarized Video"
+    });
+    const deleteAllButton = screen.getByRole("button", {
+      name: "Delete all summaries for Summarized Video"
+    });
+    expect(copyAllButton).toHaveClass("board-summary-row-copy-btn");
+    expect(copyAllButton.querySelector(".btn-icon-copy")).not.toBeNull();
+    expect(deleteAllButton).toHaveClass("remove-column-btn");
+    expect(deleteAllButton.querySelector(".btn-icon-delete")).not.toBeNull();
     expect(copySummaryButton).toHaveClass("board-summary-row-copy-btn");
     expect(copySummaryButton.querySelector(".btn-icon-copy")).not.toBeNull();
     expect(deleteSummaryButton).toHaveClass("remove-column-btn");
     expect(deleteSummaryButton.querySelector(".btn-icon-delete")).not.toBeNull();
-    expect(screen.getByText("Summarized Video").closest(".video-tile-item")).toHaveClass("is-active");
+    const selectedTile = screen
+      .getAllByText("Summarized Video")
+      .map((element) => element.closest(".video-tile-item"))
+      .find((element): element is HTMLElement => element instanceof HTMLElement);
+    expect(selectedTile).toHaveClass("is-active");
     expect(screen.queryByTestId("column-fetch")).not.toBeInTheDocument();
     expect(screen.queryByTestId("column-play")).not.toBeInTheDocument();
     expect(screen.queryByTestId("column-delete")).not.toBeInTheDocument();
@@ -116,6 +135,7 @@ describe("SummariesColumn", () => {
         toggleWatched={() => undefined}
         openVideo={openVideo}
         deleteStoredSummary={async () => undefined}
+        deleteAllStoredSummaries={async () => undefined}
       />
     );
 
@@ -166,12 +186,59 @@ describe("SummariesColumn", () => {
         toggleWatched={() => undefined}
         openVideo={() => undefined}
         deleteStoredSummary={deleteStoredSummary}
+        deleteAllStoredSummaries={async () => undefined}
       />
     );
 
     await user.click(screen.getByRole("button", { name: "Delete TLDR - GPT-4O-MINI - 2026-04-28" }));
 
     expect(deleteStoredSummary).toHaveBeenCalledWith("summary-1");
+  });
+
+  it("deletes all selected stored summaries from the title row", async () => {
+    const user = userEvent.setup();
+    const deleteAllStoredSummaries = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <SummariesColumn
+        activeBoardId="__summaries_board__"
+        videos={[summaryVideo]}
+        selectedVideoId="video-1"
+        selectedSummaryEntries={[
+          {
+            id: "summary-1",
+            label: "TLDR - GPT-4O-MINI - 2026-04-28",
+            summary: "Cached summary text",
+            keyPoints: [],
+            model: "openai/gpt-4o-mini",
+            cachedAt: Date.parse("2026-04-28T10:00:00Z"),
+            promptHash: "summary-1",
+            summaryFormatId: "tldr"
+          }
+        ]}
+        selectedSummaryLoading={false}
+        selectedSummaryError={null}
+        copiedLinkVideoId={null}
+        saveDestinationColumnsLength={1}
+        videoStatsBackfillInFlight={[]}
+        videoMetaFeedbackById={{}}
+        formatVideoMeta={() => "10.04 | -- | 100"}
+        backfillVideoStats={async () => undefined}
+        getVideoThumbnailSrc={(video) => video.thumbnailUrl}
+        handleVideoThumbnailError={() => undefined}
+        openTranscript={async () => undefined}
+        copyVideoLink={async () => undefined}
+        openSaveVideoModal={() => undefined}
+        toggleWatched={() => undefined}
+        openVideo={() => undefined}
+        deleteStoredSummary={async () => undefined}
+        deleteAllStoredSummaries={deleteAllStoredSummaries}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete all summaries for Summarized Video" }));
+
+    expect(deleteAllStoredSummaries).toHaveBeenCalledTimes(1);
   });
 
   it("copies the selected stored summary with copied feedback", async () => {
@@ -215,6 +282,7 @@ describe("SummariesColumn", () => {
         toggleWatched={() => undefined}
         openVideo={() => undefined}
         deleteStoredSummary={async () => undefined}
+        deleteAllStoredSummaries={async () => undefined}
       />
     );
 
@@ -223,8 +291,73 @@ describe("SummariesColumn", () => {
     });
     await user.click(copyButton);
 
-    expect(writeText).toHaveBeenCalledWith("## TLDR - GPT-4O-MINI - 2026-04-28\n\nCached summary text");
+    expect(writeText).toHaveBeenCalledWith("## TLDR\nGPT-4O-MINI | 28.04\n\nCached summary text");
     expect(copyButton).toHaveClass("is-copied");
     expect(copyButton.querySelector(".btn-icon-check")).not.toBeNull();
+  });
+
+  it("copies all selected stored summaries from the title row", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+
+    render(
+      <SummariesColumn
+        activeBoardId="__summaries_board__"
+        videos={[summaryVideo]}
+        selectedVideoId="video-1"
+        selectedSummaryEntries={[
+          {
+            id: "summary-1",
+            label: "TLDR - GPT-4O-MINI - 2026-04-28",
+            summary: "Cached summary text",
+            keyPoints: [],
+            model: "openai/gpt-4o-mini",
+            cachedAt: Date.parse("2026-04-28T10:00:00Z"),
+            promptHash: "summary-1",
+            summaryFormatId: "tldr"
+          },
+          {
+            id: "summary-2",
+            label: "KEYPOINTS - GPT-4O-MINI - 2026-04-28",
+            summary: "Second summary text",
+            keyPoints: [],
+            model: "openai/gpt-4o-mini",
+            cachedAt: Date.parse("2026-04-28T11:00:00Z"),
+            promptHash: "summary-2",
+            summaryFormatId: "keypoints"
+          }
+        ]}
+        selectedSummaryLoading={false}
+        selectedSummaryError={null}
+        copiedLinkVideoId={null}
+        saveDestinationColumnsLength={1}
+        videoStatsBackfillInFlight={[]}
+        videoMetaFeedbackById={{}}
+        formatVideoMeta={() => "10.04 | -- | 100"}
+        backfillVideoStats={async () => undefined}
+        getVideoThumbnailSrc={(video) => video.thumbnailUrl}
+        handleVideoThumbnailError={() => undefined}
+        openTranscript={async () => undefined}
+        copyVideoLink={async () => undefined}
+        openSaveVideoModal={() => undefined}
+        toggleWatched={() => undefined}
+        openVideo={() => undefined}
+        deleteStoredSummary={async () => undefined}
+        deleteAllStoredSummaries={async () => undefined}
+      />
+    );
+
+    const copyAllButton = screen.getByRole("button", { name: "Copy all summaries for Summarized Video" });
+    await user.click(copyAllButton);
+
+    expect(writeText).toHaveBeenCalledWith(
+      "## TLDR\nGPT-4O-MINI | 28.04\n\nCached summary text\n\n---\n\n## KEYPOINTS\nGPT-4O-MINI | 28.04\n\nSecond summary text"
+    );
+    expect(copyAllButton).toHaveClass("is-copied");
+    expect(copyAllButton.querySelector(".btn-icon-check")).not.toBeNull();
   });
 });
