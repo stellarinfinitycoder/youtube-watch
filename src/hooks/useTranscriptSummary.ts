@@ -73,6 +73,10 @@ export type InlineMetaFeedback = {
   text: string;
 };
 
+type UseTranscriptSummaryOptions = {
+  onSummaryCacheUpdated?: (videoId: string) => void | Promise<void>;
+};
+
 function createDefaultSummaryFormat(promptOverride?: string): SummaryFormat {
   const now = Date.now();
   const nextPrompt = (promptOverride ?? DEFAULT_SUMMARY_PROMPT).trim() || DEFAULT_SUMMARY_PROMPT;
@@ -326,12 +330,13 @@ export function writeCachedSummaryForTranscript(
   return writeCachedSummaryEntry(videoId, promptHash, cacheEntry);
 }
 
-export function useTranscriptSummary() {
+export function useTranscriptSummary(options: UseTranscriptSummaryOptions = {}) {
   const transcriptRequestIdRef = useRef(0);
   const transcriptCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const summaryFormatNameDraftRef = useRef("");
   const summaryPromptDraftRef = useRef("");
   const summaryFormatModelDraftRef = useRef("");
+  const onSummaryCacheUpdatedRef = useRef(options.onSummaryCacheUpdated);
 
   const [transcriptVideo, setTranscriptVideo] = useState<VideoItem | null>(null);
   const [summaryHydrating, setSummaryHydrating] = useState(false);
@@ -366,6 +371,10 @@ export function useTranscriptSummary() {
   const [summaryFormatModelDraft, setSummaryFormatModelDraftState] = useState("");
   const [isNewSummaryModelDraftMode, setIsNewSummaryModelDraftMode] = useState(false);
   const [summaryFormatDefaultDraft, setSummaryFormatDefaultDraft] = useState(false);
+
+  useEffect(() => {
+    onSummaryCacheUpdatedRef.current = options.onSummaryCacheUpdated;
+  }, [options.onSummaryCacheUpdated]);
 
   const setSummaryFormatNameDraft = (value: string): void => {
     summaryFormatNameDraftRef.current = value;
@@ -706,6 +715,7 @@ export function useTranscriptSummary() {
         }
       );
       await refreshStoredSummaryOptions(transcriptVideo.videoId);
+      await onSummaryCacheUpdatedRef.current?.(transcriptVideo.videoId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Summary failed.";
       setSummaryError(message);

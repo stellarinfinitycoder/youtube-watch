@@ -1,9 +1,17 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { resetCacheDbForTests } from "./storage/indexedDbCache";
 import { writeCachedSummary } from "./storage/summariesStorage";
+import { writeCachedTranscript } from "./storage/transcriptsStorage";
+import {
+  DEFAULT_SUMMARY_PROMPT,
+  writeCachedSummaryForTranscript
+} from "./hooks/useTranscriptSummary";
+
+const originalFetch = global.fetch;
+const defaultPromptCacheKey = `${DEFAULT_SUMMARY_PROMPT}\n__MODEL__:`;
 
 function writeBoards(): void {
   window.localStorage.setItem(
@@ -61,7 +69,21 @@ function writeBoards(): void {
 describe("App summaries board", () => {
   beforeEach(async () => {
     window.localStorage.clear();
+    vi.restoreAllMocks();
+    global.fetch = originalFetch;
+    vi.spyOn(window, "getComputedStyle").mockImplementation(
+      ((element: Element) =>
+        ({
+          getPropertyValue: () => "",
+          overflow: element instanceof HTMLElement ? element.style.overflow || "" : ""
+        }) as CSSStyleDeclaration) as typeof window.getComputedStyle
+    );
     await resetCacheDbForTests();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    global.fetch = originalFetch;
   });
 
   it("shows cached summaries in the right pane and selects videos instead of opening the player", async () => {
@@ -114,5 +136,72 @@ describe("App summaries board", () => {
     expect(screen.queryByText("Older Summarized Video")).not.toBeInTheDocument();
     expect(await screen.findByText("Newer cached summary body")).toBeInTheDocument();
     expect(screen.getByText("Newer Summarized Video").closest(".video-tile-item")).toHaveClass("is-active");
+  });
+
+  it("refreshes the selected video summaries after generating a new individual summary", async () => {
+    const user = userEvent.setup();
+    writeBoards();
+    await writeCachedTranscript("newer-video", "Existing transcript body");
+    await writeCachedSummaryForTranscript("newer-video", "Existing transcript body", defaultPromptCacheKey, {
+      summary: "Existing cached summary body",
+      keyPoints: [],
+      model: "openai/gpt-4o-mini"
+    });
+
+    global.fetch = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/summarize")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            videoId: "newer-video",
+            model: "openai/gpt-5.4-nano",
+            summary: "Fresh generated summary body",
+            keyPoints: []
+          })
+        } as Response;
+      }
+      if (url.includes("/api/transcript")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            videoId: "newer-video",
+            text: "Existing transcript body"
+          })
+        } as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({})
+      } as Response;
+    }) as typeof fetch;
+
+    render(<App />);
+
+    const boardSelect = screen.getByTestId("topbar-board-select");
+    fireEvent.mouseDown(boardSelect.querySelector(".ant-select-selector") ?? boardSelect);
+    fireEvent.click(await screen.findByText("SUMMARIES"));
+
+    const detailPane = screen.getByLabelText("Stored summaries");
+    expect(await within(detailPane).findByText("Existing cached summary body")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open transcript for Newer Summarized Video" }));
+    const dialog = await screen.findByRole("dialog");
+    const regenerateButton = within(dialog).getByRole("button", { name: "Regenerate summary" });
+    await waitFor(() => {
+      expect(regenerateButton).toBeEnabled();
+    });
+    await user.click(regenerateButton);
+
+    expect(await within(dialog).findByText("Fresh generated summary body")).toBeInTheDocument();
+    expect(await within(detailPane).findByText("Fresh generated summary body")).toBeInTheDocument();
+    const selectedTile = screen
+      .getAllByText("Newer Summarized Video")
+      .map((element) => element.closest(".video-tile-item"))
+      .find((element): element is HTMLElement => element instanceof HTMLElement);
+    expect(selectedTile).toHaveClass("is-active");
   });
 });

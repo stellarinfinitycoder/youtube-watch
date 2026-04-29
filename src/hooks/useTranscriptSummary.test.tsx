@@ -215,6 +215,65 @@ describe("useTranscriptSummary", () => {
     expect(result.current.transcriptText).toBe("Fetched transcript body");
   });
 
+  it("calls cache update callback after a generated summary is cached", async () => {
+    const onSummaryCacheUpdated = vi.fn();
+    await writeCachedTranscript(video.videoId, "Cached transcript body");
+    fetchSummaryMock.mockResolvedValue({
+      videoId: video.videoId,
+      summary: "Fresh generated summary",
+      keyPoints: [],
+      model: "openai/gpt-5.4-nano"
+    });
+
+    const { result } = renderHook(() => useTranscriptSummary({ onSummaryCacheUpdated }));
+
+    act(() => {
+      void result.current.openTranscript(video);
+    });
+
+    await waitFor(() => {
+      expect(result.current.transcriptText).toBe("Cached transcript body");
+    });
+
+    await act(async () => {
+      await result.current.regenerateSummary();
+    });
+
+    expect(result.current.summaryText).toBe("Fresh generated summary");
+    await waitFor(() => {
+      expect(onSummaryCacheUpdated).toHaveBeenCalledTimes(1);
+    });
+    expect(onSummaryCacheUpdated).toHaveBeenCalledWith(video.videoId);
+  });
+
+  it("does not call cache update callback when generated summary is empty", async () => {
+    const onSummaryCacheUpdated = vi.fn();
+    await writeCachedTranscript(video.videoId, "Cached transcript body");
+    fetchSummaryMock.mockResolvedValue({
+      videoId: video.videoId,
+      summary: "   ",
+      keyPoints: [],
+      model: "openai/gpt-5.4-nano"
+    });
+
+    const { result } = renderHook(() => useTranscriptSummary({ onSummaryCacheUpdated }));
+
+    act(() => {
+      void result.current.openTranscript(video);
+    });
+
+    await waitFor(() => {
+      expect(result.current.transcriptText).toBe("Cached transcript body");
+    });
+
+    await act(async () => {
+      await result.current.regenerateSummary();
+    });
+
+    expect(result.current.summaryError).toBe("No summary.");
+    expect(onSummaryCacheUpdated).not.toHaveBeenCalled();
+  });
+
   it("hydrates cached transcript without summary generation when no cached summary matches", async () => {
     await writeCachedTranscript(video.videoId, "Cached transcript body");
 

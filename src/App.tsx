@@ -1675,6 +1675,7 @@ function App() {
   const [selectedSummaryEntries, setSelectedSummaryEntries] = useState<StoredSummaryDisplayEntry[]>([]);
   const [selectedSummaryLoading, setSelectedSummaryLoading] = useState(false);
   const [selectedSummaryError, setSelectedSummaryError] = useState<string | null>(null);
+  const [selectedSummaryRefreshToken, setSelectedSummaryRefreshToken] = useState(0);
   const boardSummaryBatchRunIdRef = useRef(0);
   const boardSummaryAggregateCopyFeedbackTimeoutRef = useRef<number | null>(null);
   const [pendingSummarySaveRemovalVideoId, setPendingSummarySaveRemovalVideoId] = useState<string | null>(null);
@@ -1719,6 +1720,18 @@ function App() {
   const renameBoardInputDraftRef = useRef("");
   const savedListNameDraftRef = useRef("");
   const channelNameDraftRef = useRef("");
+  const refreshSummaryVideoCacheEntries = useCallback(async (): Promise<void> => {
+    setSummaryVideoCacheEntries(await listLatestCachedSummaryVideos());
+  }, []);
+  const handleIndividualSummaryCacheUpdated = useCallback(
+    async (videoId: string): Promise<void> => {
+      await refreshSummaryVideoCacheEntries();
+      if (activeBoardId === SUMMARIES_BOARD_ID && videoId === selectedSummariesVideoId) {
+        setSelectedSummaryRefreshToken((previous) => previous + 1);
+      }
+    },
+    [activeBoardId, refreshSummaryVideoCacheEntries, selectedSummariesVideoId]
+  );
   const {
     transcriptVideo,
     summaryHydrating,
@@ -1766,16 +1779,14 @@ function App() {
     removeSummaryModelPreset,
     saveSummaryPromptAndClose,
     deleteSummaryFormatAndClose
-  } = useTranscriptSummary();
+  } = useTranscriptSummary({
+    onSummaryCacheUpdated: handleIndividualSummaryCacheUpdated
+  });
   const [playlistQueue, setPlaylistQueue] = useState<VideoItem[]>([]);
   const [playlistIndex, setPlaylistIndex] = useState<number>(-1);
   const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
   const [playlistChannelLabel, setPlaylistChannelLabel] = useState<string>("");
   const [playlistOrderLabel, setPlaylistOrderLabel] = useState<string>("NEWEST FIRST");
-
-  const refreshSummaryVideoCacheEntries = useCallback(async (): Promise<void> => {
-    setSummaryVideoCacheEntries(await listLatestCachedSummaryVideos());
-  }, []);
 
   useEffect(() => {
     void refreshSummaryVideoCacheEntries();
@@ -2002,7 +2013,12 @@ function App() {
     return () => {
       isCancelled = true;
     };
-  }, [isSummariesBoardActive, reloadSelectedSummaryEntries, selectedSummariesVideoId]);
+  }, [
+    isSummariesBoardActive,
+    reloadSelectedSummaryEntries,
+    selectedSummariesVideoId,
+    selectedSummaryRefreshToken
+  ]);
   const effectiveShownVideosTotal = isSummariesBoardActive
     ? filteredSummariesBoardVideos.length
     : shownVideosTotal;

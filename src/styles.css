@@ -1901,7 +1901,7 @@ body {
 .summaries-board-grid {
   width: 100%;
   display: grid;
-  grid-template-columns: 320px 900px;
+  grid-template-columns: 320px 1000px;
   align-items: stretch;
 }
 
@@ -1961,7 +1961,7 @@ body {
 .summaries-detail-card {
   border: 1px solid rgba(190, 139, 79, 0.38);
   background: #15110e;
-  padding: 12px 50px;
+  padding: 12px 70px;
 }
 
 .summaries-detail-card-title-row {
@@ -2178,7 +2178,7 @@ body {
   flex-direction: column;
   gap: 10px;
   box-sizing: border-box;
-  padding-inline: 5%;
+  padding-inline: 7%;
 }
 
 .summary-paragraph {
