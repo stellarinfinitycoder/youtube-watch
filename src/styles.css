@@ -3323,7 +3323,7 @@ body {
 [data-theme="lite"] .maintenance-menu-dropdown .ant-dropdown-menu-item-danger.ant-dropdown-menu-item-active,
 [data-theme="lite"] .ant-dropdown-menu-item-danger,
 [data-theme="lite"] .ant-dropdown-menu-item-danger:hover {
-  background: var(--danger-soft) !important;
+  background: var(--surface) !important;
   color: var(--red) !important;
 }
 
@@ -3331,7 +3331,7 @@ body {
 [data-theme="lite"] .maintenance-menu-dropdown .ant-dropdown-menu-item-disabled:hover,
 [data-theme="lite"] .maintenance-menu-dropdown .ant-dropdown-menu-item-disabled.ant-dropdown-menu-item-active,
 [data-theme="lite"] .ant-dropdown-menu-item-disabled {
-  background: var(--surface-2) !important;
+  background: var(--surface) !important;
   color: var(--disabled-text) !important;
 }
 
