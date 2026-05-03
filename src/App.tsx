@@ -127,6 +127,11 @@ import {
   getBoardFilterDerivedData,
   useBoardFilters
 } from "./hooks/useBoardFilters";
+import {
+  getNextAppTheme,
+  readStoredAppTheme,
+  writeStoredAppTheme
+} from "./theme";
 import { normalizeHandle } from "./utils/handle";
 
 const { Text } = Typography;
@@ -1608,6 +1613,7 @@ function readStoredQuotaEstimate(): QuotaEstimateState {
 
 function App() {
   const fixtureMode = isFixtureModeEnabled();
+  const [appTheme, setAppTheme] = useState(readStoredAppTheme);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const videoModalWrapRef = useRef<HTMLDivElement | null>(null);
@@ -1716,6 +1722,9 @@ function App() {
   const [bulkInput, setBulkInput] = useState("");
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
   const [activeVideoSource, setActiveVideoSource] = useState<ActiveVideoSource>(null);
+  const toggleAppTheme = useCallback(() => {
+    setAppTheme((currentTheme) => getNextAppTheme(currentTheme));
+  }, []);
   const bulkInputDraftRef = useRef("");
   const renameBoardInputDraftRef = useRef("");
   const savedListNameDraftRef = useRef("");
@@ -1787,6 +1796,15 @@ function App() {
   const [playlistScope, setPlaylistScope] = useState<PlaylistScope>("all");
   const [playlistChannelLabel, setPlaylistChannelLabel] = useState<string>("");
   const [playlistOrderLabel, setPlaylistOrderLabel] = useState<string>("NEWEST FIRST");
+
+  useEffect(() => {
+    if (appTheme === "lite") {
+      document.documentElement.dataset.theme = appTheme;
+    } else {
+      delete document.documentElement.dataset.theme;
+    }
+    writeStoredAppTheme(appTheme);
+  }, [appTheme]);
 
   useEffect(() => {
     void refreshSummaryVideoCacheEntries();
@@ -5703,6 +5721,8 @@ function App() {
             isSavedBoardActive={isSavedBoardActive}
             topbarLastFetchLabel={topbarLastFetchLabel}
             fetchAllColumns={fetchAllColumns}
+            appTheme={appTheme}
+            toggleAppTheme={toggleAppTheme}
             activeBoardId={isSummariesBoardActive ? SUMMARIES_BOARD_ID : activeBoard?.id}
             displayedBoards={displayedBoards}
             newBoardOptionValue={NEW_BOARD_OPTION_VALUE}

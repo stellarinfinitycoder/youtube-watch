@@ -26,6 +26,8 @@ describe("AppTopbar", () => {
         isSavedBoardActive={false}
         topbarLastFetchLabel="Today at 10:00"
         fetchAllColumns={fetchAllColumns}
+        appTheme="dark"
+        toggleAppTheme={() => undefined}
         activeBoardId="board-1"
         displayedBoards={[{ id: "board-1", name: "Board", kind: "channels" }]}
         newBoardOptionValue="__new__"
@@ -94,6 +96,77 @@ describe("AppTopbar", () => {
     expect(screen.queryByText("FETCH ALL NEW VIDEOS FOR THIS BOARD.")).not.toBeInTheDocument();
   });
 
+  it("toggles theme from the settings menu", () => {
+    const toggleAppTheme = vi.fn();
+
+    render(
+      <AppTopbar
+        buildInfoLabel="dev-build"
+        lastApiQueryUnits={0}
+        totalApiQueryUnits={0}
+        topBarLogoSrc="/svg/logo-dev.svg"
+        isLogoSpinning={false}
+        isSavedBoardActive={false}
+        topbarLastFetchLabel="-"
+        fetchAllColumns={() => undefined}
+        appTheme="lite"
+        toggleAppTheme={toggleAppTheme}
+        activeBoardId="board-1"
+        displayedBoards={[{ id: "board-1", name: "Board", kind: "channels" }]}
+        newBoardOptionValue="__new__"
+        boardDropdownListHeight={320}
+        handleBoardSelectChange={() => undefined}
+        onBoardSelectorPrewarm={() => undefined}
+        blurActiveTopbarControl={() => undefined}
+        moveBoard={() => undefined}
+        openRenameBoardModal={() => undefined}
+        columnScopeFilter={[]}
+        isColumnScopeDisabled={false}
+        columnScopeDropdownListHeight={240}
+        formatColumnScopeSummary={() => "ALL"}
+        columnScopeOptions={[]}
+        onColumnScopeChange={() => undefined}
+        videoFilter="all"
+        onVideoFilterChange={() => undefined}
+        videoWindowDays={30}
+        onVideoWindowChange={() => undefined}
+        savedVideoWindowSelectOptions={[]}
+        channelVideoWindowSelectOptions={[]}
+        videoDurationFilter={[]}
+        onVideoDurationChange={() => undefined}
+        formatDurationFilterSummary={() => "ANY"}
+        videoDurationFilterOptions={[]}
+        startBoardSummaryBatch={() => undefined}
+        isBoardSummaryBatchRunning={false}
+        playAllVideos={() => undefined}
+        copyAllShownBoardLinks={async () => undefined}
+        copiedLinkVideoId={null}
+        openBulkWatchBoardAction={() => undefined}
+        openMaintenanceMenuExport={() => undefined}
+        openMaintenanceMenuRestore={() => undefined}
+        openMaintenanceMenuLogs={() => undefined}
+        openMaintenanceMenuBoardDurationBackfill={() => undefined}
+        openMaintenanceMenuRefreshBoardAvatars={() => undefined}
+        openMaintenanceMenuDeleteSummaries={() => undefined}
+        canOpenMaintenanceBoardDurationBackfill={false}
+        canOpenMaintenanceRefreshBoardAvatars={false}
+        shownVideosTotal={1}
+        areBoardActionsDisabled={false}
+        scrollToEdge={() => undefined}
+        scrollColumns={() => undefined}
+      />
+    );
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Open maintenance menu" }));
+    });
+    act(() => {
+      fireEvent.click(screen.getByText("SWITCH TO DARK"));
+    });
+
+    expect(toggleAppTheme).toHaveBeenCalledTimes(1);
+  });
+
   it("shows summaries as a board option without board action controls", () => {
     const handleBoardSelectChange = vi.fn();
 
@@ -107,6 +180,8 @@ describe("AppTopbar", () => {
         isSavedBoardActive={false}
         topbarLastFetchLabel="-"
         fetchAllColumns={() => undefined}
+        appTheme="dark"
+        toggleAppTheme={() => undefined}
         activeBoardId="board-1"
         displayedBoards={[
           { id: "board-1", name: "Board", kind: "channels" },
@@ -175,6 +250,8 @@ describe("AppTopbar", () => {
         isSavedBoardActive={false}
         topbarLastFetchLabel="-"
         fetchAllColumns={() => undefined}
+        appTheme="dark"
+        toggleAppTheme={() => undefined}
         activeBoardId="__summaries_board__"
         displayedBoards={[{ id: "__summaries_board__", name: "Summaries", kind: "summaries" }]}
         newBoardOptionValue="__new__"

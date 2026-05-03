@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lite Orange Theme Mockup</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap");
+
+      :root {
+        --page: #f7f7f5;
+        --surface: #ffffff;
+        --surface-2: #eeeeeb;
+        --surface-3: #e4e4e0;
+        --border: #d6d6d2;
+        --border-strong: #bdbdb7;
+        --text: #151515;
+        --text-strong: #000000;
+        --muted: #6f6f6a;
+        --muted-2: #8c8c86;
+        --accent: #f97316;
+        --accent-hover: #ea580c;
+        --accent-soft: rgba(249, 115, 22, 0.1);
+        --accent-softer: rgba(249, 115, 22, 0.06);
+        --danger: #dc2626;
+        --danger-soft: rgba(220, 38, 38, 0.08);
+        --focus: rgba(249, 115, 22, 0.26);
+      }
+
+      * {
+        box-sizing: border-box;
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+      }
+
+      body {
+        margin: 0;
+        min-width: 1180px;
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background:
+          linear-gradient(180deg, var(--page), #f0f0ed),
+          repeating-linear-gradient(
+            90deg,
+            rgba(21, 21, 21, 0.025) 0 1px,
+            transparent 1px 11px
+          );
+      }
+
+      button,
+      input,
+      select {
+        -webkit-appearance: none;
+        appearance: none;
+        border-radius: 0;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      button:disabled,
+      select:disabled {
+        cursor: not-allowed;
+        color: var(--muted-2);
+        background: var(--surface-2);
+        border-color: var(--border);
+        opacity: 0.62;
+      }
+
+      .app {
+        min-height: 100vh;
+        padding: 12px;
+      }
+
+      .topbar {
+        width: calc(100% + 24px);
+        margin: 0 -12px 10px;
+        padding: 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        box-shadow: inset 0 -3px 0 var(--accent-soft);
+      }
+
+      .logo {
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--border-strong);
+        background: var(--text);
+        color: var(--surface);
+        display: grid;
+        place-items: center;
+        font-size: 16px;
+        font-weight: 800;
+        flex: 0 0 32px;
+      }
+
+      .ctrl,
+      .select {
+        height: 32px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+
+      .ctrl {
+        padding: 0 12px;
+      }
+
+      .ctrl.primary {
+        background: var(--accent);
+        color: var(--surface);
+        border-color: var(--accent);
+      }
+
+      .ctrl.primary:hover {
+        background: var(--accent-hover);
+        border-color: var(--accent-hover);
+      }
+
+      .ctrl.square,
+      .ctrl.icon {
+        width: 32px;
+        padding: 0;
+      }
+
+      .ctrl:hover,
+      .select:hover,
+      .action:hover,
+      .inline-fetch:hover {
+        border-color: var(--accent);
+        color: var(--text-strong);
+        box-shadow: 0 0 0 2px var(--focus);
+      }
+
+      .select {
+        min-width: 132px;
+        padding: 0 30px 0 10px;
+        background:
+          linear-gradient(45deg, transparent 50%, var(--muted) 50%) right 13px top 12px / 5px 5px no-repeat,
+          linear-gradient(135deg, var(--muted) 50%, transparent 50%) right 8px top 12px / 5px 5px no-repeat,
+          var(--surface);
+      }
+
+      .board-select {
+        width: 238px;
+      }
+
+      .scope-select {
+        width: 310px;
+      }
+
+      .count-pill {
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--accent);
+        background: var(--accent-soft);
+        color: var(--accent-hover);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .spacer {
+        flex: 1;
+      }
+
+      .preview-row {
+        display: grid;
+        grid-template-columns: 320px 320px 320px 40px 320px;
+        gap: 12px;
+        align-items: start;
+        min-width: max-content;
+      }
+
+      .columns-wrap {
+        overflow-x: auto;
+        padding-bottom: 8px;
+      }
+
+      .column {
+        width: 320px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        padding: 10px;
+        box-shadow: 0 1px 0 rgba(21, 21, 21, 0.04);
+      }
+
+      .column.is-active {
+        border-color: var(--accent);
+        box-shadow: inset 3px 0 0 var(--accent);
+      }
+
+      .column.is-muted {
+        background: var(--surface-2);
+      }
+
+      .column-actions,
+      .column-actions-left,
+      .column-actions-right,
+      .column-header,
+      .video-meta,
+      .video-actions,
+      .modal-actions,
+      .chips {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .column-actions {
+        margin-bottom: 10px;
+      }
+
+      .column-actions-right {
+        margin-left: auto;
+      }
+
+      .action,
+      .inline-fetch {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .inline-fetch {
+        width: 32px;
+        height: 32px;
+      }
+
+      .action.copied,
+      .action.watch,
+      .chip.active {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        color: var(--accent-hover);
+      }
+
+      .action.delete,
+      .danger {
+        border-color: var(--danger);
+        color: var(--danger);
+        background: transparent;
+      }
+
+      .action.delete:hover,
+      .danger:hover {
+        background: var(--danger-soft);
+        border-color: var(--danger);
+        color: var(--danger);
+        box-shadow: none;
+      }
+
+      .avatar {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--border);
+        background: var(--surface-2);
+        color: var(--text-strong);
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        flex: 0 0 30px;
+        overflow: hidden;
+      }
+
+      .avatar.orange {
+        background: var(--accent-soft);
+        border-color: var(--accent);
+        color: var(--accent-hover);
+      }
+
+      .avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        filter: grayscale(0.15);
+      }
+
+      .handle {
+        height: 32px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text-strong);
+        font-weight: 700;
+        padding: 0 10px;
+        flex: 1;
+        min-width: 0;
+        text-transform: uppercase;
+      }
+
+      .column-video-count {
+        min-width: 28px;
+        text-align: right;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .video {
+        margin-top: 10px;
+        padding: 10px;
+        margin-inline: -10px;
+        border-bottom: 1px solid var(--border);
+        transition: background-color 120ms ease, box-shadow 120ms ease;
+      }
+
+      .video:last-child {
+        border-bottom: 0;
+      }
+
+      .video.hover {
+        background: var(--accent-softer);
+      }
+
+      .video.active {
+        background: var(--accent-soft);
+        box-shadow: inset 3px 0 0 var(--accent);
+      }
+
+      .video.watched {
+        opacity: 0.74;
+      }
+
+      .video-meta {
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+
+      .video-meta .grow {
+        flex: 1;
+      }
+
+      .video-status {
+        color: var(--accent-hover);
+        font-weight: 800;
+      }
+
+      .video-status.danger {
+        border: 0;
+        background: transparent;
+        padding: 0;
+      }
+
+      .thumb {
+        width: 100%;
+        height: 170px;
+        border: 1px solid var(--border);
+        background:
+          linear-gradient(135deg, rgba(21, 21, 21, 0.82), rgba(21, 21, 21, 0.22)),
+          linear-gradient(135deg, #f8fafc, #c9c9c3 48%, #ffffff);
+        margin-bottom: 8px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .thumb::before {
+        content: "";
+        position: absolute;
+        inset: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        background:
+          linear-gradient(135deg, transparent 0 42%, rgba(249, 115, 22, 0.84) 42% 50%, transparent 50%),
+          rgba(255, 255, 255, 0.18);
+      }
+
+      .thumb.dark {
+        background:
+          linear-gradient(135deg, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.08)),
+          linear-gradient(135deg, #282828, #7a7a73 52%, #fafafa);
+      }
+
+      .thumb.light {
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.52), rgba(249, 115, 22, 0.18)),
+          linear-gradient(135deg, #ffffff, #e4e4e0 52%, #bdbdb7);
+      }
+
+      .title {
+        margin: 0;
+        color: var(--text-strong);
+        font-size: 16px;
+        line-height: 1.4;
+        font-weight: 800;
+        text-transform: none;
+      }
+
+      .add-rail {
+        width: 40px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .add-btn,
+      .hidden-thumb {
+        width: 40px;
+        height: 40px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        font-size: 26px;
+        font-weight: 800;
+      }
+
+      .add-btn:hover,
+      .hidden-thumb:hover {
+        border-color: var(--accent);
+        color: var(--accent-hover);
+        background: var(--accent-soft);
+      }
+
+      .hidden-thumb {
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+      }
+
+      .mock-side {
+        display: grid;
+        gap: 12px;
+      }
+
+      .panel {
+        border: 1px solid var(--border);
+        background: var(--surface);
+        padding: 10px;
+      }
+
+      .panel-title {
+        margin: 0 0 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text-strong);
+        font-size: 13px;
+        text-transform: uppercase;
+      }
+
+      .dropdown-preview {
+        display: grid;
+        gap: 2px;
+      }
+
+      .menu-item {
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 10px;
+        color: var(--text);
+        background: var(--surface);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .menu-item:hover,
+      .menu-item.active {
+        background: var(--accent-soft);
+        color: var(--accent-hover);
+      }
+
+      .menu-item.selected {
+        background: var(--accent);
+        color: var(--surface);
+      }
+
+      .menu-item.disabled {
+        color: var(--muted-2);
+        background: var(--surface-2);
+      }
+
+      .menu-item.danger {
+        border: 0;
+        color: var(--danger);
+        background: var(--danger-soft);
+      }
+
+      .modal {
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        box-shadow: 0 18px 44px rgba(21, 21, 21, 0.16);
+      }
+
+      .modal-header {
+        padding: 10px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--text-strong);
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .modal-body {
+        padding: 10px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .modal-callout {
+        margin-top: 10px;
+        padding: 10px;
+        border-left: 3px solid var(--accent);
+        background: var(--accent-soft);
+        color: var(--text);
+      }
+
+      .modal-actions {
+        padding: 10px;
+        border-top: 1px solid var(--border);
+        justify-content: flex-end;
+      }
+
+      .chip {
+        height: 24px;
+        padding: 0 8px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--muted);
+        display: inline-flex;
+        align-items: center;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .footer {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      .footer .accent {
+        color: var(--accent-hover);
+        font-weight: 800;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <nav class="topbar" aria-label="Theme mockup topbar">
+        <div class="logo">Y</div>
+        <select class="select board-select" aria-label="Board selector">
+          <option>RESEARCH BOARD</option>
+        </select>
+        <select class="select scope-select" aria-label="Channel scope filter">
+          <option>ALL CHANNELS</option>
+        </select>
+        <select class="select" aria-label="Video filter">
+          <option>NEW</option>
+        </select>
+        <select class="select" aria-label="Video age window">
+          <option>LAST 30D</option>
+        </select>
+        <select class="select" aria-label="Video duration">
+          <option>ANY LENGTH</option>
+        </select>
+        <div class="count-pill">42</div>
+        <button class="ctrl icon" aria-label="Summarize board">T</button>
+        <button class="ctrl primary" aria-label="Play all">PLAY</button>
+        <button class="ctrl icon copied" aria-label="Copy links">L</button>
+        <button class="ctrl icon" aria-label="Mark watched">W</button>
+        <div class="spacer"></div>
+        <button class="ctrl icon" aria-label="Settings">S</button>
+        <button class="ctrl icon" aria-label="Scroll first">|&lt;</button>
+        <button class="ctrl icon" aria-label="Scroll left">&lt;</button>
+        <button class="ctrl icon" aria-label="Scroll right">&gt;</button>
+        <button class="ctrl icon" aria-label="Scroll last">&gt;|</button>
+      </nav>
+
+      <div class="columns-wrap">
+        <div class="preview-row">
+          <section class="column is-active">
+            <div class="column-actions">
+              <div class="column-actions-left">
+                <button class="action" aria-label="Move left">&larr;</button>
+                <button class="action" aria-label="Move right">&rarr;</button>
+                <button class="action" aria-label="Move column">M</button>
+              </div>
+              <div class="column-actions-right">
+                <button class="inline-fetch" aria-label="Fetch">F</button>
+                <button class="action watch" aria-label="Play column">P</button>
+                <button class="action copied" aria-label="Copied">L</button>
+                <button class="action" aria-label="Mark watched">W</button>
+                <button class="action delete" aria-label="Delete column">X</button>
+              </div>
+            </div>
+            <div class="column-header">
+              <div class="avatar orange">AI</div>
+              <input class="handle" value="@AIRESEARCH" aria-label="Channel handle" />
+              <span class="column-video-count">18</span>
+            </div>
+
+            <article class="video active">
+              <div class="video-meta">
+                <span class="video-status">NEW</span>
+                <span>18K VIEWS</span>
+                <span class="grow">12:48</span>
+                <div class="video-actions">
+                  <button class="action" aria-label="Transcript">T</button>
+                  <button class="action copied" aria-label="Copy link">L</button>
+                  <button class="action" aria-label="Save">S</button>
+                  <button class="action watch" aria-label="Mark watched">W</button>
+                </div>
+              </div>
+              <div class="thumb"></div>
+              <h2 class="title">Building a local-first queue for AI video review</h2>
+            </article>
+
+            <article class="video hover">
+              <div class="video-meta">
+                <span>2D AGO</span>
+                <span>44K VIEWS</span>
+                <span class="grow">24:11</span>
+                <div class="video-actions">
+                  <button class="action" aria-label="Transcript">T</button>
+                  <button class="action" aria-label="Copy link">L</button>
+                  <button class="action" aria-label="Save">S</button>
+                  <button class="action watch" aria-label="Mark watched">W</button>
+                </div>
+              </div>
+              <div class="thumb light"></div>
+              <h2 class="title">What changed in practical agent workflows this week</h2>
+            </article>
+          </section>
+
+          <section class="column">
+            <div class="column-actions">
+              <div class="column-actions-left">
+                <button class="action" aria-label="Move left">&larr;</button>
+                <button class="action" aria-label="Move right">&rarr;</button>
+              </div>
+              <div class="column-actions-right">
+                <button class="inline-fetch" aria-label="Fetch">F</button>
+                <button class="action watch" aria-label="Play column">P</button>
+                <button class="action" aria-label="Copy links">L</button>
+                <button class="action delete" aria-label="Remove">X</button>
+              </div>
+            </div>
+            <div class="column-header">
+              <div class="avatar">DS</div>
+              <input class="handle" value="@DESIGNSYSTEMS" aria-label="Channel handle" />
+              <span class="column-video-count">9</span>
+            </div>
+
+            <article class="video">
+              <div class="video-meta">
+                <span>5H AGO</span>
+                <span>8K VIEWS</span>
+                <span class="grow">09:31</span>
+                <div class="video-actions">
+                  <button class="action" aria-label="Transcript">T</button>
+                  <button class="action" aria-label="Copy link">L</button>
+                  <button class="action" aria-label="Save">S</button>
+                  <button class="action watch" aria-label="Mark watched">W</button>
+                </div>
+              </div>
+              <div class="thumb dark"></div>
+              <h2 class="title">Theme tokens that survive product-scale edge cases</h2>
+            </article>
+
+            <article class="video watched">
+              <div class="video-meta">
+                <span>WATCHED</span>
+                <span>31K VIEWS</span>
+                <span class="grow">16:03</span>
+                <div class="video-actions">
+                  <button class="action" aria-label="Transcript">T</button>
+                  <button class="action" aria-label="Copy link">L</button>
+                  <button class="action" disabled aria-label="Save disabled">S</button>
+                  <button class="action" aria-label="Undo watched">U</button>
+                </div>
+              </div>
+              <div class="thumb light"></div>
+              <h2 class="title">A compact UI review checklist for dense tools</h2>
+            </article>
+          </section>
+
+          <section class="column is-muted">
+            <div class="column-actions">
+              <div class="column-actions-left">
+                <button class="action" disabled aria-label="Move left disabled">&larr;</button>
+                <button class="action" aria-label="Move right">&rarr;</button>
+              </div>
+              <div class="column-actions-right">
+                <button class="inline-fetch" aria-label="Fetch">F</button>
+                <button class="action watch" aria-label="Play column">P</button>
+                <button class="action delete" aria-label="Delete list">X</button>
+              </div>
+            </div>
+            <div class="column-header">
+              <div class="avatar">SV</div>
+              <input class="handle" value="SAVED LIST" aria-label="Saved list name" />
+              <span class="column-video-count">6</span>
+            </div>
+
+            <article class="video">
+              <div class="video-meta">
+                <span>SAVED</span>
+                <span>ADDED TODAY</span>
+                <span class="grow">36:49</span>
+                <div class="video-actions">
+                  <button class="action" aria-label="Transcript">T</button>
+                  <button class="action" aria-label="Copy">L</button>
+                  <button class="action" aria-label="Move">M</button>
+                  <button class="action delete" aria-label="Delete video">X</button>
+                </div>
+              </div>
+              <div class="thumb"></div>
+              <h2 class="title">Long-form interview about small teams shipping faster</h2>
+            </article>
+
+            <div class="footer">
+              <span>Sort</span>
+              <span class="chip active">Added desc</span>
+              <span class="chip">Manual</span>
+            </div>
+          </section>
+
+          <aside class="add-rail" aria-label="Add column rail">
+            <button class="add-btn" aria-label="Add column">+</button>
+            <button class="hidden-thumb" aria-label="Hidden channel">UX</button>
+            <button class="hidden-thumb" aria-label="Hidden channel">ML</button>
+            <button class="hidden-thumb" aria-label="Hidden channel">YT</button>
+          </aside>
+
+          <aside class="mock-side">
+            <section class="panel">
+              <h2 class="panel-title">Dropdown states</h2>
+              <div class="dropdown-preview">
+                <div class="menu-item selected">Research board <span>✓</span></div>
+                <div class="menu-item active">Saved lists</div>
+                <div class="menu-item">Summaries</div>
+                <div class="menu-item disabled">Backfill metadata</div>
+                <div class="menu-item danger">DELETE SUMMARIES</div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2 class="panel-title">Maintenance menu</h2>
+              <div class="dropdown-preview">
+                <div class="menu-item">Backup</div>
+                <div class="menu-item">Restore</div>
+                <div class="menu-item">Open info</div>
+                <div class="menu-item">Open logs</div>
+                <div class="menu-item active">Refresh avatars</div>
+                <div class="menu-item danger">DELETE SUMMARIES</div>
+              </div>
+            </section>
+
+            <section class="modal" aria-label="Modal preview">
+              <div class="modal-header">
+                <span>Delete summaries</span>
+                <button class="action" aria-label="Close">X</button>
+              </div>
+              <div class="modal-body">
+                Delete cached summaries from this browser. Transcript cache and saved lists stay unchanged.
+                <div class="modal-callout">
+                  Orange is reserved for focus, selected states, and primary actions. Destructive actions remain red.
+                </div>
+              </div>
+              <div class="modal-actions">
+                <button class="ctrl">Cancel</button>
+                <button class="ctrl primary">Save</button>
+                <button class="ctrl danger">Delete</button>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2 class="panel-title">Palette</h2>
+              <div class="chips">
+                <span class="chip active">#f97316</span>
+                <span class="chip">#ffffff</span>
+                <span class="chip">#151515</span>
+                <span class="chip danger">#dc2626</span>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

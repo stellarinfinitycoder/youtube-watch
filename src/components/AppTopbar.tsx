@@ -1,6 +1,7 @@
 import { memo, useState } from "react";
 import { Button, Dropdown, Modal, Select, Typography } from "antd";
 import type { MenuProps } from "antd";
+import type { AppTheme } from "../theme";
 
 const { Text } = Typography;
 
@@ -19,6 +20,8 @@ type AppTopbarProps = {
   isSavedBoardActive: boolean;
   topbarLastFetchLabel: string;
   fetchAllColumns: () => void;
+  appTheme: AppTheme;
+  toggleAppTheme: () => void;
   activeBoardId?: string;
   displayedBoards: BoardOption[];
   newBoardOptionValue: string;
@@ -73,6 +76,8 @@ function AppTopbarComponent({
   isSavedBoardActive,
   topbarLastFetchLabel,
   fetchAllColumns,
+  appTheme,
+  toggleAppTheme,
   activeBoardId,
   displayedBoards,
   newBoardOptionValue,
@@ -119,7 +124,9 @@ function AppTopbarComponent({
 }: AppTopbarProps) {
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
   const channelBoardCount = displayedBoards.filter((board) => board.kind === "channels").length;
+  const themeToggleLabel = appTheme === "lite" ? "SWITCH TO DARK" : "SWITCH TO LITE";
   const maintenanceMenuItems: MenuProps["items"] = [
+    { key: "toggle-theme", label: themeToggleLabel },
     { key: "backup", label: "BACKUP" },
     { key: "restore", label: "RESTORE" },
     { key: "open-stats", label: "OPEN INFO" },
@@ -152,6 +159,10 @@ function AppTopbarComponent({
     }
     if (key === "logs") {
       openMaintenanceMenuLogs();
+      return;
+    }
+    if (key === "toggle-theme") {
+      toggleAppTheme();
       return;
     }
     if (key === "board-duration") {
