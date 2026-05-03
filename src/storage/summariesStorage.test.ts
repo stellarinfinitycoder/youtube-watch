@@ -3,6 +3,7 @@ import { waitFor } from "@testing-library/react";
 import { resetCacheDbForTests } from "./indexedDbCache";
 import {
   clearAllCachedSummaries,
+  deleteCachedSummariesForVideo,
   deleteCachedSummary,
   listCachedSummariesForVideo,
   listLatestCachedSummaryVideos,
@@ -130,6 +131,33 @@ describe("summariesStorage", () => {
       promptHash: "prompt-b",
       cachedAt: 20
     });
+    await expect(readCachedSummary("video-2", "prompt-a")).resolves.toEqual({
+      ...payload,
+      promptHash: "prompt-a",
+      cachedAt: 30
+    });
+  });
+
+  it("deletes all cached summaries for one video without touching other videos", async () => {
+    await writeCachedSummary("video-1", "prompt-a", {
+      ...payload,
+      promptHash: "prompt-a",
+      cachedAt: 10
+    });
+    await writeCachedSummary("video-1", "prompt-b", {
+      ...payload,
+      promptHash: "prompt-b",
+      cachedAt: 20
+    });
+    await writeCachedSummary("video-2", "prompt-a", {
+      ...payload,
+      promptHash: "prompt-a",
+      cachedAt: 30
+    });
+
+    await expect(deleteCachedSummariesForVideo("video-1")).resolves.toBe(true);
+
+    await expect(listCachedSummariesForVideo("video-1")).resolves.toEqual([]);
     await expect(readCachedSummary("video-2", "prompt-a")).resolves.toEqual({
       ...payload,
       promptHash: "prompt-a",

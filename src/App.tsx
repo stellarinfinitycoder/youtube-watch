@@ -39,6 +39,7 @@ import {
 import {
   clearAllCachedSummaries,
   deleteCachedSummary,
+  deleteCachedSummariesForVideo,
   listCachedSummariesForVideo,
   listLatestCachedSummaryVideos,
   readCachedSummary
@@ -1732,14 +1733,92 @@ function App() {
   const refreshSummaryVideoCacheEntries = useCallback(async (): Promise<void> => {
     setSummaryVideoCacheEntries(await listLatestCachedSummaryVideos());
   }, []);
+  const refreshSelectedSummaryEntriesAfterCacheChange = useCallback(
+    (videoId: string): void => {
+      if (videoId !== selectedSummariesVideoId) {
+        return;
+      }
+      setSelectedSummaryRefreshToken((previous) => previous + 1);
+    },
+    [selectedSummariesVideoId]
+  );
+  const getVideoSummaryRetentionState = useCallback(
+    (videoId: string): { isSaved: boolean; isWatched: boolean } => {
+      const normalizedVideoId = videoId.trim().toLowerCase();
+      if (!normalizedVideoId) {
+        return { isSaved: false, isWatched: false };
+      }
+      let isSaved = false;
+      let isWatched = false;
+      boards.forEach((board) => {
+        if (board.kind === "saved") {
+          if (
+            board.columns.some((column) =>
+              column.videos.some((video) => video.videoId.trim().toLowerCase() === normalizedVideoId)
+            )
+          ) {
+            isSaved = true;
+          }
+        }
+        if (isVideoMarkedWatched(board.watchedVideos, videoId)) {
+          isWatched = true;
+        }
+      });
+      return { isSaved, isWatched };
+    },
+    [boards]
+  );
+  const shouldKeepCachedSummariesForVideo = useCallback(
+    (videoId: string): boolean => {
+      const { isSaved, isWatched } = getVideoSummaryRetentionState(videoId);
+      return isSaved || !isWatched;
+    },
+    [getVideoSummaryRetentionState]
+  );
+  const pruneDisallowedSummaryCacheEntries = useCallback(
+    async (entries = summaryVideoCacheEntries): Promise<boolean> => {
+      const videoIdsToDelete = entries
+        .map((entry) => entry.videoId)
+        .filter((videoId, index, allVideoIds) => allVideoIds.indexOf(videoId) === index)
+        .filter((videoId) => !shouldKeepCachedSummariesForVideo(videoId));
+      if (videoIdsToDelete.length === 0) {
+        return false;
+      }
+      const results = await Promise.all(videoIdsToDelete.map((videoId) => deleteCachedSummariesForVideo(videoId)));
+      const didDelete = results.some(Boolean);
+      if (didDelete) {
+        await refreshSummaryVideoCacheEntries();
+        videoIdsToDelete.forEach((videoId) => refreshSelectedSummaryEntriesAfterCacheChange(videoId));
+      }
+      return didDelete;
+    },
+    [
+      refreshSummaryVideoCacheEntries,
+      refreshSelectedSummaryEntriesAfterCacheChange,
+      shouldKeepCachedSummariesForVideo,
+      summaryVideoCacheEntries
+    ]
+  );
   const handleIndividualSummaryCacheUpdated = useCallback(
     async (videoId: string): Promise<void> => {
       await refreshSummaryVideoCacheEntries();
+      if (!shouldKeepCachedSummariesForVideo(videoId)) {
+        await deleteCachedSummariesForVideo(videoId);
+        await refreshSummaryVideoCacheEntries();
+        refreshSelectedSummaryEntriesAfterCacheChange(videoId);
+        return;
+      }
       if (activeBoardId === SUMMARIES_BOARD_ID && videoId === selectedSummariesVideoId) {
         setSelectedSummaryRefreshToken((previous) => previous + 1);
       }
     },
-    [activeBoardId, refreshSummaryVideoCacheEntries, selectedSummariesVideoId]
+    [
+      activeBoardId,
+      refreshSummaryVideoCacheEntries,
+      refreshSelectedSummaryEntriesAfterCacheChange,
+      selectedSummariesVideoId,
+      shouldKeepCachedSummariesForVideo
+    ]
   );
   const {
     transcriptVideo,
@@ -1816,6 +1895,9 @@ function App() {
     },
     [summaryFormats]
   );
+  useEffect(() => {
+    void pruneDisallowedSummaryCacheEntries();
+  }, [pruneDisallowedSummaryCacheEntries]);
   const [brokenChannelThumbnailKeys, setBrokenChannelThumbnailKeys] = useState<string[]>(
     []
   );

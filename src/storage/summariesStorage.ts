@@ -309,6 +309,39 @@ export async function deleteCachedSummary(
   return existing !== null || hadLegacyEntry;
 }
 
+export async function deleteCachedSummariesForVideo(videoId: string): Promise<boolean> {
+  const normalizedVideoId = videoId.trim();
+  if (normalizedVideoId.length === 0) {
+    return false;
+  }
+
+  await migrateLegacySummaryCache();
+  let didDelete = false;
+  const keyPrefix = `${normalizedVideoId}:`;
+  const summaryKeys = await getAllCacheKeys(SUMMARIES_STORE_NAME);
+  const matchingKeys = summaryKeys.filter((key) => key.startsWith(keyPrefix));
+  if (matchingKeys.length > 0) {
+    await Promise.all(matchingKeys.map((key) => deleteCacheValue(SUMMARIES_STORE_NAME, key)));
+    didDelete = true;
+  }
+
+  const storage = getStorage();
+  if (storage) {
+    const legacyPrefix = getSummaryCacheKey(normalizedVideoId, "");
+    const legacyKeysToDelete: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(legacyPrefix)) {
+        legacyKeysToDelete.push(key);
+      }
+    }
+    legacyKeysToDelete.forEach((key) => storage.removeItem(key));
+    didDelete = didDelete || legacyKeysToDelete.length > 0;
+  }
+
+  return didDelete;
+}
+
 export async function clearAllCachedSummaries(): Promise<boolean> {
   const summaryEntries = await getAllCacheKeys(SUMMARIES_STORE_NAME);
   if (summaryEntries.length === 0) {
