@@ -3456,14 +3456,18 @@ body {
   color: var(--video-title-text) !important;
 }
 
-[data-theme="lite"] .video-meta-feedback.is-info,
-[data-theme="lite"] .video-meta-feedback.is-success,
 [data-theme="lite"] .link-copy-btn.is-copied,
 [data-theme="lite"] .transcript-copy-btn.is-copied,
 [data-theme="lite"] .summary-wikilink {
   color: var(--amber) !important;
   border-color: var(--amber-soft) !important;
   background: var(--accent-soft) !important;
+}
+
+[data-theme="lite"] .video-meta-feedback.is-info,
+[data-theme="lite"] .video-meta-feedback.is-success {
+  color: var(--amber) !important;
+  background: transparent !important;
 }
 
 [data-theme="lite"] .video-meta-feedback.is-error,
