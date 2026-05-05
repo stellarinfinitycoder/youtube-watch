@@ -1478,6 +1478,7 @@ button.column-video-count:disabled {
   margin: 0 0 5px !important;
   font-size: 16px !important;
   line-height: 1.4 !important;
+  min-height: calc(2 * 1.4em);
   color: #ffe0b7 !important;
   display: -webkit-box;
   -webkit-line-clamp: 2;
