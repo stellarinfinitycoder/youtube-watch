@@ -1,4 +1,4 @@
-import { Button, Select, Typography } from "antd";
+import { Button, Modal, Select, Typography } from "antd";
 import { memo, useEffect, useState } from "react";
 import type { VideoItem } from "../types/youtube";
 import { VideoTile } from "./VideoTile";
@@ -110,15 +110,9 @@ export type BoardSummaryBatchItem = {
   error: string | null;
 };
 
-type BoardSummaryBatchPageProps = {
+type BoardSummaryBatchModalProps = {
   open: boolean;
-  onGoHome: () => void;
-  boardName: string;
-  channelScopeLabel: string;
-  videoFilterLabel: string;
-  timeFilterLabel: string;
-  lengthFilterLabel: string;
-  shownVideosLabel: string;
+  onCancel: () => void;
   summaryFormats: SummaryFormat[];
   selectedSummaryFormatId: string;
   isPreparing: boolean;
@@ -155,15 +149,9 @@ type BoardSummaryBatchPageProps = {
   onOpenVideo: (video: VideoItem) => void;
 };
 
-function BoardSummaryBatchPageComponent({
+function BoardSummaryBatchModalComponent({
   open,
-  onGoHome,
-  boardName,
-  channelScopeLabel,
-  videoFilterLabel,
-  timeFilterLabel,
-  lengthFilterLabel,
-  shownVideosLabel,
+  onCancel,
   summaryFormats,
   selectedSummaryFormatId,
   isPreparing,
@@ -194,7 +182,7 @@ function BoardSummaryBatchPageComponent({
   onOpenSaveVideoModal,
   onToggleWatched,
   onOpenVideo
-}: BoardSummaryBatchPageProps) {
+}: BoardSummaryBatchModalProps) {
   const [visibleCount, setVisibleCount] = useState(BOARD_SUMMARY_BATCH_PAGE_SIZE);
   const [copiedVideoId, setCopiedVideoId] = useState<string | null>(null);
 
@@ -224,6 +212,9 @@ function BoardSummaryBatchPageComponent({
       item.status === "done" &&
       (item.summary.trim().length > 0 || item.keyPoints.some((point) => point.trim().length > 0))
   );
+  const selectedSummaryFormat =
+    summaryFormats.find((format) => format.id === selectedSummaryFormatId) ?? summaryFormats[0];
+  const selectedModel = (selectedSummaryFormat?.model ?? "").trim();
 
   const copySummaryRow = async (item: BoardSummaryBatchItem): Promise<void> => {
     const text = formatBoardSummaryRowCopyText(item);
@@ -264,84 +255,81 @@ function BoardSummaryBatchPageComponent({
     setCopiedVideoId(item.videoId);
   };
 
-  const pageTitle = [
-    `SUMMARIES: ${boardName.toUpperCase()}`,
-    channelScopeLabel.toUpperCase(),
-    videoFilterLabel.toUpperCase(),
-    timeFilterLabel.toUpperCase(),
-    lengthFilterLabel.toUpperCase(),
-    shownVideosLabel.toUpperCase()
-  ].join(" > ");
-
   return (
-    <section className="board-summary-page">
-      <div className="board-summary-page-header">
-        <div className="board-summary-page-title-row">
-          <Button
-            htmlType="button"
-            className="column-move-btn board-summary-home-btn"
-            aria-label="Return to board"
-            onClick={onGoHome}
-          >
-            <span className="btn-icon btn-icon-home" aria-hidden />
-          </Button>
-          <h1 className="board-summary-page-title">{pageTitle}</h1>
+    <Modal
+      title={
+        <div>
+          <div className="transcript-modal-status-row">
+            {selectedModel ? (
+              <Text className="video-meta-feedback is-info">MODEL: {selectedModel.toUpperCase()}</Text>
+            ) : null}
+          </div>
+          <div className="transcript-modal-header-row">
+            <span className="transcript-modal-header-title">BOARD SUMMARIES</span>
+            <div className="transcript-modal-header-controls">
+              <Select<string>
+                value={selectedSummaryFormatId}
+                onChange={onSummaryFormatChange}
+                aria-label="Board summaries format"
+                className="video-filter-select board-summary-format-select"
+                classNames={{ popup: { root: "summary-format-dropdown" } }}
+                popupMatchSelectWidth={false}
+                optionLabelProp="title"
+                showSearch={false}
+              >
+                {summaryFormats.map((format) => (
+                  <Select.Option key={format.id} value={format.id} title={format.name.toUpperCase()}>
+                    <div className="board-option-row">
+                      <span className="board-option-name">{format.name.toUpperCase()}</span>
+                    </div>
+                  </Select.Option>
+                ))}
+              </Select>
+              <Button
+                htmlType="button"
+                className={`column-move-btn transcript-copy-btn board-summary-copy-btn ${
+                  isCopied ? "is-copied" : ""
+                }`}
+                aria-label="Copy all board summaries"
+                onClick={() => void onCopyAll()}
+                disabled={items.length === 0}
+              >
+                {isCopied ? (
+                  <span className="btn-icon btn-icon-check" aria-hidden />
+                ) : (
+                  <span className="btn-icon btn-icon-copy" aria-hidden />
+                )}
+              </Button>
+              <Button
+                htmlType="button"
+                className="column-move-btn board-summary-copy-btn"
+                aria-label="Summarize shown summaries"
+                onClick={() => void onSummarizeShown(visibleItems)}
+                disabled={isSummarizingShown || !hasSummarizableVisibleItems}
+              >
+                <span
+                  className={`btn-icon btn-icon-transcript ${isSummarizingShown ? "is-spinning" : ""}`}
+                  aria-hidden
+                />
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="board-summary-page-actions">
-          <Select<string>
-            value={selectedSummaryFormatId}
-            onChange={onSummaryFormatChange}
-            aria-label="Board summaries format"
-            className="video-filter-select board-summary-format-select"
-            popupClassName="summary-format-dropdown"
-            popupMatchSelectWidth={false}
-            optionLabelProp="title"
-            showSearch={false}
-          >
-            {summaryFormats.map((format) => (
-              <Select.Option key={format.id} value={format.id} title={format.name.toUpperCase()}>
-                <div className="board-option-row">
-                  <span className="board-option-name">{format.name.toUpperCase()}</span>
-                </div>
-              </Select.Option>
-            ))}
-          </Select>
-          <Button
-            htmlType="button"
-            className={`column-move-btn transcript-copy-btn board-summary-copy-btn ${
-              isCopied ? "is-copied" : ""
-            }`}
-            aria-label="Copy all board summaries"
-            onClick={() => void onCopyAll()}
-            disabled={items.length === 0}
-          >
-            {isCopied ? (
-              <span className="btn-icon btn-icon-check" aria-hidden />
-            ) : (
-              <span className="btn-icon btn-icon-copy" aria-hidden />
-            )}
-          </Button>
-          <Button
-            htmlType="button"
-            className="column-move-btn board-summary-copy-btn"
-            aria-label="Summarize shown summaries"
-            onClick={() => void onSummarizeShown(visibleItems)}
-            disabled={isSummarizingShown || !hasSummarizableVisibleItems}
-          >
-            <span
-              className={`btn-icon btn-icon-transcript ${isSummarizingShown ? "is-spinning" : ""}`}
-              aria-hidden
-            />
-          </Button>
-        </div>
-      </div>
-
-      <div className="board-summary-page-panel">
-        <div className="board-summary-page-scroll-content">
+      }
+      open={open}
+      onCancel={onCancel}
+      footer={null}
+      width="min(1280px, calc(100vw - 32px))"
+      className="transcript-modal board-summary-modal"
+      destroyOnHidden
+    >
+      <section className="board-summary-modal-content">
+        <div className="board-summary-modal-panel">
+          <div className="board-summary-modal-scroll-content">
           {isPreparing && items.length === 0 ? (
             <div className="board-summary-batch-preparing">PREPARING SUMMARIES...</div>
           ) : isEmpty ? (
-            <div className="board-summary-page-empty">NO BOARD SUMMARIES YET.</div>
+            <div className="board-summary-modal-empty">NO BOARD SUMMARIES YET.</div>
           ) : (
             <>
               <div className="board-summary-batch-list">
@@ -352,76 +340,80 @@ function BoardSummaryBatchPageComponent({
                   );
                   return (
                     <section key={item.videoId} className="board-summary-batch-item board-summary-table-row">
-                      <div className="board-summary-video-cell">
-                        <VideoTile
-                          boardId={activeBoardId}
-                          column={item.column}
-                          isSavedBoardActive={isSavedBoardActive}
-                          video={item.video}
-                          isWatched={isVideoMarkedWatched(item.video.videoId)}
-                          isMetaRefreshInFlight={videoStatsBackfillInFlight.includes(item.video.videoId)}
-                          metaFeedback={videoMetaFeedbackById[item.video.videoId]}
-                          metaText={formatVideoMeta(item.video)}
-                          copiedLinkVideoId={copiedLinkVideoId}
-                          saveDestinationColumnsLength={saveDestinationColumnsLength}
-                          savedBoardColumnsLength={savedBoardColumnsLength}
-                          manualIndex={Math.max(0, manualIndex)}
-                          filteredVideosLength={filteredVideos.length}
-                          savedSortMode={item.column.savedSortMode}
-                          onBackfillVideoStats={backfillVideoStats}
-                          onOpenTranscript={onOpenTranscript}
-                          onCopyVideoLink={onCopyVideoLink}
-                          onOpenMoveSavedVideoModal={onOpenMoveSavedVideoModal}
-                          onSetDeletingSavedVideo={onSetDeletingSavedVideo}
-                          onMoveSavedVideoInManualOrder={onMoveSavedVideoInManualOrder}
-                          onOpenSaveVideoModal={onOpenSaveVideoModal}
-                          onToggleWatched={onToggleWatched}
-                          onOpenVideo={onOpenVideo}
-                          getVideoThumbnailSrc={getVideoThumbnailSrc}
-                          onHandleVideoThumbnailError={onHandleVideoThumbnailError}
-                        />
-                      </div>
-                      <div className="board-summary-summary-cell">
-                        <div className="board-summary-row-toolbar">
-                          <Button
-                            htmlType="button"
-                            className={`column-move-btn transcript-copy-btn board-summary-copy-btn board-summary-row-copy-btn ${
-                              copiedVideoId === item.videoId ? "is-copied" : ""
-                            }`}
-                            aria-label={`Copy summary for ${item.video.title}`}
-                            onClick={() => void copySummaryRow(item)}
-                          >
-                            {copiedVideoId === item.videoId ? (
-                              <span className="btn-icon btn-icon-check" aria-hidden />
-                            ) : (
-                              <span className="btn-icon btn-icon-copy" aria-hidden />
-                            )}
-                          </Button>
-                        </div>
-                        <div className="board-summary-content-block">
-                          <h3 className="board-summary-batch-title">{item.video.title.toUpperCase()}</h3>
-                          {item.status === "loading" ? (
-                            <Text className="board-summary-batch-status">LOADING...</Text>
-                          ) : item.status === "summarizing" ? (
-                            <Text className="board-summary-batch-status">SUMMARIZING...</Text>
-                          ) : item.error ? (
-                            <Text type="danger" className="board-summary-batch-error">
-                              {item.error}
-                            </Text>
+                      <div className="board-summary-row-title-line">
+                        <h3 className="board-summary-batch-title transcript-modal-header-title">
+                          {item.video.title.toUpperCase()}
+                        </h3>
+                        <Button
+                          htmlType="button"
+                          className={`column-move-btn transcript-copy-btn board-summary-copy-btn board-summary-row-copy-btn ${
+                            copiedVideoId === item.videoId ? "is-copied" : ""
+                          }`}
+                          aria-label={`Copy summary for ${item.video.title}`}
+                          onClick={() => void copySummaryRow(item)}
+                        >
+                          {copiedVideoId === item.videoId ? (
+                            <span className="btn-icon btn-icon-check" aria-hidden />
                           ) : (
-                            <div className="board-summary-batch-content">
-                              {item.summary.trim() ? (
-                                <p className="board-summary-batch-paragraph">{item.summary.trim()}</p>
-                              ) : null}
-                              {item.keyPoints.length > 0 ? (
-                                <ul className="board-summary-batch-points">
-                                  {item.keyPoints.map((point, index) => (
-                                    <li key={`${item.videoId}-point-${index}`}>{point}</li>
-                                  ))}
-                                </ul>
-                              ) : null}
-                            </div>
+                            <span className="btn-icon btn-icon-copy" aria-hidden />
                           )}
+                        </Button>
+                      </div>
+                      <div className="board-summary-row-content">
+                        <div className="board-summary-video-cell">
+                          <VideoTile
+                            boardId={activeBoardId}
+                            column={item.column}
+                            isSavedBoardActive={isSavedBoardActive}
+                            video={item.video}
+                            isWatched={isVideoMarkedWatched(item.video.videoId)}
+                            isMetaRefreshInFlight={videoStatsBackfillInFlight.includes(item.video.videoId)}
+                            metaFeedback={videoMetaFeedbackById[item.video.videoId]}
+                            metaText={formatVideoMeta(item.video)}
+                            copiedLinkVideoId={copiedLinkVideoId}
+                            saveDestinationColumnsLength={saveDestinationColumnsLength}
+                            savedBoardColumnsLength={savedBoardColumnsLength}
+                            manualIndex={Math.max(0, manualIndex)}
+                            filteredVideosLength={filteredVideos.length}
+                            savedSortMode={item.column.savedSortMode}
+                            onBackfillVideoStats={backfillVideoStats}
+                            onOpenTranscript={onOpenTranscript}
+                            onCopyVideoLink={onCopyVideoLink}
+                            onOpenMoveSavedVideoModal={onOpenMoveSavedVideoModal}
+                            onSetDeletingSavedVideo={onSetDeletingSavedVideo}
+                            onMoveSavedVideoInManualOrder={onMoveSavedVideoInManualOrder}
+                            onOpenSaveVideoModal={onOpenSaveVideoModal}
+                            onToggleWatched={onToggleWatched}
+                            onOpenVideo={onOpenVideo}
+                            getVideoThumbnailSrc={getVideoThumbnailSrc}
+                            onHandleVideoThumbnailError={onHandleVideoThumbnailError}
+                          />
+                        </div>
+                        <div className="board-summary-summary-cell">
+                          <div className="board-summary-content-block">
+                            {item.status === "loading" ? (
+                              <Text className="board-summary-batch-status">LOADING...</Text>
+                            ) : item.status === "summarizing" ? (
+                              <Text className="board-summary-batch-status">SUMMARIZING...</Text>
+                            ) : item.error ? (
+                              <Text type="danger" className="board-summary-batch-error">
+                                {item.error}
+                              </Text>
+                            ) : (
+                              <div className="board-summary-batch-content">
+                                {item.summary.trim() ? (
+                                  <p className="board-summary-batch-paragraph">{item.summary.trim()}</p>
+                                ) : null}
+                                {item.keyPoints.length > 0 ? (
+                                  <ul className="board-summary-batch-points">
+                                    {item.keyPoints.map((point, index) => (
+                                      <li key={`${item.videoId}-point-${index}`}>{point}</li>
+                                    ))}
+                                  </ul>
+                                ) : null}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </section>
@@ -452,10 +444,11 @@ function BoardSummaryBatchPageComponent({
               ) : null}
             </>
           )}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </Modal>
   );
 }
 
-export const BoardSummaryBatchPage = memo(BoardSummaryBatchPageComponent);
+export const BoardSummaryBatchModal = memo(BoardSummaryBatchModalComponent);

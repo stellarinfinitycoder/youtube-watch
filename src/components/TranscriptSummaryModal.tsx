@@ -1,7 +1,8 @@
 import { Button, Checkbox, Input, Modal, Select, Space, Typography } from "antd";
 import { Suspense, lazy, memo } from "react";
 import type { VideoItem } from "../types/youtube";
-import { RESPONSIVE_SUMMARY_MODAL_WIDTH } from "./modalSizing";
+import { VideoTile } from "./VideoTile";
+import type { ColumnStateLike, InlineMetaFeedback } from "./boardColumnsShared";
 import {
   NEW_SUMMARY_FORMAT_OPTION,
   NEW_SUMMARY_MODEL_OPTION,
@@ -18,6 +19,36 @@ const SummaryMarkdownRenderer = lazy(() => import("./SummaryMarkdownRenderer"));
 
 type TranscriptSummaryModalProps = {
   transcriptVideo: VideoItem;
+  videoTile?: {
+    boardId: string;
+    column: ColumnStateLike;
+    isSavedBoardActive: boolean;
+    isWatched: boolean;
+    isMetaRefreshInFlight: boolean;
+    metaFeedback?: InlineMetaFeedback;
+    metaText: string;
+    copiedLinkVideoId: string | null;
+    saveDestinationColumnsLength: number;
+    savedBoardColumnsLength: number;
+    manualIndex: number;
+    filteredVideosLength: number;
+    savedSortMode: string;
+    onBackfillVideoStats: (videoId: string) => Promise<void>;
+    onOpenTranscript: (video: VideoItem, handle?: string) => Promise<void>;
+    onCopyVideoLink: (video: VideoItem) => Promise<void>;
+    onOpenMoveSavedVideoModal: (columnId: string, videoId: string) => void;
+    onSetDeletingSavedVideo: (value: { columnId: string; videoId: string }) => void;
+    onMoveSavedVideoInManualOrder: (
+      columnId: string,
+      videoId: string,
+      direction: "up" | "down"
+    ) => void;
+    onOpenSaveVideoModal: (video: VideoItem) => void;
+    onToggleWatched: (videoId: string) => void;
+    onOpenVideo: (video: VideoItem) => void;
+    getVideoThumbnailSrc: (video: VideoItem) => string;
+    onHandleVideoThumbnailError: (video: VideoItem) => void;
+  };
   summaryHydrating: boolean;
   transcriptHydrating: boolean;
   transcriptLoading: boolean;
@@ -65,6 +96,7 @@ type TranscriptSummaryModalProps = {
 function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
   const {
     transcriptVideo,
+    videoTile,
     summaryHydrating,
     transcriptHydrating,
     transcriptLoading,
@@ -153,7 +185,7 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                 onChange={(value) => void handleTranscriptViewModeChange(value)}
                 aria-label="Transcript view mode"
                 className="video-filter-select transcript-mode-select"
-                popupClassName="summary-format-dropdown"
+                classNames={{ popup: { root: "summary-format-dropdown" } }}
                 optionLabelProp="title"
                 disabled={
                   !isSummaryModeSelectorUsable &&
@@ -323,9 +355,9 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
       open
       onCancel={onCancel}
       footer={null}
-      width={RESPONSIVE_SUMMARY_MODAL_WIDTH}
+      width="min(1280px, calc(100vw - 32px))"
       destroyOnHidden
-      className="transcript-modal"
+      className="transcript-modal board-summary-modal"
     >
       <div className="transcript-modal-body">
         {isSummaryPromptEditMode ? (
@@ -438,22 +470,59 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
               </Space>
             </div>
           </div>
-        ) : transcriptViewMode === "transcript" ? (
-          <>
-            {!transcriptLoading && transcriptError ? <Text type="danger">{transcriptError}</Text> : null}
-            {!transcriptLoading && !transcriptError ? <pre className="transcript-text">{transcriptText}</pre> : null}
-          </>
         ) : (
-          <>
-            {!summaryLoading && summaryError ? <Text type="danger">{summaryError}</Text> : null}
-            {!summaryLoading && !summaryError && summaryText ? (
-              <div className="summary-content">
-                <Suspense fallback={<pre className="summary-raw-text">{plainSummaryText}</pre>}>
-                  <SummaryMarkdownRenderer content={plainSummaryText} />
-                </Suspense>
+          <div className="transcript-summary-layout">
+            {videoTile ? (
+              <div className="transcript-summary-video-cell">
+                <VideoTile
+                  boardId={videoTile.boardId}
+                  column={videoTile.column}
+                  isSavedBoardActive={videoTile.isSavedBoardActive}
+                  video={transcriptVideo}
+                  isWatched={videoTile.isWatched}
+                  isMetaRefreshInFlight={videoTile.isMetaRefreshInFlight}
+                  metaFeedback={videoTile.metaFeedback}
+                  metaText={videoTile.metaText}
+                  copiedLinkVideoId={videoTile.copiedLinkVideoId}
+                  saveDestinationColumnsLength={videoTile.saveDestinationColumnsLength}
+                  savedBoardColumnsLength={videoTile.savedBoardColumnsLength}
+                  manualIndex={videoTile.manualIndex}
+                  filteredVideosLength={videoTile.filteredVideosLength}
+                  savedSortMode={videoTile.savedSortMode}
+                  onBackfillVideoStats={videoTile.onBackfillVideoStats}
+                  onOpenTranscript={videoTile.onOpenTranscript}
+                  onCopyVideoLink={videoTile.onCopyVideoLink}
+                  onOpenMoveSavedVideoModal={videoTile.onOpenMoveSavedVideoModal}
+                  onSetDeletingSavedVideo={videoTile.onSetDeletingSavedVideo}
+                  onMoveSavedVideoInManualOrder={videoTile.onMoveSavedVideoInManualOrder}
+                  onOpenSaveVideoModal={videoTile.onOpenSaveVideoModal}
+                  onToggleWatched={videoTile.onToggleWatched}
+                  onOpenVideo={videoTile.onOpenVideo}
+                  getVideoThumbnailSrc={videoTile.getVideoThumbnailSrc}
+                  onHandleVideoThumbnailError={videoTile.onHandleVideoThumbnailError}
+                />
               </div>
             ) : null}
-          </>
+            <div className="transcript-summary-content-cell">
+              {transcriptViewMode === "transcript" ? (
+                <>
+                  {!transcriptLoading && transcriptError ? <Text type="danger">{transcriptError}</Text> : null}
+                  {!transcriptLoading && !transcriptError ? <pre className="transcript-text">{transcriptText}</pre> : null}
+                </>
+              ) : (
+                <>
+                  {!summaryLoading && summaryError ? <Text type="danger">{summaryError}</Text> : null}
+                  {!summaryLoading && !summaryError && summaryText ? (
+                    <div className="summary-content">
+                      <Suspense fallback={<pre className="summary-raw-text">{plainSummaryText}</pre>}>
+                        <SummaryMarkdownRenderer content={plainSummaryText} />
+                      </Suspense>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </Modal>

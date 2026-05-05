@@ -3,7 +3,6 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import TranscriptSummaryModal from "./TranscriptSummaryModal";
-import { RESPONSIVE_SUMMARY_MODAL_WIDTH } from "./modalSizing";
 
 vi.mock("antd", async () => {
   const actual = await vi.importActual<typeof import("antd")>("antd");
@@ -183,10 +182,107 @@ describe("TranscriptSummaryModal", () => {
     );
 
     const modalRoot = screen.getByRole("dialog").closest(".transcript-modal");
-    expect(modalRoot).toHaveAttribute(
-      "data-modal-width",
-      RESPONSIVE_SUMMARY_MODAL_WIDTH
+    expect(modalRoot).toHaveAttribute("data-modal-width", "min(1280px, calc(100vw - 32px))");
+  });
+
+  it("renders the current video tile beside individual summary content", () => {
+    render(
+      <TranscriptSummaryModal
+        transcriptVideo={{
+          videoId: "video-1",
+          title: "Example video",
+          publishedAt: "2026-04-10T10:00:00Z",
+          thumbnailUrl: "https://img.test/video-1.jpg",
+          channelTitle: "Example Channel",
+          videoUrl: "https://www.youtube.com/watch?v=video-1",
+          viewCount: 100
+        }}
+        videoTile={{
+          boardId: "board-1",
+          column: {
+            id: "column-1",
+            handleInput: "@example",
+            currentHandle: "@example",
+            loading: false,
+            error: null,
+            videos: [],
+            channelId: "channel-1",
+            uploadsPlaylistId: "playlist-1",
+            channelThumbnailUrl: "",
+            lastGoodChannelThumbnailUrl: "",
+            lastFetchAt: null,
+            savedSortMode: "added_desc"
+          },
+          isSavedBoardActive: false,
+          isWatched: false,
+          isMetaRefreshInFlight: false,
+          metaText: "03.05 | 31:19 | 2k",
+          copiedLinkVideoId: null,
+          saveDestinationColumnsLength: 1,
+          savedBoardColumnsLength: 1,
+          manualIndex: 0,
+          filteredVideosLength: 1,
+          savedSortMode: "added_desc",
+          onBackfillVideoStats: async () => undefined,
+          onOpenTranscript: async () => undefined,
+          onCopyVideoLink: async () => undefined,
+          onOpenMoveSavedVideoModal: () => undefined,
+          onSetDeletingSavedVideo: () => undefined,
+          onMoveSavedVideoInManualOrder: () => undefined,
+          onOpenSaveVideoModal: () => undefined,
+          onToggleWatched: () => undefined,
+          onOpenVideo: () => undefined,
+          getVideoThumbnailSrc: (video) => video.thumbnailUrl,
+          onHandleVideoThumbnailError: () => undefined
+        }}
+        summaryHydrating={false}
+        transcriptHydrating={false}
+        transcriptLoading={false}
+        transcriptText=""
+        transcriptError={null}
+        transcriptViewMode="summary"
+        isTranscriptCopied={false}
+        summaryLoading={false}
+        summaryText="Plain summary"
+        summaryKeyPoints={[]}
+        summaryError={null}
+        summaryModel=""
+        summaryFormats={[summaryFormat]}
+        summaryModelPresets={[]}
+        storedSummaryOptions={[]}
+        activeStoredSummaryOptionId={null}
+        activeSummaryFormat={summaryFormat}
+        isSummaryPromptEditMode={false}
+        editingSummaryFormatId={summaryFormat.id}
+        summaryFormatNameDraft={summaryFormat.name}
+        summaryPromptDraft={summaryFormat.prompt}
+        summaryFormatModelDraft={summaryFormat.model}
+        isNewSummaryModelDraftMode={false}
+        summaryFormatDefaultDraft
+        isSummaryBusy={false}
+        onCancel={() => undefined}
+        setSummaryFormatNameDraft={() => undefined}
+        setSummaryPromptDraft={() => undefined}
+        setSummaryFormatModelDraft={() => undefined}
+        setIsNewSummaryModelDraftMode={() => undefined}
+        setSummaryFormatDefaultDraft={() => undefined}
+        setActiveSummaryFormatId={() => undefined}
+        setIsSummaryPromptEditMode={() => undefined}
+        cancelSummaryFormatEditing={() => undefined}
+        handleTranscriptViewModeChange={async () => undefined}
+        copyTranscriptText={async () => undefined}
+        regenerateSummary={async () => undefined}
+        openSummaryFormatEditor={() => undefined}
+        moveSummaryFormat={() => undefined}
+        removeSummaryModelPreset={() => undefined}
+        saveSummaryPromptAndClose={async () => undefined}
+        deleteSummaryFormatAndClose={() => undefined}
+      />
     );
+
+    expect(screen.getByAltText("Example video")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy summary" })).toBeInTheDocument();
+    expect(screen.getByText("Plain summary")).toBeInTheDocument();
   });
 
   it("keeps the summary format selector enabled and renders markdown summaries", async () => {

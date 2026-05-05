@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { BoardSummaryBatchPage, type BoardSummaryBatchItem } from "./BoardSummaryBatchModal";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { BoardSummaryBatchModal, type BoardSummaryBatchItem } from "./BoardSummaryBatchModal";
 
 const baseItem: BoardSummaryBatchItem = {
   videoId: "video-1",
@@ -33,20 +33,28 @@ const baseItem: BoardSummaryBatchItem = {
   error: null
 };
 
-describe("BoardSummaryBatchPage", () => {
-  it("renders summarize shown summaries action after copy all", () => {
+describe("BoardSummaryBatchModal", () => {
+  beforeEach(() => {
+    vi.spyOn(window, "getComputedStyle").mockImplementation(
+      ((element: Element) =>
+        ({
+          getPropertyValue: () => "",
+          overflow: element instanceof HTMLElement ? element.style.overflow || "" : ""
+        }) as CSSStyleDeclaration) as typeof window.getComputedStyle
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders modal actions without the old page breadcrumb header", () => {
     const onSummarizeShown = vi.fn();
 
     render(
-      <BoardSummaryBatchPage
+      <BoardSummaryBatchModal
         open
-        onGoHome={() => undefined}
-        boardName="Board"
-        channelScopeLabel="All"
-        videoFilterLabel="All"
-        timeFilterLabel="Last 30D"
-        lengthFilterLabel="Any"
-        shownVideosLabel="1"
+        onCancel={() => undefined}
         summaryFormats={[{ id: "summary-default", name: "SUMMARY", prompt: "Prompt", model: "", isDefault: true, createdAt: 1, updatedAt: 1 }]}
         selectedSummaryFormatId="summary-default"
         isPreparing={false}
@@ -84,6 +92,8 @@ describe("BoardSummaryBatchPage", () => {
     const summarizeButton = screen.getByRole("button", { name: "Summarize shown summaries" });
 
     expect(copyAllButton.compareDocumentPosition(summarizeButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Return to board" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^SUMMARIES:/)).not.toBeInTheDocument();
 
     fireEvent.click(summarizeButton);
 
