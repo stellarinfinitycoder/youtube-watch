@@ -1,5 +1,19 @@
+import {
+  BOARDS_STORE_NAME,
+  getCacheValue,
+  setCacheValue
+} from "./indexedDbCache";
+
 export const BOARDS_STORAGE_KEY = "youtube-watch:boards:v1";
 export const ACTIVE_BOARD_ID_STORAGE_KEY = "youtube-watch:active-board-id:v1";
+
+const BOARDS_CACHE_KEY = "boardsPayload";
+const ACTIVE_BOARD_ID_CACHE_KEY = "activeBoardId";
+
+export type StoredBoardsState = {
+  boardsPayload: unknown[];
+  activeBoardId: string | null;
+};
 
 function getStorage(): Storage | null {
   if (typeof window === "undefined") {
@@ -48,12 +62,59 @@ export function readStoredActiveBoardId(): string | null {
   }
 }
 
-export function persistBoardsPayload(
+export async function readStoredBoardsState(): Promise<StoredBoardsState> {
+  const indexedDbBoardsPayload = await getCacheValue<unknown[]>(
+    BOARDS_STORE_NAME,
+    BOARDS_CACHE_KEY
+  );
+  if (Array.isArray(indexedDbBoardsPayload)) {
+    const indexedDbActiveBoardId = await getCacheValue<string>(
+      BOARDS_STORE_NAME,
+      ACTIVE_BOARD_ID_CACHE_KEY
+    );
+    return {
+      boardsPayload: indexedDbBoardsPayload,
+      activeBoardId:
+        typeof indexedDbActiveBoardId === "string" && indexedDbActiveBoardId.length > 0
+          ? indexedDbActiveBoardId
+          : readStoredActiveBoardId()
+    };
+  }
+
+  const legacyBoardsPayload = readStoredBoardsPayload();
+  const legacyActiveBoardId = readStoredActiveBoardId();
+  if (legacyBoardsPayload.length > 0) {
+    await persistBoardsPayload(JSON.stringify(legacyBoardsPayload), legacyActiveBoardId ?? "");
+  }
+  return {
+    boardsPayload: legacyBoardsPayload,
+    activeBoardId: legacyActiveBoardId
+  };
+}
+
+export async function persistBoardsPayload(
   boardsPayload: string,
   activeBoardId: string,
-  pruneCaches: (storage: Storage) => boolean,
+  pruneCaches: (storage: Storage) => boolean = () => false,
   maxAttempts = 6
-): boolean {
+): Promise<boolean> {
+  try {
+    const parsedBoardsPayload = JSON.parse(boardsPayload) as unknown;
+    const didWriteBoards = Array.isArray(parsedBoardsPayload)
+      ? await setCacheValue(BOARDS_STORE_NAME, BOARDS_CACHE_KEY, parsedBoardsPayload)
+      : false;
+    const didWriteActiveBoardId = await setCacheValue(
+      BOARDS_STORE_NAME,
+      ACTIVE_BOARD_ID_CACHE_KEY,
+      activeBoardId
+    );
+    if (didWriteBoards && didWriteActiveBoardId) {
+      return true;
+    }
+  } catch {
+    // Fall back to localStorage below.
+  }
+
   const storage = getStorage();
   if (!storage || typeof storage.setItem !== "function") {
     return false;

@@ -1,8 +1,14 @@
 const CACHE_DB_NAME = "youtube-watch-cache";
-const CACHE_DB_VERSION = 1;
+const CACHE_DB_VERSION = 2;
 
 export const TRANSCRIPTS_STORE_NAME = "transcripts";
 export const SUMMARIES_STORE_NAME = "summaries";
+export const BOARDS_STORE_NAME = "boards";
+
+type CacheStoreName =
+  | typeof TRANSCRIPTS_STORE_NAME
+  | typeof SUMMARIES_STORE_NAME
+  | typeof BOARDS_STORE_NAME;
 
 function getIndexedDbFactory(): IDBFactory | null {
   if (typeof window === "undefined") {
@@ -32,7 +38,12 @@ export async function resetCacheDbForTests(): Promise<void> {
     return;
   }
   try {
-    window.indexedDB.deleteDatabase(CACHE_DB_NAME);
+    await new Promise<void>((resolve) => {
+      const request = window.indexedDB.deleteDatabase(CACHE_DB_NAME);
+      request.onsuccess = () => resolve();
+      request.onerror = () => resolve();
+      request.onblocked = () => resolve();
+    });
   } catch {
     // Ignore reset failures in non-test environments.
   }
@@ -58,6 +69,9 @@ export async function openCacheDb(): Promise<IDBDatabase | null> {
         }
         if (!database.objectStoreNames.contains(SUMMARIES_STORE_NAME)) {
           database.createObjectStore(SUMMARIES_STORE_NAME);
+        }
+        if (!database.objectStoreNames.contains(BOARDS_STORE_NAME)) {
+          database.createObjectStore(BOARDS_STORE_NAME);
         }
       };
       request.onsuccess = () => {
@@ -86,7 +100,7 @@ export async function openCacheDb(): Promise<IDBDatabase | null> {
 }
 
 export async function getCacheValue<T>(
-  storeName: typeof TRANSCRIPTS_STORE_NAME | typeof SUMMARIES_STORE_NAME,
+  storeName: CacheStoreName,
   key: string
 ): Promise<T | null> {
   const database = await openCacheDb();
@@ -104,7 +118,7 @@ export async function getCacheValue<T>(
 }
 
 export async function setCacheValue<T>(
-  storeName: typeof TRANSCRIPTS_STORE_NAME | typeof SUMMARIES_STORE_NAME,
+  storeName: CacheStoreName,
   key: string,
   value: T
 ): Promise<boolean> {
@@ -127,7 +141,7 @@ export async function setCacheValue<T>(
 }
 
 export async function deleteCacheValue(
-  storeName: typeof TRANSCRIPTS_STORE_NAME | typeof SUMMARIES_STORE_NAME,
+  storeName: CacheStoreName,
   key: string
 ): Promise<void> {
   const database = await openCacheDb();
@@ -148,7 +162,7 @@ export async function deleteCacheValue(
 }
 
 export async function getAllCacheKeys(
-  storeName: typeof TRANSCRIPTS_STORE_NAME | typeof SUMMARIES_STORE_NAME
+  storeName: CacheStoreName
 ): Promise<string[]> {
   const database = await openCacheDb();
   if (!database) {

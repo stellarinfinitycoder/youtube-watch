@@ -2,11 +2,14 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import * as youtubeApi from "./api/youtube";
+import { readStoredBoardsState } from "./storage/boardsStorage";
+import { resetCacheDbForTests } from "./storage/indexedDbCache";
 
 const originalFetch = global.fetch;
 
 describe("App", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await resetCacheDbForTests();
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -24,6 +27,7 @@ describe("App", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     global.fetch = originalFetch;
   });
 
@@ -76,7 +80,7 @@ describe("App", () => {
             {
               videoId: "vid-1",
               title: "Stored Video",
-              publishedAt: "2026-03-12T10:00:00Z",
+              publishedAt: "2026-05-04T10:00:00Z",
               thumbnailUrl: "https://img.test/video-1.jpg",
               channelTitle: "Stored Channel",
               videoUrl: "https://www.youtube.com/watch?v=vid-1",
@@ -367,7 +371,7 @@ describe("App", () => {
             {
               videoId: "vid-1",
               title: "Stored Video",
-              publishedAt: "2026-03-12T10:00:00Z",
+              publishedAt: "2026-05-04T10:00:00Z",
               thumbnailUrl: "https://img.test/video-1.jpg",
               channelTitle: "Stored Channel",
               videoUrl: "https://www.youtube.com/watch?v=vid-1",
@@ -392,6 +396,70 @@ describe("App", () => {
       window.localStorage.getItem("youtube-watch:boards:v1") ?? "[]"
     ) as Array<{ watchedVideos?: Record<string, number> }>;
     expect(typeof persistedBoards[0]?.watchedVideos?.["vid-1"]).toBe("number");
+  });
+
+  it("keeps watched videos persisted through IndexedDB when localStorage is full", async () => {
+    window.localStorage.setItem(
+      "youtube-watch:columns:v2",
+      JSON.stringify([
+        {
+          handleInput: "@one",
+          currentHandle: "@one",
+          channelThumbnailUrl: "https://img.test/channel-1.jpg",
+          lastFetchAt: "11/03/2026, 22:17:03",
+          videos: [
+            {
+              videoId: "vid-1",
+              title: "Stored Video",
+              publishedAt: "2026-05-04T10:00:00Z",
+              thumbnailUrl: "https://img.test/video-1.jpg",
+              channelTitle: "Stored Channel",
+              videoUrl: "https://www.youtube.com/watch?v=vid-1",
+              viewCount: 4321
+            }
+          ]
+        }
+      ])
+    );
+    const originalSetItem = window.localStorage.setItem.bind(window.localStorage);
+    Object.defineProperty(window.localStorage, "setItem", {
+      configurable: true,
+      value: () => {
+        throw new DOMException("Quota exceeded", "QuotaExceededError");
+      }
+    });
+
+    const { unmount } = render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Mark Stored Video as watched" })
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("Stored Video")).not.toBeInTheDocument();
+    });
+    await waitFor(async () => {
+      const storedState = await readStoredBoardsState();
+      const firstBoard = storedState.boardsPayload[0] as
+        | { watchedVideos?: Record<string, number> }
+        | undefined;
+      expect(typeof firstBoard?.watchedVideos?.["vid-1"]).toBe("number");
+    });
+
+    unmount();
+    Object.defineProperty(window.localStorage, "setItem", {
+      configurable: true,
+      value: originalSetItem
+    });
+    window.localStorage.clear();
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.queryByText("Stored Video")).not.toBeInTheDocument();
+    });
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Video filter" }));
+    fireEvent.click(await screen.findByText("WATCHED"));
+    expect(await screen.findByText("Stored Video")).toBeInTheDocument();
   });
 
   it("shows watched videos in Watched filter and allows restoring them to New", async () => {

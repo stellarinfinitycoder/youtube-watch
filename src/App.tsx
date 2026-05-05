@@ -34,7 +34,8 @@ import { VideoPlayerModal } from "./components/VideoPlayerModal";
 import {
   persistBoardsPayload,
   readStoredActiveBoardId,
-  readStoredBoardsPayload
+  readStoredBoardsPayload,
+  readStoredBoardsState
 } from "./storage/boardsStorage";
 import {
   clearAllCachedSummaries,
@@ -1262,12 +1263,16 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
   });
 }
 
-function readStoredBoards(): BoardState[] {
-  const boards = readStoredBoardsPayload()
+function parseStoredBoardsPayload(payload: unknown[]): BoardState[] {
+  const boards = payload
     .map((item) => sanitizePersistedBoard(item))
     .filter((item): item is PersistedBoardState => item !== null)
     .map((board) => fromPersistedBoard(board));
   return boards.length > 0 ? ensureSavedBoard(boards) : [];
+}
+
+function readStoredBoards(): BoardState[] {
+  return parseStoredBoardsPayload(readStoredBoardsPayload());
 }
 
 function readStoredBoardRuntime(): PersistedBoardRuntimeState {
@@ -1339,6 +1344,29 @@ function getInitialBoardsState(): { boards: BoardState[]; activeBoardId: string 
   });
 
   return { boards: ensureSavedBoard([board]), activeBoardId: board.id };
+}
+
+async function readPersistedInitialBoardsState(): Promise<{
+  boards: BoardState[];
+  activeBoardId: string;
+} | null> {
+  const storedState = await readStoredBoardsState();
+  const storedBoards = parseStoredBoardsPayload(storedState.boardsPayload);
+  if (storedBoards.length === 0) {
+    return null;
+  }
+  const boardRuntime = readStoredBoardRuntime();
+  const boardsWithRuntime = storedBoards.map((board) => ({
+    ...board,
+    viewCountRefreshedAtByVideoId:
+      boardRuntime[board.id]?.viewCountRefreshedAtByVideoId ?? board.viewCountRefreshedAtByVideoId
+  }));
+  const activeBoardId =
+    storedState.activeBoardId &&
+    boardsWithRuntime.some((board) => board.id === storedState.activeBoardId)
+      ? storedState.activeBoardId
+      : boardsWithRuntime[0].id;
+  return { boards: boardsWithRuntime, activeBoardId };
 }
 
 function columnNeedsAvatarRecovery(
@@ -1627,6 +1655,8 @@ function App() {
   const preloadingImageUrlsRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const initialBoardsState = fixtureMode ? createFixtureBoardsState() : getInitialBoardsState();
   const [boards, setBoards] = useState<BoardState[]>(initialBoardsState.boards);
+  const [isBoardStorageHydrated, setIsBoardStorageHydrated] = useState(fixtureMode);
+  const [boardPersistenceError, setBoardPersistenceError] = useState<string | null>(null);
   const [appPath, setAppPath] = useState<string>(() =>
     typeof window === "undefined" ? APP_ROOT_PATH : normalizeAppPath(window.location.pathname)
   );
@@ -2264,6 +2294,31 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (fixtureMode) {
+      return;
+    }
+    let cancelled = false;
+    void readPersistedInitialBoardsState()
+      .then((storedState) => {
+        if (cancelled) {
+          return;
+        }
+        if (storedState) {
+          setBoards(storedState.boards);
+          setActiveBoardId(storedState.activeBoardId);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsBoardStorageHydrated(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fixtureMode]);
+
+  useEffect(() => {
     if (boards.length === 0) {
       return;
     }
@@ -2354,33 +2409,39 @@ function App() {
   }, [fixtureMode]);
 
   useEffect(() => {
-    if (fixtureMode) {
+    if (fixtureMode || !isBoardStorageHydrated) {
       return;
     }
     const timeoutId = window.setTimeout(() => {
-      try {
+      void (async () => {
         const persistedBoards = toPersistedBoards(boards);
         const boardsPayload = JSON.stringify(persistedBoards);
         const persistedActiveBoardId =
           activeBoardId === SUMMARIES_BOARD_ID ? boards[0]?.id ?? "" : activeBoardId;
-        const didPersist = persistBoardsPayload(
+        const didPersist = await persistBoardsPayload(
           boardsPayload,
-          persistedActiveBoardId,
-          () => false
+          persistedActiveBoardId
         );
         if (!didPersist) {
+          setBoardPersistenceError(
+            "Board changes are not being saved. Browser storage is full or unavailable."
+          );
           // eslint-disable-next-line no-console
-          console.warn("Failed to persist boards to localStorage.");
+          console.warn("Failed to persist boards to browser storage.");
+          return;
         }
-      } catch {
-        // Ignore write failures (private mode / restricted environments).
-      }
+        setBoardPersistenceError(null);
+      })().catch(() => {
+        setBoardPersistenceError(
+          "Board changes are not being saved. Browser storage is full or unavailable."
+        );
+      });
     }, BOARDS_PERSIST_DEBOUNCE_MS);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [activeBoardId, boards, fixtureMode]);
+  }, [activeBoardId, boards, fixtureMode, isBoardStorageHydrated]);
 
   useEffect(() => {
     if (fixtureMode) {
@@ -5851,6 +5912,10 @@ function App() {
             scrollToEdge={scrollToEdge}
             scrollColumns={scrollColumns}
           />
+
+          {boardPersistenceError ? (
+            <Alert type="warning" showIcon={false} message={boardPersistenceError} />
+          ) : null}
 
           <Modal
             title={isSavedBoardActive ? "Add Lists" : "Add Channels"}

@@ -136,6 +136,7 @@ if (typeof window.indexedDB?.open !== "function") {
   const databases = new Map<string, { version: number; stores: Map<string, Map<string, unknown>> }>();
 
   Object.defineProperty(window, "indexedDB", {
+    configurable: true,
     writable: true,
     value: {
       open: (name: string, version?: number) => {
