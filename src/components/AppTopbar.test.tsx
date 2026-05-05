@@ -23,6 +23,7 @@ describe("AppTopbar", () => {
         totalApiQueryUnits={34}
         topBarLogoSrc="/svg/logo-dev.svg"
         isLogoSpinning={false}
+        isFetchingVideos={false}
         isSavedBoardActive={false}
         topbarLastFetchLabel="Today at 10:00"
         fetchAllColumns={fetchAllColumns}
@@ -106,6 +107,7 @@ describe("AppTopbar", () => {
         totalApiQueryUnits={0}
         topBarLogoSrc="/svg/logo-dev.svg"
         isLogoSpinning={false}
+        isFetchingVideos={false}
         isSavedBoardActive={false}
         topbarLastFetchLabel="-"
         fetchAllColumns={() => undefined}
@@ -177,6 +179,7 @@ describe("AppTopbar", () => {
         totalApiQueryUnits={0}
         topBarLogoSrc="/svg/logo-dev.svg"
         isLogoSpinning={false}
+        isFetchingVideos={false}
         isSavedBoardActive={false}
         topbarLastFetchLabel="-"
         fetchAllColumns={() => undefined}
@@ -247,6 +250,7 @@ describe("AppTopbar", () => {
         totalApiQueryUnits={0}
         topBarLogoSrc="/svg/logo-dev.svg"
         isLogoSpinning={false}
+        isFetchingVideos={false}
         isSavedBoardActive={false}
         topbarLastFetchLabel="-"
         fetchAllColumns={() => undefined}
@@ -310,5 +314,137 @@ describe("AppTopbar", () => {
     expect(screen.queryByRole("button", { name: "Scroll columns right" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Scroll columns to last" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open maintenance menu" })).toBeInTheDocument();
+  });
+
+  it("marks the topbar video count as fetching while videos are loading", () => {
+    const { container } = render(
+      <AppTopbar
+        buildInfoLabel="dev-build"
+        lastApiQueryUnits={0}
+        totalApiQueryUnits={0}
+        topBarLogoSrc="/svg/logo-dev.svg"
+        isLogoSpinning={false}
+        isFetchingVideos={true}
+        isSavedBoardActive={false}
+        topbarLastFetchLabel="-"
+        fetchAllColumns={() => undefined}
+        appTheme="dark"
+        toggleAppTheme={() => undefined}
+        activeBoardId="board-1"
+        displayedBoards={[{ id: "board-1", name: "Board", kind: "channels" }]}
+        newBoardOptionValue="__new__"
+        boardDropdownListHeight={320}
+        handleBoardSelectChange={() => undefined}
+        onBoardSelectorPrewarm={() => undefined}
+        blurActiveTopbarControl={() => undefined}
+        moveBoard={() => undefined}
+        openRenameBoardModal={() => undefined}
+        columnScopeFilter={[]}
+        isColumnScopeDisabled={false}
+        columnScopeDropdownListHeight={240}
+        formatColumnScopeSummary={() => "ALL"}
+        columnScopeOptions={[]}
+        onColumnScopeChange={() => undefined}
+        videoFilter="all"
+        onVideoFilterChange={() => undefined}
+        videoWindowDays={30}
+        onVideoWindowChange={() => undefined}
+        savedVideoWindowSelectOptions={[]}
+        channelVideoWindowSelectOptions={[]}
+        videoDurationFilter={[]}
+        onVideoDurationChange={() => undefined}
+        formatDurationFilterSummary={() => "ANY"}
+        videoDurationFilterOptions={[]}
+        startBoardSummaryBatch={() => undefined}
+        isBoardSummaryBatchRunning={false}
+        playAllVideos={() => undefined}
+        copyAllShownBoardLinks={async () => undefined}
+        copiedLinkVideoId={null}
+        openBulkWatchBoardAction={() => undefined}
+        openMaintenanceMenuExport={() => undefined}
+        openMaintenanceMenuRestore={() => undefined}
+        openMaintenanceMenuLogs={() => undefined}
+        openMaintenanceMenuBoardDurationBackfill={() => undefined}
+        openMaintenanceMenuRefreshBoardAvatars={() => undefined}
+        openMaintenanceMenuDeleteSummaries={() => undefined}
+        canOpenMaintenanceBoardDurationBackfill={false}
+        canOpenMaintenanceRefreshBoardAvatars={false}
+        shownVideosTotal={16}
+        areBoardActionsDisabled={false}
+        scrollToEdge={() => undefined}
+        scrollColumns={() => undefined}
+      />
+    );
+
+    const count = container.querySelector(".topbar-video-count");
+    expect(count).toHaveClass("is-fetching");
+    expect(count).toBeEmptyDOMElement();
+  });
+
+  it("fetches all channels from the topbar video count", () => {
+    const fetchAllColumns = vi.fn();
+
+    render(
+      <AppTopbar
+        buildInfoLabel="dev-build"
+        lastApiQueryUnits={0}
+        totalApiQueryUnits={0}
+        topBarLogoSrc="/svg/logo-dev.svg"
+        isLogoSpinning={false}
+        isFetchingVideos={false}
+        isSavedBoardActive={false}
+        topbarLastFetchLabel="-"
+        fetchAllColumns={fetchAllColumns}
+        appTheme="dark"
+        toggleAppTheme={() => undefined}
+        activeBoardId="board-1"
+        displayedBoards={[{ id: "board-1", name: "Board", kind: "channels" }]}
+        newBoardOptionValue="__new__"
+        boardDropdownListHeight={320}
+        handleBoardSelectChange={() => undefined}
+        onBoardSelectorPrewarm={() => undefined}
+        blurActiveTopbarControl={() => undefined}
+        moveBoard={() => undefined}
+        openRenameBoardModal={() => undefined}
+        columnScopeFilter={[]}
+        isColumnScopeDisabled={false}
+        columnScopeDropdownListHeight={240}
+        formatColumnScopeSummary={() => "ALL"}
+        columnScopeOptions={[]}
+        onColumnScopeChange={() => undefined}
+        videoFilter="all"
+        onVideoFilterChange={() => undefined}
+        videoWindowDays={30}
+        onVideoWindowChange={() => undefined}
+        savedVideoWindowSelectOptions={[]}
+        channelVideoWindowSelectOptions={[]}
+        videoDurationFilter={[]}
+        onVideoDurationChange={() => undefined}
+        formatDurationFilterSummary={() => "ANY"}
+        videoDurationFilterOptions={[]}
+        startBoardSummaryBatch={() => undefined}
+        isBoardSummaryBatchRunning={false}
+        playAllVideos={() => undefined}
+        copyAllShownBoardLinks={async () => undefined}
+        copiedLinkVideoId={null}
+        openBulkWatchBoardAction={() => undefined}
+        openMaintenanceMenuExport={() => undefined}
+        openMaintenanceMenuRestore={() => undefined}
+        openMaintenanceMenuLogs={() => undefined}
+        openMaintenanceMenuBoardDurationBackfill={() => undefined}
+        openMaintenanceMenuRefreshBoardAvatars={() => undefined}
+        openMaintenanceMenuDeleteSummaries={() => undefined}
+        canOpenMaintenanceBoardDurationBackfill={false}
+        canOpenMaintenanceRefreshBoardAvatars={false}
+        shownVideosTotal={16}
+        areBoardActionsDisabled={false}
+        scrollToEdge={() => undefined}
+        scrollColumns={() => undefined}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Fetch all shown channels" }));
+
+    expect(fetchAllColumns).toHaveBeenCalledTimes(1);
   });
 });

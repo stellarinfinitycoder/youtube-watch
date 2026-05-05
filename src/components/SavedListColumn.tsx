@@ -139,7 +139,9 @@ function SavedListColumnComponent(props: SavedListColumnProps) {
 
   return (
     <article
-      className="channel-column is-saved-column"
+      className={`channel-column is-saved-column${
+        !column.loading && !column.error && filteredVideos.length === 1 ? " has-single-video" : ""
+      }`}
       data-board-id={activeBoardId}
       data-column-id={column.id}
       data-handle={(column.currentHandle || column.handleInput || "").trim()}
@@ -249,8 +251,12 @@ function SavedListColumnComponent(props: SavedListColumnProps) {
             onClick={() => openEditSavedListModal(column)}
             onPressEnter={(event) => event.preventDefault()}
           />
-          <Text className={`column-video-count ${filteredVideos.length === 0 ? "is-zero" : ""}`}>
-            {filteredVideos.length}
+          <Text
+            className={`column-video-count ${filteredVideos.length === 0 ? "is-zero" : ""}${
+              column.loading ? " is-fetching" : ""
+            }`}
+          >
+            {column.loading ? null : filteredVideos.length}
           </Text>
         </div>
       </Form>

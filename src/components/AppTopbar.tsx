@@ -17,6 +17,7 @@ type AppTopbarProps = {
   totalApiQueryUnits: number;
   topBarLogoSrc: string;
   isLogoSpinning: boolean;
+  isFetchingVideos: boolean;
   isSavedBoardActive: boolean;
   topbarLastFetchLabel: string;
   fetchAllColumns: () => void;
@@ -73,6 +74,7 @@ function AppTopbarComponent({
   totalApiQueryUnits,
   topBarLogoSrc,
   isLogoSpinning,
+  isFetchingVideos,
   isSavedBoardActive,
   topbarLastFetchLabel,
   fetchAllColumns,
@@ -320,9 +322,17 @@ function AppTopbarComponent({
         showSearch={false}
         options={videoDurationFilterOptions}
       />
-      <Text className={`topbar-video-count ${shownVideosTotal === 0 ? "is-zero" : ""}`}>
-        {shownVideosTotal}
-      </Text>
+      <button
+        type="button"
+        className={`topbar-video-count ${shownVideosTotal === 0 ? "is-zero" : ""}${
+          isFetchingVideos ? " is-fetching" : ""
+        }`}
+        onClick={fetchAllColumns}
+        disabled={isFetchingVideos || areBoardActionsDisabled}
+        aria-label="Fetch all shown channels"
+      >
+        {isFetchingVideos ? null : shownVideosTotal}
+      </button>
       {!areBoardActionsDisabled ? (
         <>
           <Button

@@ -2152,6 +2152,7 @@ function App() {
   const effectiveShownVideosTotal = isSummariesBoardActive
     ? filteredSummariesBoardVideos.length
     : shownVideosTotal;
+  const isActiveBoardFetching = activeBoard?.columns.some((column) => column.loading) === true;
   const boardSummaryChannelScopeLabel = formatColumnScopeSummary(
     columnScopeFilter,
     isSavedBoardActive,
@@ -5861,6 +5862,7 @@ function App() {
             totalApiQueryUnits={quotaEstimate.todayUnits}
             topBarLogoSrc={TOP_BAR_LOGO_SRC}
             isLogoSpinning={isLogoSpinning}
+            isFetchingVideos={isActiveBoardFetching}
             isSavedBoardActive={isSavedBoardActive}
             topbarLastFetchLabel={topbarLastFetchLabel}
             fetchAllColumns={fetchAllColumns}

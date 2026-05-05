@@ -97,7 +97,7 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
   const channelThumbToShow = buildChannelAvatarProxyUrl(rawChannelThumbToShow);
   const hasHandleInput = column.handleInput.trim().length > 0;
   const hasChannelPlaylistVideos = filteredVideos.length > 0;
-  const avatarToggleClassName = `channel-avatar-toggle-btn${column.loading ? " is-fetching" : ""}`;
+  const avatarToggleClassName = "channel-avatar-toggle-btn";
 
   const videoItems = useMemo(
     () =>
@@ -154,7 +154,9 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
 
   return (
     <article
-      className="channel-column is-channel-column"
+      className={`channel-column is-channel-column${
+        !column.loading && !column.error && filteredVideos.length === 1 ? " has-single-video" : ""
+      }`}
       data-board-id={activeBoardId}
       data-column-id={column.id}
       data-handle={(column.currentHandle || column.handleInput || "").trim()}
@@ -303,9 +305,17 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
             onClick={() => openEditChannelModal(column)}
             onPressEnter={(event) => event.preventDefault()}
           />
-          <Text className={`column-video-count ${filteredVideos.length === 0 ? "is-zero" : ""}`}>
-            {filteredVideos.length}
-          </Text>
+          <button
+            type="button"
+            className={`column-video-count ${filteredVideos.length === 0 ? "is-zero" : ""}${
+              column.loading ? " is-fetching" : ""
+            }`}
+            onClick={() => runFetch(activeBoardId, column.id, column.handleInput)}
+            disabled={column.loading || !hasHandleInput}
+            aria-label={`Fetch column ${columnIndex + 1} from video count`}
+          >
+            {column.loading ? null : filteredVideos.length}
+          </button>
         </div>
       </Form>
 
