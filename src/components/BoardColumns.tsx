@@ -194,7 +194,11 @@ function BoardColumnsComponent({
               />
             );
           })}
-          <aside className="add-column-rail">
+          <aside
+            className={`add-column-rail${
+              !isSavedBoardActive && hiddenColumns.length > 0 ? " has-hidden-channels" : ""
+            }`}
+          >
             <div className="add-column-stack">
               <Button htmlType="button" onClick={addColumn} aria-label="Add column" className="add-column-btn add-column-plus-btn">
                 +

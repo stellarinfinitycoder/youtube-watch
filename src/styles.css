@@ -712,12 +712,23 @@ body {
   gap: 8px;
 }
 
+.add-column-rail.has-hidden-channels {
+  width: calc(100vw - 28px);
+  min-width: calc(100vw - 28px);
+}
+
 .add-column-stack {
   width: 46px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
+}
+
+.add-column-rail.has-hidden-channels .add-column-stack {
+  width: 100%;
+  flex-direction: row;
+  align-items: flex-start;
 }
 
 .add-column-btn.ant-btn {
@@ -750,8 +761,11 @@ body {
 
 .hidden-channel-thumbs {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 8px;
 }
 
@@ -2793,8 +2807,8 @@ button.column-video-count:disabled {
     padding-bottom: 10px;
   }
 
-  .add-column-rail {
-    flex: 0 0 auto;
+  .add-column-rail.has-hidden-channels {
+    flex: 0 0 calc(100vw - 28px);
   }
 }
 
