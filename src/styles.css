@@ -498,20 +498,37 @@ body {
   margin-left: auto;
 }
 
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to first"] {
+.topbar-action-strip {
+  order: 10;
+  display: flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: max-content;
+}
+
+.topbar-action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: max-content;
+}
+
+.topbar-action-group-right {
+  margin-left: auto;
+}
+
+.topbar-action-strip .maintenance-menu-btn.ant-btn {
+  margin-left: 0;
+}
+
+.columns-scroll-controls {
   order: 15;
-}
-
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns left"] {
-  order: 16;
-}
-
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns right"] {
-  order: 17;
-}
-
-.columns-nav .scroll-btn.ant-btn[aria-label="Scroll columns to last"] {
-  order: 18;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  white-space: nowrap;
 }
 
 .columns-nav [aria-label="Board selector"] {
@@ -2933,6 +2950,11 @@ button.column-video-count:disabled {
     order: 4;
   }
 
+  .topbar-action-strip,
+  .topbar-action-group {
+    display: contents;
+  }
+
   .columns-nav .top-summary-btn.ant-btn {
     order: 5;
     display: inline-flex !important;
@@ -2987,6 +3009,7 @@ button.column-video-count:disabled {
     order: 16;
   }
 
+  .columns-scroll-controls,
   .columns-nav [aria-label="Scroll columns to first"],
   .columns-nav [aria-label="Scroll columns left"],
   .columns-nav [aria-label="Scroll columns right"],

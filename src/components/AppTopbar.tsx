@@ -333,107 +333,113 @@ function AppTopbarComponent({
       >
         {isFetchingVideos ? null : shownVideosTotal}
       </button>
-      {!areBoardActionsDisabled ? (
-        <>
-          <Button
-            htmlType="button"
-            onClick={startBoardSummaryBatch}
-            aria-label="Summarize all shown videos"
-            className="nav-btn top-summary-btn"
-            disabled={shownVideosTotal === 0 || isBoardSummaryBatchRunning}
-            data-testid="topbar-summarize-all"
+      <div className="topbar-action-strip">
+        <div className="topbar-action-group topbar-action-group-left">
+          {!areBoardActionsDisabled ? (
+            <>
+              <Button
+                htmlType="button"
+                onClick={startBoardSummaryBatch}
+                aria-label="Summarize all shown videos"
+                className="nav-btn top-summary-btn"
+                disabled={shownVideosTotal === 0 || isBoardSummaryBatchRunning}
+                data-testid="topbar-summarize-all"
+              >
+                <span className="btn-icon btn-icon-transcript" aria-hidden />
+              </Button>
+              <Button
+                htmlType="button"
+                onClick={playAllVideos}
+                aria-label="Play all videos"
+                className="nav-btn"
+                data-testid="topbar-play-all"
+              >
+                <span className="btn-icon btn-icon-play" aria-hidden />
+              </Button>
+              <Button
+                htmlType="button"
+                onClick={() => void copyAllShownBoardLinks()}
+                aria-label="Copy all shown links on board"
+                className={`nav-btn link-copy-btn ${
+                  copiedLinkVideoId === `board-links:${activeBoardId}` ? "is-copied" : ""
+                }`}
+                disabled={shownVideosTotal === 0}
+                data-testid="topbar-copy-all-links"
+              >
+                <span className="btn-icon btn-icon-link" aria-hidden />
+              </Button>
+            </>
+          ) : null}
+          {!isSavedBoardActive && !areBoardActionsDisabled ? (
+            <Button
+              htmlType="button"
+              onClick={openBulkWatchBoardAction}
+              aria-label={`Mark all shown videos ${videoFilter === "watched" ? "new" : "watched"}`}
+              className="nav-btn top-wa-btn"
+              disabled={videoFilter === "all" || shownVideosTotal === 0}
+              data-testid="topbar-mark-all"
+            >
+              {videoFilter === "watched" ? (
+                <span className="btn-icon btn-icon-undo" aria-hidden />
+              ) : (
+                <span className="btn-icon btn-icon-check" aria-hidden />
+              )}
+            </Button>
+          ) : null}
+        </div>
+        <div className="topbar-action-group topbar-action-group-right">
+          <Dropdown
+            menu={{ items: maintenanceMenuItems, onClick: handleMaintenanceMenuClick }}
+            trigger={["click"]}
+            placement="bottomRight"
+            overlayClassName="maintenance-menu-dropdown"
           >
-            <span className="btn-icon btn-icon-transcript" aria-hidden />
-          </Button>
-          <Button
-            htmlType="button"
-            onClick={playAllVideos}
-            aria-label="Play all videos"
-            className="nav-btn"
-            data-testid="topbar-play-all"
-          >
-            <span className="btn-icon btn-icon-play" aria-hidden />
-          </Button>
-          <Button
-            htmlType="button"
-            onClick={() => void copyAllShownBoardLinks()}
-            aria-label="Copy all shown links on board"
-            className={`nav-btn link-copy-btn ${
-              copiedLinkVideoId === `board-links:${activeBoardId}` ? "is-copied" : ""
-            }`}
-            disabled={shownVideosTotal === 0}
-            data-testid="topbar-copy-all-links"
-          >
-            <span className="btn-icon btn-icon-link" aria-hidden />
-          </Button>
-        </>
-      ) : null}
-      {!isSavedBoardActive && !areBoardActionsDisabled ? (
-        <Button
-          htmlType="button"
-          onClick={openBulkWatchBoardAction}
-          aria-label={`Mark all shown videos ${videoFilter === "watched" ? "new" : "watched"}`}
-          className="nav-btn top-wa-btn"
-          disabled={videoFilter === "all" || shownVideosTotal === 0}
-          data-testid="topbar-mark-all"
-        >
-          {videoFilter === "watched" ? (
-            <span className="btn-icon btn-icon-undo" aria-hidden />
-          ) : (
-            <span className="btn-icon btn-icon-check" aria-hidden />
-          )}
-        </Button>
-      ) : null}
-      <Dropdown
-        menu={{ items: maintenanceMenuItems, onClick: handleMaintenanceMenuClick }}
-        trigger={["click"]}
-        placement="bottomRight"
-        overlayClassName="maintenance-menu-dropdown"
-      >
-        <Button
-          htmlType="button"
-          aria-label="Open maintenance menu"
-          className="nav-btn maintenance-menu-btn"
-        >
-          <span className="btn-icon btn-icon-settings" aria-hidden />
-        </Button>
-      </Dropdown>
-      {!areBoardActionsDisabled ? (
-        <>
-          <Button
-            htmlType="button"
-            onClick={() => scrollToEdge("start")}
-            aria-label="Scroll columns to first"
-            className="nav-btn scroll-btn"
-          >
-            {"«"}
-          </Button>
-          <Button
-            htmlType="button"
-            onClick={() => scrollColumns("left")}
-            aria-label="Scroll columns left"
-            className="nav-btn scroll-btn"
-          >
-            {"‹"}
-          </Button>
-          <Button
-            htmlType="button"
-            onClick={() => scrollColumns("right")}
-            aria-label="Scroll columns right"
-            className="nav-btn scroll-btn"
-          >
-            {"›"}
-          </Button>
-          <Button
-            htmlType="button"
-            onClick={() => scrollToEdge("end")}
-            aria-label="Scroll columns to last"
-            className="nav-btn scroll-btn"
-          >
-            {"»"}
-          </Button>
-        </>
-      ) : null}
+            <Button
+              htmlType="button"
+              aria-label="Open maintenance menu"
+              className="nav-btn maintenance-menu-btn"
+            >
+              <span className="btn-icon btn-icon-settings" aria-hidden />
+            </Button>
+          </Dropdown>
+          {!areBoardActionsDisabled ? (
+            <div className="columns-scroll-controls">
+              <Button
+                htmlType="button"
+                onClick={() => scrollToEdge("start")}
+                aria-label="Scroll columns to first"
+                className="nav-btn scroll-btn"
+              >
+                {"«"}
+              </Button>
+              <Button
+                htmlType="button"
+                onClick={() => scrollColumns("left")}
+                aria-label="Scroll columns left"
+                className="nav-btn scroll-btn"
+              >
+                {"‹"}
+              </Button>
+              <Button
+                htmlType="button"
+                onClick={() => scrollColumns("right")}
+                aria-label="Scroll columns right"
+                className="nav-btn scroll-btn"
+              >
+                {"›"}
+              </Button>
+              <Button
+                htmlType="button"
+                onClick={() => scrollToEdge("end")}
+                aria-label="Scroll columns to last"
+                className="nav-btn scroll-btn"
+              >
+                {"»"}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </div>
       </div>
       <Modal
         title="STATS"
