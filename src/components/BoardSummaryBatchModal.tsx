@@ -1,11 +1,12 @@
 import { Button, Modal, Select, Typography } from "antd";
-import { memo, useEffect, useState } from "react";
+import { Suspense, lazy, memo, useEffect, useState } from "react";
 import type { VideoItem } from "../types/youtube";
 import { VideoTile } from "./VideoTile";
 import type { ColumnStateLike, InlineMetaFeedback } from "./boardColumnsShared";
 import type { SummaryFormat } from "../hooks/useTranscriptSummary";
 
 const { Text } = Typography;
+const SummaryMarkdownRenderer = lazy(() => import("./SummaryMarkdownRenderer"));
 const BOARD_SUMMARY_BATCH_PAGE_SIZE = 5;
 
 function escapeHtml(value: string): string {
@@ -402,7 +403,15 @@ function BoardSummaryBatchModalComponent({
                             ) : (
                               <div className="board-summary-batch-content">
                                 {item.summary.trim() ? (
-                                  <p className="board-summary-batch-paragraph">{item.summary.trim()}</p>
+                                  <Suspense
+                                    fallback={
+                                      <pre className="summary-raw-text board-summary-raw-text">
+                                        {item.summary.trim()}
+                                      </pre>
+                                    }
+                                  >
+                                    <SummaryMarkdownRenderer content={item.summary.trim()} />
+                                  </Suspense>
                                 ) : null}
                                 {item.keyPoints.length > 0 ? (
                                   <ul className="board-summary-batch-points">

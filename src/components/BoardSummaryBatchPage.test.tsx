@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BoardSummaryBatchModal, type BoardSummaryBatchItem } from "./BoardSummaryBatchModal";
 
@@ -99,5 +99,54 @@ describe("BoardSummaryBatchModal", () => {
 
     expect(onSummarizeShown).toHaveBeenCalledTimes(1);
     expect(onSummarizeShown).toHaveBeenCalledWith([baseItem]);
+  });
+
+  it("renders generated summary markdown instead of raw markdown text", async () => {
+    const markdownItem: BoardSummaryBatchItem = {
+      ...baseItem,
+      summary: "**Markdown lead**\n\nPlain detail.",
+      keyPoints: []
+    };
+    render(
+      <BoardSummaryBatchModal
+        open
+        onCancel={() => undefined}
+        summaryFormats={[{ id: "summary-default", name: "SUMMARY", prompt: "Prompt", model: "", isDefault: true, createdAt: 1, updatedAt: 1 }]}
+        selectedSummaryFormatId="summary-default"
+        isPreparing={false}
+        isCopied={false}
+        items={[markdownItem]}
+        onCopyAll={async () => undefined}
+        onSummarizeShown={async () => undefined}
+        isSummarizingShown={false}
+        onSummaryFormatChange={() => undefined}
+        activeBoardId="board-1"
+        isSavedBoardActive={false}
+        copiedLinkVideoId={null}
+        saveDestinationColumnsLength={1}
+        savedBoardColumnsLength={1}
+        filteredVideosByColumnId={new Map([["column-1", [baseItem.video]]])}
+        isVideoMarkedWatched={() => false}
+        videoStatsBackfillInFlight={[]}
+        videoMetaFeedbackById={{}}
+        formatVideoMeta={() => "Meta"}
+        backfillVideoStats={async () => undefined}
+        getVideoThumbnailSrc={(video) => video.thumbnailUrl}
+        onHandleVideoThumbnailError={() => undefined}
+        onOpenTranscript={async () => undefined}
+        onCopyVideoLink={async () => undefined}
+        onOpenMoveSavedVideoModal={() => undefined}
+        onSetDeletingSavedVideo={() => undefined}
+        onMoveSavedVideoInManualOrder={() => undefined}
+        onOpenSaveVideoModal={() => undefined}
+        onToggleWatched={() => undefined}
+        onOpenVideo={() => undefined}
+      />
+    );
+
+    await waitFor(() => {
+      expect(document.body.querySelector(".summary-markdown strong")).toHaveTextContent("Markdown lead");
+    });
+    expect(screen.queryByText("**Markdown lead**")).not.toBeInTheDocument();
   });
 });
