@@ -2674,6 +2674,10 @@ button.column-video-count:disabled {
   letter-spacing: 0.04em;
 }
 
+.board-summary-batch-status-info.ant-typography {
+  color: var(--muted);
+}
+
 .board-summary-batch-content {
   display: flex;
   flex-direction: column;

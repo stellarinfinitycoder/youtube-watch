@@ -393,9 +393,13 @@ function BoardSummaryBatchModalComponent({
                         <div className="board-summary-summary-cell">
                           <div className="board-summary-content-block">
                             {item.status === "loading" ? (
-                              <Text className="board-summary-batch-status">LOADING...</Text>
+                              <Text className="board-summary-batch-status board-summary-batch-status-info video-meta-feedback is-info">
+                                LOADING...
+                              </Text>
                             ) : item.status === "summarizing" ? (
-                              <Text className="board-summary-batch-status">SUMMARIZING...</Text>
+                              <Text className="board-summary-batch-status board-summary-batch-status-info video-meta-feedback is-info">
+                                SUMMARIZING...
+                              </Text>
                             ) : item.error ? (
                               <Text type="danger" className="board-summary-batch-error">
                                 {item.error}
