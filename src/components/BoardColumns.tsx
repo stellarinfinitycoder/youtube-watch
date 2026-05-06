@@ -197,6 +197,10 @@ function BoardColumnsComponent({
           <aside
             className={`add-column-rail${
               !isSavedBoardActive && hiddenColumns.length > 0 ? " has-hidden-channels" : ""
+            }${
+              !isSavedBoardActive && hiddenColumns.length > 0 && visibleColumns.length === 0
+                ? " has-no-active-channels"
+                : ""
             }`}
           >
             <div className="add-column-stack">

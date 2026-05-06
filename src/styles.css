@@ -853,6 +853,22 @@ body {
   .add-column-rail.has-hidden-channels .hidden-channel-thumbs {
     display: contents;
   }
+
+  .add-column-rail.has-hidden-channels.has-no-active-channels {
+    width: calc(100vw - 28px);
+    min-width: calc(100vw - 28px);
+  }
+
+  .add-column-rail.has-hidden-channels.has-no-active-channels .add-column-stack {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .add-column-rail.has-hidden-channels.has-no-active-channels .hidden-channel-thumbs {
+    display: flex;
+  }
 }
 
 .full-width {
