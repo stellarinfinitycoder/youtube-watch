@@ -322,23 +322,23 @@ function AppTopbarComponent({
         showSearch={false}
         options={videoDurationFilterOptions}
       />
-      <button
-        type="button"
-        className={`topbar-video-count ${shownVideosTotal === 0 ? "is-zero" : ""}${
-          isFetchingVideos ? " is-fetching" : ""
-        }`}
-        onClick={fetchAllColumns}
-        disabled={isFetchingVideos || areBoardActionsDisabled}
-        aria-label="Fetch all shown channels"
-      >
-        {isFetchingVideos ? null : shownVideosTotal === 0 ? (
-          <span className="btn-icon btn-icon-fetch" aria-hidden />
-        ) : (
-          shownVideosTotal
-        )}
-      </button>
       <div className="topbar-action-strip">
         <div className="topbar-action-group topbar-action-group-left">
+          <button
+            type="button"
+            className={`topbar-video-count ${shownVideosTotal === 0 ? "is-zero" : ""}${
+              isFetchingVideos ? " is-fetching" : ""
+            }`}
+            onClick={fetchAllColumns}
+            disabled={isFetchingVideos || areBoardActionsDisabled}
+            aria-label="Fetch all shown channels"
+          >
+            {isFetchingVideos ? null : shownVideosTotal === 0 ? (
+              <span className="btn-icon btn-icon-fetch" aria-hidden />
+            ) : (
+              shownVideosTotal
+            )}
+          </button>
           {!areBoardActionsDisabled ? (
             <>
               <Button

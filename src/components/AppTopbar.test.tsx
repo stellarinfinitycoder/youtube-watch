@@ -76,9 +76,9 @@ describe("AppTopbar", () => {
     );
 
     expect(screen.queryByText("FETCH ALL NEW VIDEOS FOR THIS BOARD.")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Fetch all shown channels" }).closest(".topbar-action-strip")).toBeNull();
-    const actionStrip = screen.getByRole("button", { name: "Summarize all shown videos" }).closest(".topbar-action-strip");
+    const actionStrip = screen.getByRole("button", { name: "Fetch all shown channels" }).closest(".topbar-action-strip");
     expect(actionStrip).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Fetch all shown channels" }).closest(".topbar-action-group-left")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Summarize all shown videos" }).closest(".topbar-action-strip")).toBe(actionStrip);
     expect(screen.getByRole("button", { name: "Play all videos" }).closest(".topbar-action-strip")).toBe(actionStrip);
     expect(screen.getByRole("button", { name: "Copy all shown links on board" }).closest(".topbar-action-strip")).toBe(actionStrip);
