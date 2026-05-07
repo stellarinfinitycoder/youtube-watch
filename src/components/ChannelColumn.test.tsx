@@ -123,7 +123,12 @@ describe("ChannelColumn", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Fetch column 1 from video count" }));
+    const countButton = screen.getByRole("button", { name: "Fetch column 1" });
+
+    expect(countButton).toHaveClass("is-zero");
+    expect(countButton).toContainElement(countButton.querySelector(".btn-icon-fetch"));
+
+    fireEvent.click(countButton);
 
     expect(runFetch).toHaveBeenCalledWith("board-1", "column-1", "@channel");
   });

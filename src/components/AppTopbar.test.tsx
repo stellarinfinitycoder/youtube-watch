@@ -450,14 +450,19 @@ describe("AppTopbar", () => {
         openMaintenanceMenuDeleteSummaries={() => undefined}
         canOpenMaintenanceBoardDurationBackfill={false}
         canOpenMaintenanceRefreshBoardAvatars={false}
-        shownVideosTotal={16}
+        shownVideosTotal={0}
         areBoardActionsDisabled={false}
         scrollToEdge={() => undefined}
         scrollColumns={() => undefined}
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Fetch all shown channels" }));
+    const countButton = screen.getByRole("button", { name: "Fetch all shown channels" });
+
+    expect(countButton).toHaveClass("is-zero");
+    expect(countButton).toContainElement(countButton.querySelector(".btn-icon-fetch"));
+
+    fireEvent.click(countButton);
 
     expect(fetchAllColumns).toHaveBeenCalledTimes(1);
   });

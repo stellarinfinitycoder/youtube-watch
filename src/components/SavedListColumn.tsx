@@ -256,7 +256,11 @@ function SavedListColumnComponent(props: SavedListColumnProps) {
               column.loading ? " is-fetching" : ""
             }`}
           >
-            {column.loading ? null : filteredVideos.length}
+            {column.loading ? null : filteredVideos.length === 0 ? (
+              <span className="btn-icon btn-icon-fetch" aria-hidden />
+            ) : (
+              filteredVideos.length
+            )}
           </Text>
         </div>
       </Form>

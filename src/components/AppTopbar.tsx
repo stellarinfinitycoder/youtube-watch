@@ -331,7 +331,11 @@ function AppTopbarComponent({
         disabled={isFetchingVideos || areBoardActionsDisabled}
         aria-label="Fetch all shown channels"
       >
-        {isFetchingVideos ? null : shownVideosTotal}
+        {isFetchingVideos ? null : shownVideosTotal === 0 ? (
+          <span className="btn-icon btn-icon-fetch" aria-hidden />
+        ) : (
+          shownVideosTotal
+        )}
       </button>
       <div className="topbar-action-strip">
         <div className="topbar-action-group topbar-action-group-left">

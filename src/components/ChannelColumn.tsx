@@ -195,16 +195,6 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
         <div className="column-actions-right">
           <Button
             htmlType="button"
-            onClick={() => runFetch(activeBoardId, column.id, column.handleInput)}
-            disabled={column.loading || !hasHandleInput}
-            aria-label={`Fetch column ${columnIndex + 1}`}
-            className="inline-fetch-btn"
-            data-testid="column-fetch"
-          >
-            <span className="btn-icon btn-icon-fetch" aria-hidden />
-          </Button>
-          <Button
-            htmlType="button"
             onClick={() => playChannelVideos(column)}
             disabled={column.loading || !hasChannelPlaylistVideos}
             aria-label={`Play channel ${columnIndex + 1} playlist`}
@@ -312,9 +302,13 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
             }`}
             onClick={() => runFetch(activeBoardId, column.id, column.handleInput)}
             disabled={column.loading || !hasHandleInput}
-            aria-label={`Fetch column ${columnIndex + 1} from video count`}
+            aria-label={`Fetch column ${columnIndex + 1}`}
           >
-            {column.loading ? null : filteredVideos.length}
+            {column.loading ? null : filteredVideos.length === 0 ? (
+              <span className="btn-icon btn-icon-fetch" aria-hidden />
+            ) : (
+              filteredVideos.length
+            )}
           </button>
         </div>
       </Form>
