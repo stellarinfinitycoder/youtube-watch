@@ -184,6 +184,16 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
           </Button>
           <Button
             htmlType="button"
+            onClick={() => hideVisibleColumn(column.id)}
+            disabled={column.loading}
+            aria-label={`Hide ${column.handleInput || column.currentHandle || `channel ${columnIndex + 1}`}`}
+            className="column-move-btn column-hide-btn"
+            data-testid="column-hide"
+          >
+            <span className="btn-icon btn-icon-hide" aria-hidden />
+          </Button>
+          <Button
+            htmlType="button"
             onClick={() => openMoveColumnModal(column.id)}
             disabled={column.loading || moveDestinationBoardsLength === 0 || !hasChannelPlaylistVideos}
             aria-label={`Move column ${columnIndex + 1} to board`}
@@ -303,6 +313,7 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
             onClick={() => runFetch(activeBoardId, column.id, column.handleInput)}
             disabled={column.loading || !hasHandleInput}
             aria-label={`Fetch column ${columnIndex + 1}`}
+            data-testid="column-fetch"
           >
             {column.loading ? null : filteredVideos.length === 0 ? (
               <span className="btn-icon btn-icon-fetch" aria-hidden />

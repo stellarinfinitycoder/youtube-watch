@@ -133,6 +133,57 @@ describe("ChannelColumn", () => {
     expect(runFetch).toHaveBeenCalledWith("board-1", "column-1", "@channel");
   });
 
+  it("hides the channel from the hide action", () => {
+    const hideVisibleColumn = vi.fn();
+
+    render(
+      <ChannelColumn
+        activeBoardId="board-1"
+        column={readyColumn}
+        columnIndex={0}
+        visibleColumnsLength={1}
+        brokenChannelThumbnailKeys={[]}
+        channelPlaceholderIcon="/svg/placeholder-channel.svg"
+        copiedLinkVideoId={null}
+        moveDestinationBoardsLength={0}
+        saveDestinationColumnsLength={0}
+        filteredVideos={[]}
+        isVideoMarkedWatched={() => false}
+        videoStatsBackfillInFlight={[]}
+        videoMetaFeedbackById={{}}
+        formatVideoMeta={() => ""}
+        backfillVideoStats={async () => undefined}
+        getVideoThumbnailSrc={(video) => video.thumbnailUrl}
+        handleVideoThumbnailError={() => undefined}
+        moveColumnById={() => undefined}
+        openMoveColumnModal={() => undefined}
+        runFetch={() => undefined}
+        playChannelVideos={() => undefined}
+        copyAllVideoLinks={async () => undefined}
+        openBulkWatchColumnAction={() => undefined}
+        setDeletingColumnId={() => undefined}
+        hideVisibleColumn={hideVisibleColumn}
+        openEditChannelModal={() => undefined}
+        openTranscript={async () => undefined}
+        copyVideoLink={async () => undefined}
+        openSaveVideoModal={() => undefined}
+        toggleWatched={() => undefined}
+        openVideo={() => undefined}
+        onLoadedChannelThumbnail={() => undefined}
+        onBrokenChannelThumbnail={async () => undefined}
+        videoFilter="new"
+      />
+    );
+
+    const hideButton = screen.getByTestId("column-hide");
+
+    expect(hideButton.querySelector(".btn-icon-hide")).not.toBeNull();
+
+    fireEvent.click(hideButton);
+
+    expect(hideVisibleColumn).toHaveBeenCalledWith("column-1");
+  });
+
   it("marks a loaded one-video column for compact bottom spacing", () => {
     const { container } = render(
       <ChannelColumn

@@ -963,7 +963,7 @@ body {
 
 .is-channel-column .column-actions {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   align-items: center;
   justify-items: center;
 }
@@ -1128,6 +1128,11 @@ button.column-video-count:active:not(:disabled) {
 .btn-icon-move {
   -webkit-mask: url("/svg/btn-move.svg") center / contain no-repeat;
   mask: url("/svg/btn-move.svg") center / contain no-repeat;
+}
+
+.btn-icon-hide {
+  -webkit-mask: url("/svg/btn-hide.svg") center / contain no-repeat;
+  mask: url("/svg/btn-hide.svg") center / contain no-repeat;
 }
 
 .btn-icon-star {
