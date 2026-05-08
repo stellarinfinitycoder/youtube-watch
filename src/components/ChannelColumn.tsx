@@ -39,7 +39,9 @@ type ChannelColumnProps = {
   copyAllVideoLinks: (columnId: string, videos: VideoItem[]) => Promise<void>;
   openBulkWatchColumnAction: (column: ColumnStateLike, videoIds: string[], watched: boolean) => void;
   setDeletingColumnId: (columnId: string) => void;
+  isChannelOnlySelected: boolean;
   hideVisibleColumn: (columnId: string) => void;
+  selectChannelFromThumbnail: (columnId: string) => void;
   openEditChannelModal: (column: ColumnStateLike) => void;
   openTranscript: (video: VideoItem, handle?: string) => Promise<void>;
   copyVideoLink: (video: VideoItem) => Promise<void>;
@@ -77,7 +79,9 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
     copyAllVideoLinks,
     openBulkWatchColumnAction,
     setDeletingColumnId,
+    isChannelOnlySelected,
     hideVisibleColumn,
+    selectChannelFromThumbnail,
     openEditChannelModal,
     openTranscript,
     copyVideoLink,
@@ -262,8 +266,12 @@ function ChannelColumnComponent(props: ChannelColumnProps) {
           <button
             type="button"
             className={avatarToggleClassName}
-            aria-label={`Hide ${column.handleInput || column.currentHandle || `channel ${columnIndex + 1}`}`}
-            onClick={() => hideVisibleColumn(column.id)}
+            aria-label={
+              isChannelOnlySelected
+                ? "Show active channels"
+                : `Select only ${column.handleInput || column.currentHandle || `channel ${columnIndex + 1}`}`
+            }
+            onClick={() => selectChannelFromThumbnail(column.id)}
           >
             {channelThumbToShow ? (
               <img
@@ -361,6 +369,7 @@ function areEqual(prev: ChannelColumnProps, next: ChannelColumnProps): boolean {
     prev.filteredVideos === next.filteredVideos &&
     prev.videoStatsBackfillInFlight === next.videoStatsBackfillInFlight &&
     prev.videoMetaFeedbackById === next.videoMetaFeedbackById &&
+    prev.isChannelOnlySelected === next.isChannelOnlySelected &&
     prev.videoFilter === next.videoFilter
   );
 }

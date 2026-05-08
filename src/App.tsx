@@ -3738,6 +3738,20 @@ function App() {
     }));
   };
 
+  const selectChannelFromThumbnail = (columnId: string): void => {
+    if (!activeBoard || activeBoard.kind === "saved") {
+      return;
+    }
+    const isOnlySelectedChannel =
+      columnScopeFilter.length === 1 && columnScopeFilter[0] === columnId;
+    const next = isOnlySelectedChannel ? [COLUMN_SCOPE_NOT_EMPTY] : [columnId];
+    clearFetchAllVisibilityState(activeBoard.id);
+    setBoard(activeBoard.id, (board) => ({
+      ...board,
+      columnScopeFilter: next
+    }));
+  };
+
   const blurActiveTopbarControl = (): void => {
     window.setTimeout(() => {
       const activeElement = document.activeElement;
@@ -6063,6 +6077,7 @@ function App() {
           activeBoardId={activeBoardId}
           isSavedBoardActive={isSavedBoardActive}
           columns={columns}
+          columnScopeFilter={columnScopeFilter}
           visibleColumns={visibleColumns}
           hiddenColumns={hiddenColumns}
           hiddenColumnIdSet={hiddenColumnIdSet}
@@ -6094,6 +6109,7 @@ function App() {
           }
           setDeletingColumnId={setDeletingColumnId}
           hideVisibleColumn={hideVisibleColumn}
+          selectChannelFromThumbnail={selectChannelFromThumbnail}
           revealHiddenColumn={revealHiddenColumn}
           openEditSavedListModal={(column) => openEditSavedListModal(column as ColumnState)}
           openEditChannelModal={(column) => openEditChannelModal(column as ColumnState)}

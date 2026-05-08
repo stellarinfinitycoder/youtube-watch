@@ -29,6 +29,7 @@ function renderBoardColumns({
       activeBoardId="board-1"
       isSavedBoardActive={false}
       columns={[...visibleColumns, ...hiddenColumns]}
+      columnScopeFilter={visibleColumns.map((item) => item.id)}
       visibleColumns={visibleColumns}
       hiddenColumns={hiddenColumns}
       hiddenColumnIdSet={new Set(hiddenColumns.map((item) => item.id))}
@@ -58,6 +59,7 @@ function renderBoardColumns({
       openBulkWatchColumnAction={() => undefined}
       setDeletingColumnId={() => undefined}
       hideVisibleColumn={() => undefined}
+      selectChannelFromThumbnail={() => undefined}
       revealHiddenColumn={() => undefined}
       openEditSavedListModal={() => undefined}
       openEditChannelModal={() => undefined}

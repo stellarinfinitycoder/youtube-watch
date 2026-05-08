@@ -12,6 +12,7 @@ type BoardColumnsProps = {
   activeBoardId: string;
   isSavedBoardActive: boolean;
   columns: ColumnStateLike[];
+  columnScopeFilter: string[];
   visibleColumns: ColumnStateLike[];
   hiddenColumns: ColumnStateLike[];
   hiddenColumnIdSet: Set<string>;
@@ -46,6 +47,7 @@ type BoardColumnsProps = {
   openBulkWatchColumnAction: (column: ColumnStateLike, videoIds: string[], watched: boolean) => void;
   setDeletingColumnId: (columnId: string) => void;
   hideVisibleColumn: (columnId: string) => void;
+  selectChannelFromThumbnail: (columnId: string) => void;
   revealHiddenColumn: (columnId: string) => void;
   openEditSavedListModal: (column: ColumnStateLike) => void;
   openEditChannelModal: (column: ColumnStateLike) => void;
@@ -67,6 +69,7 @@ function BoardColumnsComponent({
   activeBoardId,
   isSavedBoardActive,
   columns,
+  columnScopeFilter,
   visibleColumns,
   hiddenColumns,
   hiddenColumnIdSet,
@@ -96,6 +99,7 @@ function BoardColumnsComponent({
   openBulkWatchColumnAction,
   setDeletingColumnId,
   hideVisibleColumn,
+  selectChannelFromThumbnail,
   revealHiddenColumn,
   openEditSavedListModal,
   openEditChannelModal,
@@ -181,7 +185,11 @@ function BoardColumnsComponent({
                 copyAllVideoLinks={copyAllVideoLinks}
                 openBulkWatchColumnAction={openBulkWatchColumnAction}
                 setDeletingColumnId={setDeletingColumnId}
+                isChannelOnlySelected={
+                  columnScopeFilter.length === 1 && columnScopeFilter[0] === column.id
+                }
                 hideVisibleColumn={hideVisibleColumn}
+                selectChannelFromThumbnail={selectChannelFromThumbnail}
                 openEditChannelModal={openEditChannelModal}
                 openTranscript={openTranscript}
                 copyVideoLink={copyVideoLink}
