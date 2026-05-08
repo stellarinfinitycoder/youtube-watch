@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_VIDEO_WINDOW_DAYS,
+  formatDurationFilterSummary,
   normalizeStoredVideoWindowFilterForKind,
   normalizeVideoWindowFilterForKind
 } from "./filters";
@@ -28,5 +29,11 @@ describe("video window defaults", () => {
     expect(normalizeStoredVideoWindowFilterForKind("saved", "all")).toBe("all");
     expect(normalizeStoredVideoWindowFilterForKind("saved", 120)).toBe(120);
     expect(normalizeStoredVideoWindowFilterForKind("saved", "bad")).toBe("all");
+  });
+});
+
+describe("duration filter summary", () => {
+  it("labels multiple selected lengths explicitly", () => {
+    expect(formatDurationFilterSummary(["under_1", "min_1_3"])).toBe("MIXED LENGTHS");
   });
 });

@@ -219,7 +219,7 @@ export function formatDurationFilterSummary(filters: VideoDurationFilter): strin
   if (normalized.length === 1) {
     return getDurationFilterOptionLabel(normalized[0]);
   }
-  return "SELECT LENGTH";
+  return "MIXED LENGTHS";
 }
 
 export function getVideoPublishedTime(video: VideoItem): number {
