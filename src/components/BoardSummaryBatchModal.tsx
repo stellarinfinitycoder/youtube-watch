@@ -1,4 +1,4 @@
-import { Button, Modal, Select, Typography } from "antd";
+import { Button, Empty, Modal, Select, Typography } from "antd";
 import { Suspense, lazy, memo, useEffect, useState } from "react";
 import type { VideoItem } from "../types/youtube";
 import { VideoTile } from "./VideoTile";
@@ -122,6 +122,9 @@ type BoardSummaryBatchModalProps = {
   onCopyAll: () => Promise<void>;
   onSummarizeShown: (items: BoardSummaryBatchItem[]) => Promise<void>;
   isSummarizingShown: boolean;
+  onMarkAllShownWatched: () => void;
+  videoFilter: "all" | "new" | "watched";
+  shownVideosTotal: number;
   onSummaryFormatChange: (formatId: string) => void;
   activeBoardId: string;
   isSavedBoardActive: boolean;
@@ -161,6 +164,9 @@ function BoardSummaryBatchModalComponent({
   onCopyAll,
   onSummarizeShown,
   isSummarizingShown,
+  onMarkAllShownWatched,
+  videoFilter,
+  shownVideosTotal,
   onSummaryFormatChange,
   activeBoardId,
   isSavedBoardActive,
@@ -313,6 +319,19 @@ function BoardSummaryBatchModalComponent({
                   aria-hidden
                 />
               </Button>
+              <Button
+                htmlType="button"
+                className="column-move-btn board-summary-copy-btn"
+                aria-label={`Mark all shown videos ${videoFilter === "watched" ? "new" : "watched"}`}
+                onClick={onMarkAllShownWatched}
+                disabled={videoFilter === "all" || shownVideosTotal === 0}
+              >
+                {videoFilter === "watched" ? (
+                  <span className="btn-icon btn-icon-undo" aria-hidden />
+                ) : (
+                  <span className="btn-icon btn-icon-check" aria-hidden />
+                )}
+              </Button>
             </div>
           </div>
         </div>
@@ -330,7 +349,9 @@ function BoardSummaryBatchModalComponent({
           {isPreparing && items.length === 0 ? (
             <div className="board-summary-batch-preparing">PREPARING SUMMARIES...</div>
           ) : isEmpty ? (
-            <div className="board-summary-modal-empty">NO BOARD SUMMARIES YET.</div>
+            <div className="board-summary-modal-empty">
+              <Empty description="Empty" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            </div>
           ) : (
             <>
               <div className="board-summary-batch-list">

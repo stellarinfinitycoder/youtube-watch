@@ -61,6 +61,9 @@ describe("BoardSummaryBatchModal", () => {
         onCopyAll={async () => undefined}
         onSummarizeShown={async () => undefined}
         isSummarizingShown={false}
+        onMarkAllShownWatched={() => undefined}
+        videoFilter="new"
+        shownVideosTotal={1}
         onSummaryFormatChange={() => undefined}
         activeBoardId="board-1"
         isSavedBoardActive={false}
@@ -111,6 +114,9 @@ describe("BoardSummaryBatchModal", () => {
         onCopyAll={async () => undefined}
         onSummarizeShown={onSummarizeShown}
         isSummarizingShown={false}
+        onMarkAllShownWatched={() => undefined}
+        videoFilter="new"
+        shownVideosTotal={1}
         onSummaryFormatChange={() => undefined}
         activeBoardId="board-1"
         isSavedBoardActive={false}
@@ -138,8 +144,10 @@ describe("BoardSummaryBatchModal", () => {
 
     const copyAllButton = screen.getByRole("button", { name: "Copy all board summaries" });
     const summarizeButton = screen.getByRole("button", { name: "Summarize shown summaries" });
+    const markAllButton = screen.getByRole("button", { name: "Mark all shown videos watched" });
 
     expect(copyAllButton.compareDocumentPosition(summarizeButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(summarizeButton.compareDocumentPosition(markAllButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Return to board" })).not.toBeInTheDocument();
     expect(screen.queryByText(/^SUMMARIES:/)).not.toBeInTheDocument();
 
@@ -147,6 +155,54 @@ describe("BoardSummaryBatchModal", () => {
 
     expect(onSummarizeShown).toHaveBeenCalledTimes(1);
     expect(onSummarizeShown).toHaveBeenCalledWith([baseItem]);
+  });
+
+  it("uses the board bulk watched action from the final header button", () => {
+    const onMarkAllShownWatched = vi.fn();
+
+    render(
+      <BoardSummaryBatchModal
+        open
+        onCancel={() => undefined}
+        summaryFormats={[{ id: "summary-default", name: "SUMMARY", prompt: "Prompt", model: "", isDefault: true, createdAt: 1, updatedAt: 1 }]}
+        selectedSummaryFormatId="summary-default"
+        isPreparing={false}
+        isCopied={false}
+        items={[baseItem]}
+        onCopyAll={async () => undefined}
+        onSummarizeShown={async () => undefined}
+        isSummarizingShown={false}
+        onMarkAllShownWatched={onMarkAllShownWatched}
+        videoFilter="new"
+        shownVideosTotal={1}
+        onSummaryFormatChange={() => undefined}
+        activeBoardId="board-1"
+        isSavedBoardActive={false}
+        copiedLinkVideoId={null}
+        saveDestinationColumnsLength={1}
+        savedBoardColumnsLength={1}
+        filteredVideosByColumnId={new Map([["column-1", [baseItem.video]]])}
+        isVideoMarkedWatched={() => false}
+        videoStatsBackfillInFlight={[]}
+        videoMetaFeedbackById={{}}
+        formatVideoMeta={() => "Meta"}
+        backfillVideoStats={async () => undefined}
+        getVideoThumbnailSrc={(video) => video.thumbnailUrl}
+        onHandleVideoThumbnailError={() => undefined}
+        onOpenTranscript={async () => undefined}
+        onCopyVideoLink={async () => undefined}
+        onOpenMoveSavedVideoModal={() => undefined}
+        onSetDeletingSavedVideo={() => undefined}
+        onMoveSavedVideoInManualOrder={() => undefined}
+        onOpenSaveVideoModal={() => undefined}
+        onToggleWatched={() => undefined}
+        onOpenVideo={() => undefined}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark all shown videos watched" }));
+
+    expect(onMarkAllShownWatched).toHaveBeenCalledTimes(1);
   });
 
   it("renders generated summary markdown instead of raw markdown text", async () => {
@@ -167,6 +223,9 @@ describe("BoardSummaryBatchModal", () => {
         onCopyAll={async () => undefined}
         onSummarizeShown={async () => undefined}
         isSummarizingShown={false}
+        onMarkAllShownWatched={() => undefined}
+        videoFilter="new"
+        shownVideosTotal={1}
         onSummaryFormatChange={() => undefined}
         activeBoardId="board-1"
         isSavedBoardActive={false}

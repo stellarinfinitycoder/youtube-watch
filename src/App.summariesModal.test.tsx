@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import {
@@ -11,7 +11,7 @@ import { writeCachedTranscript } from "./storage/transcriptsStorage";
 const originalFetch = global.fetch;
 const defaultPromptCacheKey = `${DEFAULT_SUMMARY_PROMPT}\n__MODEL__:`;
 
-function writeBoardWithVideo(): void {
+function writeBoardWithVideo(videoFilter: "all" | "new" | "watched" = "all"): void {
   window.localStorage.setItem(
     "youtube-watch:boards:v1",
     JSON.stringify([
@@ -22,7 +22,7 @@ function writeBoardWithVideo(): void {
         columnScopeFilter: ["__all__"],
         watchedVideos: {},
         viewCountRefreshedAtByVideoId: {},
-        videoFilter: "all",
+        videoFilter,
         videoDurationFilter: ["all"],
         videoWindowDays: 90,
         defaultPlaybackRate: 1.5,
@@ -99,5 +99,31 @@ describe("App summaries modal", () => {
     expect(screen.getByRole("button", { name: "Copy all board summaries" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Return to board" })).not.toBeInTheDocument();
     expect(screen.queryByText(/^SUMMARIES:/)).not.toBeInTheDocument();
+  });
+
+  it("removes summary rows after bulk marking shown videos watched from the modal", async () => {
+    writeBoardWithVideo("new");
+    await writeCachedTranscript("video-1", "Cached transcript body");
+    await writeCachedSummaryForTranscript("video-1", "Cached transcript body", defaultPromptCacheKey, {
+      summary: "Cached board summary",
+      keyPoints: [],
+      model: "openai/gpt-4o-mini"
+    });
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Summarize all shown videos" }));
+
+    expect(await screen.findByText("SUMMARIZABLE VIDEO")).toBeInTheDocument();
+
+    const markAllWatchedButtons = screen.getAllByRole("button", {
+      name: "Mark all shown videos watched"
+    });
+    fireEvent.click(markAllWatchedButtons[markAllWatchedButtons.length - 1]);
+    fireEvent.click(await screen.findByRole("button", { name: "WATCHED" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("SUMMARIZABLE VIDEO")).not.toBeInTheDocument();
+    });
   });
 });

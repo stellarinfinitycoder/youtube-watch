@@ -4277,6 +4277,11 @@ function App() {
       bulkWatchColumnAction.videoIds,
       bulkWatchColumnAction.markWatched
     );
+    if (bulkWatchColumnAction.markWatched) {
+      setBoardSummaryBatchItems((previous) =>
+        previous.filter((item) => !bulkWatchColumnAction.videoIds.includes(item.videoId))
+      );
+    }
     setBulkWatchColumnAction(null);
   };
 
@@ -6001,6 +6006,9 @@ function App() {
         onCopyAll={copyBoardSummaryBatchToClipboard}
         onSummarizeShown={summarizeShownBoardSummaries}
         isSummarizingShown={boardSummaryAggregateState?.loading === true}
+        onMarkAllShownWatched={openBulkWatchBoardAction}
+        videoFilter={videoFilter}
+        shownVideosTotal={shownVideosTotal}
         onSummaryFormatChange={changeBoardSummaryFormat}
         activeBoardId={activeBoardId}
         isSavedBoardActive={isSavedBoardActive}
@@ -6493,6 +6501,7 @@ function App() {
         onOk={confirmBulkWatchColumnAction}
         okText={bulkWatchColumnAction?.markWatched ? "WATCHED" : "NEW"}
         width={380}
+        zIndex={1200}
       >
         <Text>
           {bulkWatchColumnAction

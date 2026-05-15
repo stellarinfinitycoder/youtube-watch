@@ -1468,8 +1468,10 @@ button.column-video-count:active:not(:disabled) {
   flex: 0 0 16px;
 }
 
-.columns-nav .top-wa-btn.ant-btn .btn-icon {
-  background: var(--amber) !important;
+.columns-nav .top-wa-btn.ant-btn {
+  background: var(--amber-deep) !important;
+  color: var(--amber) !important;
+  border-color: var(--amber-soft) !important;
 }
 
 .columns-nav .nav-btn.ant-btn.ant-btn-primary {
@@ -2760,10 +2762,6 @@ button.column-video-count:active:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 228, 181, 0.82);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
 }
 
 .board-summary-batch-item {
