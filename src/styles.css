@@ -2672,7 +2672,7 @@ button.column-video-count:active:not(:disabled) {
 }
 
 .board-summary-modal .ant-modal-content {
-  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   padding: 16px;
 }
 
@@ -2685,7 +2685,7 @@ button.column-video-count:active:not(:disabled) {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  height: min(640px, calc(100dvh - 172px));
+  height: calc(90dvh - 198px);
   min-height: 0;
 }
 

@@ -48,6 +48,54 @@ describe("BoardSummaryBatchModal", () => {
     vi.restoreAllMocks();
   });
 
+  it("keeps the responsive width and viewport height class hooks", () => {
+    render(
+      <BoardSummaryBatchModal
+        open
+        onCancel={() => undefined}
+        summaryFormats={[{ id: "summary-default", name: "SUMMARY", prompt: "Prompt", model: "", isDefault: true, createdAt: 1, updatedAt: 1 }]}
+        selectedSummaryFormatId="summary-default"
+        isPreparing={false}
+        isCopied={false}
+        items={[baseItem]}
+        onCopyAll={async () => undefined}
+        onSummarizeShown={async () => undefined}
+        isSummarizingShown={false}
+        onSummaryFormatChange={() => undefined}
+        activeBoardId="board-1"
+        isSavedBoardActive={false}
+        copiedLinkVideoId={null}
+        saveDestinationColumnsLength={1}
+        savedBoardColumnsLength={1}
+        filteredVideosByColumnId={new Map([["column-1", [baseItem.video]]])}
+        isVideoMarkedWatched={() => false}
+        videoStatsBackfillInFlight={[]}
+        videoMetaFeedbackById={{}}
+        formatVideoMeta={() => "Meta"}
+        backfillVideoStats={async () => undefined}
+        getVideoThumbnailSrc={(video) => video.thumbnailUrl}
+        onHandleVideoThumbnailError={() => undefined}
+        onOpenTranscript={async () => undefined}
+        onCopyVideoLink={async () => undefined}
+        onOpenMoveSavedVideoModal={() => undefined}
+        onSetDeletingSavedVideo={() => undefined}
+        onMoveSavedVideoInManualOrder={() => undefined}
+        onOpenSaveVideoModal={() => undefined}
+        onToggleWatched={() => undefined}
+        onOpenVideo={() => undefined}
+      />
+    );
+
+    const modal = document.body.querySelector(".board-summary-modal");
+    expect(modal).not.toBeNull();
+    expect(modal?.getAttribute("style")).toContain("width:");
+    expect(modal?.getAttribute("style")).toContain("1280px");
+    expect(modal?.getAttribute("style")).toContain("calc(100vw - 32px)");
+    expect(modal?.querySelector(".board-summary-modal-content")).toBeInTheDocument();
+    expect(modal?.querySelector(".board-summary-modal-panel")).toBeInTheDocument();
+    expect(modal?.querySelector(".board-summary-modal-scroll-content")).toBeInTheDocument();
+  });
+
   it("renders modal actions without the old page breadcrumb header", () => {
     const onSummarizeShown = vi.fn();
 
