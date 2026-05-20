@@ -25,6 +25,10 @@
       "destination": "/api/youtube?route=view-counts"
     },
     {
+      "source": "/api/youtube/discover-similar-videos",
+      "destination": "/api/youtube?route=discover-similar-videos"
+    },
+    {
       "source": "/api/youtube/channel-avatar",
       "destination": "/api/youtube?route=channel-avatar"
     },

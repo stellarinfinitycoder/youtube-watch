@@ -588,8 +588,15 @@ body {
   order: 13;
 }
 
-.columns-nav [aria-label="Bulk add channels"] {
+.columns-nav .top-discovery-btn.ant-btn {
   order: 14;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.columns-nav [aria-label="Bulk add channels"] {
+  order: 15;
 }
 
 .topbar-video-count {
@@ -660,6 +667,7 @@ body {
 .columns-nav .top-summary-btn.ant-btn,
 .columns-nav [aria-label="Copy all shown links on board"],
 .columns-nav .top-wa-btn.ant-btn,
+.columns-nav .top-discovery-btn.ant-btn,
 .columns-nav [aria-label="Bulk add channels"],
 .columns-nav .maintenance-menu-btn.ant-btn {
   width: 32px;
@@ -1943,6 +1951,17 @@ button.column-video-count:active:not(:disabled) {
   margin: 0 !important;
 }
 
+.discovery-seed-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.discovery-seed-modal-footer .ant-space {
+  margin-left: auto;
+}
+
 .video-player-modal .speed-btn.ant-btn.ant-btn-primary {
   background: var(--amber) !important;
   color: #18110a !important;
@@ -3123,6 +3142,7 @@ button.column-video-count:active:not(:disabled) {
   .columns-nav .top-summary-btn.ant-btn,
   .columns-nav [aria-label="Copy all shown links on board"],
   .columns-nav .top-wa-btn.ant-btn,
+  .columns-nav .top-discovery-btn.ant-btn,
   .columns-nav [aria-label="Bulk add channels"],
   .scroll-btn.ant-btn,
   .top-bar-logo {
@@ -3135,6 +3155,7 @@ button.column-video-count:active:not(:disabled) {
   .columns-nav .top-summary-btn.ant-btn,
   .columns-nav [aria-label="Copy all shown links on board"],
   .columns-nav .top-wa-btn.ant-btn,
+  .columns-nav .top-discovery-btn.ant-btn,
   .columns-nav [aria-label="Bulk add channels"],
   .columns-nav .maintenance-menu-btn.ant-btn,
   .scroll-btn.ant-btn {

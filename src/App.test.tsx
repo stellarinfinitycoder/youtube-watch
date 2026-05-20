@@ -23,6 +23,7 @@ describe("App", () => {
       window.localStorage.removeItem("youtube-watch:columns:v2");
       window.localStorage.removeItem("youtube-watch:watched:v1");
       window.localStorage.removeItem("youtube-watch:playback-rate:v1");
+      window.localStorage.removeItem("youtube-watch:discovery-ignore:v1");
     }
   });
 

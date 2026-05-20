@@ -10,6 +10,30 @@ export type VideoItem = {
   viewCount: number | null;
 };
 
+export type SimilarVideoSeed = {
+  query: string;
+  source: "video" | "channel" | "manual";
+  sourceTitle: string;
+};
+
+export type SimilarVideoDiscoveryItem = VideoItem & {
+  channelId: string;
+  channelThumbnailUrl: string;
+  uploadsPlaylistId: string;
+  channelHandle: string;
+  channelUrl: string;
+  matchReason: string;
+  matchedSeed: string;
+  score: number;
+  alreadyOnBoard: boolean;
+};
+
+export type SimilarVideoDiscoveryResult = {
+  videos: SimilarVideoDiscoveryItem[];
+  searchedSeeds: SimilarVideoSeed[];
+  estimatedQuotaUnits: number;
+};
+
 type ChannelByHandleResponse = {
   items?: Array<{
     id?: string;
@@ -44,12 +68,19 @@ type ChannelDetailsResponse = {
   items?: Array<{
     id?: string;
     snippet?: {
+      title?: string;
+      description?: string;
       customUrl?: string;
       thumbnails?: {
         high?: { url?: string };
         medium?: { url?: string };
         default?: { url?: string };
       };
+    };
+    statistics?: {
+      subscriberCount?: string;
+      videoCount?: string;
+      viewCount?: string;
     };
     contentDetails?: {
       relatedPlaylists?: {
@@ -111,6 +142,10 @@ type VideoMetadataResponse = {
       duration?: string;
     };
     snippet?: {
+      channelId?: string;
+      channelTitle?: string;
+      publishedAt?: string;
+      title?: string;
       thumbnails?: {
         maxres?: { url?: string };
         standard?: { url?: string };
@@ -123,6 +158,27 @@ type VideoMetadataResponse = {
       embeddable?: boolean;
     };
   }>;
+};
+
+type SearchListResponse = {
+  items?: SearchResultItem[];
+};
+
+type SearchResultItem = {
+  id?: {
+    videoId?: string;
+  };
+  snippet?: {
+    title?: string;
+    publishedAt?: string;
+    channelId?: string;
+    channelTitle?: string;
+    thumbnails?: {
+      high?: { url?: string };
+      medium?: { url?: string };
+      default?: { url?: string };
+    };
+  };
 };
 
 type VideoSnippet = {
@@ -145,6 +201,16 @@ type VideoMetadataMap = Record<
     embeddable?: boolean;
   }
 >;
+
+type SimilarVideoCandidate = {
+  videoId: string;
+  title: string;
+  publishedAt: string;
+  thumbnailUrl: string;
+  channelId: string;
+  channelTitle: string;
+  matchedSeeds: SimilarVideoSeed[];
+};
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 
@@ -200,6 +266,15 @@ function pickVideoSnippetThumbnailUrl(snippet?: VideoSnippet): string {
   );
 }
 
+function pickSearchThumbnailUrl(snippet?: SearchResultItem["snippet"]): string {
+  return (
+    snippet?.thumbnails?.high?.url ??
+    snippet?.thumbnails?.medium?.url ??
+    snippet?.thumbnails?.default?.url ??
+    ""
+  );
+}
+
 function normalizeImageUrl(url: string): string {
   const trimmed = url.trim();
   if (!trimmed) {
@@ -212,6 +287,89 @@ function normalizeImageUrl(url: string): string {
     return `https://${trimmed.slice("http://".length)}`;
   }
   return trimmed;
+}
+
+function normalizeChannelHandle(customUrl: string | undefined): string {
+  const trimmed = customUrl?.trim() ?? "";
+  if (!trimmed) {
+    return "";
+  }
+  if (!trimmed.startsWith("@")) {
+    return "";
+  }
+  try {
+    return normalizeHandle(trimmed);
+  } catch {
+    return "";
+  }
+}
+
+function normalizeSeedQuery(seed: SimilarVideoSeed): SimilarVideoSeed | null {
+  const query = seed.query.replace(/\s+/g, " ").trim().slice(0, 120);
+  if (query.length < 3) {
+    return null;
+  }
+  return {
+    query,
+    source: seed.source === "channel" || seed.source === "manual" ? seed.source : "video",
+    sourceTitle: seed.sourceTitle.replace(/\s+/g, " ").trim().slice(0, 160)
+  };
+}
+
+function scoreCandidate(
+  candidate: SimilarVideoCandidate,
+  existingChannelIds: Set<string>,
+  channelVideoCount: number
+): number {
+  const latestTime = Date.parse(candidate.publishedAt);
+  const recencyScore = Number.isFinite(latestTime)
+    ? Math.max(0, 30 - Math.floor((Date.now() - latestTime) / 86_400_000))
+    : 0;
+  const repeatedSeedScore = Math.max(0, candidate.matchedSeeds.length - 1) * 25;
+  const channelRepeatScore = Math.max(0, channelVideoCount - 1) * 10;
+  const existingPenalty = existingChannelIds.has(candidate.channelId) ? -15 : 0;
+  return repeatedSeedScore + channelRepeatScore + recencyScore + existingPenalty;
+}
+
+export function formatSimilarVideoMatchReason(
+  firstSeed: SimilarVideoSeed | undefined,
+  seedCount: number
+): string {
+  if (seedCount > 1) {
+    return `Matched ${seedCount} board searches`;
+  }
+  if (firstSeed?.source === "manual") {
+    return `Matched search seed: ${firstSeed.sourceTitle || firstSeed.query}`;
+  }
+  if (firstSeed?.source === "channel") {
+    return `Matched channel topic: ${firstSeed.sourceTitle || firstSeed.query}`;
+  }
+  return `Matched board video: ${firstSeed?.sourceTitle || firstSeed?.query || "board topic"}`;
+}
+
+function buildMatchReason(candidate: SimilarVideoCandidate): string {
+  return formatSimilarVideoMatchReason(candidate.matchedSeeds[0], candidate.matchedSeeds.length);
+}
+
+function mapSearchResultToCandidate(
+  item: SearchResultItem,
+  seed: SimilarVideoSeed
+): SimilarVideoCandidate | null {
+  const videoId = item.id?.videoId;
+  const snippet = item.snippet;
+  const channelId = snippet?.channelId?.trim() ?? "";
+  if (!videoId || !snippet || !channelId) {
+    return null;
+  }
+  return {
+    videoId,
+    title: snippet.title ?? "Untitled video",
+    publishedAt: snippet.publishedAt ?? "",
+    thumbnailUrl: normalizeImageUrl(pickSearchThumbnailUrl(snippet)),
+    channelId,
+    channelTitle: snippet.channelTitle ?? "",
+    matchedSeeds: [seed]
+  };
 }
 
 function mapPlaylistItemToVideoItem(item: PlaylistItem): VideoItem | null {
@@ -610,6 +768,170 @@ export async function fetchUploadsPlaylistPage(
   return {
     videos,
     nextPageToken: playlistData.nextPageToken ?? null
+  };
+}
+
+export async function discoverSimilarVideos(input: {
+  seeds: SimilarVideoSeed[];
+  existingChannelIds: string[];
+  maxSeeds?: number;
+  resultsPerSeed?: number;
+}): Promise<SimilarVideoDiscoveryResult> {
+  const apiKey = getApiKey();
+  const existingChannelIds = new Set(
+    input.existingChannelIds.map((id) => id.trim()).filter(Boolean)
+  );
+  const requestedMaxSeeds =
+    typeof input.maxSeeds === "number" && Number.isFinite(input.maxSeeds) ? input.maxSeeds : 5;
+  const requestedResultsPerSeed =
+    typeof input.resultsPerSeed === "number" && Number.isFinite(input.resultsPerSeed)
+      ? input.resultsPerSeed
+      : 10;
+  const maxSeeds = Math.max(1, Math.min(5, Math.floor(requestedMaxSeeds)));
+  const resultsPerSeed = Math.max(1, Math.min(50, Math.floor(requestedResultsPerSeed)));
+  const searchedSeeds = input.seeds
+    .map(normalizeSeedQuery)
+    .filter((seed): seed is SimilarVideoSeed => seed !== null)
+    .slice(0, maxSeeds);
+
+  if (searchedSeeds.length === 0) {
+    return { videos: [], searchedSeeds: [], estimatedQuotaUnits: 0 };
+  }
+
+  const candidatesByVideoId = new Map<string, SimilarVideoCandidate>();
+  let estimatedQuotaUnits = 0;
+
+  for (const seed of searchedSeeds) {
+    estimatedQuotaUnits += 100;
+    const searchUrl = buildUrl("/search", {
+      part: "snippet",
+      type: "video",
+      order: "relevance",
+      maxResults: resultsPerSeed,
+      q: seed.query,
+      key: apiKey
+    });
+    const searchData = await fetchJson<SearchListResponse>(searchUrl);
+    for (const item of searchData.items ?? []) {
+      const candidate = mapSearchResultToCandidate(item, seed);
+      if (!candidate) {
+        continue;
+      }
+      const existing = candidatesByVideoId.get(candidate.videoId);
+      if (existing) {
+        existing.matchedSeeds.push(seed);
+        continue;
+      }
+      candidatesByVideoId.set(candidate.videoId, candidate);
+    }
+  }
+
+  const candidates = Array.from(candidatesByVideoId.values());
+  if (candidates.length === 0) {
+    return { videos: [], searchedSeeds, estimatedQuotaUnits };
+  }
+
+  const channelIds = Array.from(new Set(candidates.map((candidate) => candidate.channelId)));
+  const channelsById = new Map<
+    string,
+    {
+      title: string;
+      thumbnailUrl: string;
+      handle: string;
+      uploadsPlaylistId: string;
+      videoCount: number;
+    }
+  >();
+  for (let index = 0; index < channelIds.length; index += 50) {
+    const chunk = channelIds.slice(index, index + 50);
+    estimatedQuotaUnits += 1;
+    const channelUrl = buildUrl("/channels", {
+      part: "snippet,contentDetails,statistics",
+      id: chunk.join(","),
+      key: apiKey
+    });
+    const channelData = await fetchJson<ChannelDetailsResponse>(channelUrl);
+    for (const channel of channelData.items ?? []) {
+      const channelId = channel.id?.trim() ?? "";
+      if (!channelId) {
+        continue;
+      }
+      channelsById.set(channelId, {
+        title: channel.snippet?.title ?? "",
+        thumbnailUrl: normalizeImageUrl(
+          channel.snippet?.thumbnails?.high?.url ??
+            channel.snippet?.thumbnails?.medium?.url ??
+            channel.snippet?.thumbnails?.default?.url ??
+            ""
+        ),
+        handle: normalizeChannelHandle(channel.snippet?.customUrl),
+        uploadsPlaylistId: channel.contentDetails?.relatedPlaylists?.uploads ?? "",
+        videoCount: Number(channel.statistics?.videoCount ?? 0)
+      });
+    }
+  }
+
+  const statsByVideoId = await fetchVideoStatsByVideoIds(
+    candidates.map((candidate) => candidate.videoId)
+  );
+  estimatedQuotaUnits += Math.ceil(candidates.length / 50);
+
+  const channelVideoCounts = new Map<string, number>();
+  candidates.forEach((candidate) => {
+    channelVideoCounts.set(
+      candidate.channelId,
+      (channelVideoCounts.get(candidate.channelId) ?? 0) + 1
+    );
+  });
+
+  const videos = candidates
+    .map((candidate): SimilarVideoDiscoveryItem | null => {
+      const channel = channelsById.get(candidate.channelId);
+      if (!channel?.uploadsPlaylistId) {
+        return null;
+      }
+      const stats = statsByVideoId[candidate.videoId];
+      const score = scoreCandidate(
+        candidate,
+        existingChannelIds,
+        channelVideoCounts.get(candidate.channelId) ?? 1
+      );
+      const channelTitle = channel.title || candidate.channelTitle;
+      return {
+        videoId: candidate.videoId,
+        title: candidate.title,
+        publishedAt: candidate.publishedAt,
+        durationSeconds: stats?.durationSeconds ?? null,
+        embeddable: stats?.embeddable,
+        thumbnailUrl: stats?.thumbnailUrl || candidate.thumbnailUrl,
+        channelTitle,
+        videoUrl: `https://www.youtube.com/watch?v=${candidate.videoId}`,
+        viewCount: stats?.viewCount ?? null,
+        channelId: candidate.channelId,
+        channelThumbnailUrl: channel.thumbnailUrl,
+        uploadsPlaylistId: channel.uploadsPlaylistId,
+        channelHandle: channel.handle,
+        channelUrl: channel.handle
+          ? `https://www.youtube.com/${channel.handle}`
+          : `https://www.youtube.com/channel/${candidate.channelId}`,
+        matchReason: buildMatchReason(candidate),
+        matchedSeed: candidate.matchedSeeds[0]?.query ?? "",
+        score,
+        alreadyOnBoard: existingChannelIds.has(candidate.channelId)
+      };
+    })
+    .filter((item): item is SimilarVideoDiscoveryItem => item !== null)
+    .sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      return Date.parse(b.publishedAt) - Date.parse(a.publishedAt);
+    });
+
+  return {
+    videos,
+    searchedSeeds,
+    estimatedQuotaUnits
   };
 }
 

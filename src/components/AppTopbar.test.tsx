@@ -56,6 +56,7 @@ describe("AppTopbar", () => {
         videoDurationFilterOptions={[]}
         startBoardSummaryBatch={() => undefined}
         isBoardSummaryBatchRunning={false}
+        openVideoDiscovery={() => undefined}
         playAllVideos={() => undefined}
         copyAllShownBoardLinks={async () => undefined}
         copiedLinkVideoId={null}
@@ -83,6 +84,15 @@ describe("AppTopbar", () => {
     expect(screen.getByRole("button", { name: "Play all videos" }).closest(".topbar-action-strip")).toBe(actionStrip);
     expect(screen.getByRole("button", { name: "Copy all shown links on board" }).closest(".topbar-action-strip")).toBe(actionStrip);
     expect(screen.getByRole("button", { name: "Mark all shown videos watched" }).closest(".topbar-action-strip")).toBe(actionStrip);
+    expect(screen.getByRole("button", { name: "Create discovery board" }).closest(".topbar-action-strip")).toBe(actionStrip);
+    expect(
+      Boolean(
+        screen
+          .getByRole("button", { name: "Mark all shown videos watched" })
+          .compareDocumentPosition(screen.getByRole("button", { name: "Create discovery board" })) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      )
+    ).toBe(true);
     expect(screen.getByRole("button", { name: "Open maintenance menu" }).closest(".topbar-action-strip")).toBe(actionStrip);
     const scrollControls = screen.getByRole("button", { name: "Scroll columns to first" }).closest(".columns-scroll-controls");
     expect(scrollControls).not.toBeNull();
@@ -154,6 +164,7 @@ describe("AppTopbar", () => {
         videoDurationFilterOptions={[]}
         startBoardSummaryBatch={() => undefined}
         isBoardSummaryBatchRunning={false}
+        openVideoDiscovery={() => undefined}
         playAllVideos={() => undefined}
         copyAllShownBoardLinks={async () => undefined}
         copiedLinkVideoId={null}
@@ -181,6 +192,85 @@ describe("AppTopbar", () => {
     });
 
     expect(toggleAppTheme).toHaveBeenCalledTimes(1);
+  });
+
+  it("creates a discovery board from the topbar D button and omits the settings link", () => {
+    const openVideoDiscovery = vi.fn();
+
+    render(
+      <AppTopbar
+        buildInfoLabel="dev-build"
+        lastApiQueryUnits={0}
+        totalApiQueryUnits={0}
+        topBarLogoSrc="/svg/logo-dev.svg"
+        isLogoSpinning={false}
+        isFetchingVideos={false}
+        isSavedBoardActive={false}
+        topbarLastFetchLabel="-"
+        fetchAllColumns={() => undefined}
+        appTheme="dark"
+        toggleAppTheme={() => undefined}
+        activeBoardId="board-1"
+        displayedBoards={[{ id: "board-1", name: "Board", kind: "channels" }]}
+        newBoardOptionValue="__new__"
+        boardDropdownListHeight={320}
+        handleBoardSelectChange={() => undefined}
+        onBoardSelectorPrewarm={() => undefined}
+        blurActiveTopbarControl={() => undefined}
+        moveBoard={() => undefined}
+        openRenameBoardModal={() => undefined}
+        columnScopeFilter={[]}
+        isColumnScopeDisabled={false}
+        columnScopeDropdownListHeight={240}
+        formatColumnScopeSummary={() => "ALL"}
+        columnScopeOptions={[]}
+        onColumnScopeChange={() => undefined}
+        videoFilter="all"
+        onVideoFilterChange={() => undefined}
+        videoWindowDays={30}
+        onVideoWindowChange={() => undefined}
+        savedVideoWindowSelectOptions={[]}
+        channelVideoWindowSelectOptions={[]}
+        videoDurationFilter={[]}
+        onVideoDurationChange={() => undefined}
+        formatDurationFilterSummary={() => "ANY"}
+        videoDurationFilterOptions={[]}
+        startBoardSummaryBatch={() => undefined}
+        isBoardSummaryBatchRunning={false}
+        openVideoDiscovery={openVideoDiscovery}
+        playAllVideos={() => undefined}
+        copyAllShownBoardLinks={async () => undefined}
+        copiedLinkVideoId={null}
+        openBulkWatchBoardAction={() => undefined}
+        openMaintenanceMenuExport={() => undefined}
+        openMaintenanceMenuRestore={() => undefined}
+        openMaintenanceMenuLogs={() => undefined}
+        openMaintenanceMenuBoardDurationBackfill={() => undefined}
+        openMaintenanceMenuRefreshBoardAvatars={() => undefined}
+        openMaintenanceMenuDeleteSummaries={() => undefined}
+        canOpenMaintenanceBoardDurationBackfill={false}
+        canOpenMaintenanceRefreshBoardAvatars={false}
+        shownVideosTotal={1}
+        areBoardActionsDisabled={false}
+        scrollToEdge={() => undefined}
+        scrollColumns={() => undefined}
+      />
+    );
+
+    const discoveryButton = screen.getByRole("button", { name: "Create discovery board" });
+    expect(discoveryButton).toHaveTextContent("D");
+    expect(discoveryButton).toHaveClass("top-discovery-btn");
+
+    act(() => {
+      fireEvent.click(discoveryButton);
+    });
+
+    expect(openVideoDiscovery).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Open maintenance menu" }));
+    });
+    expect(screen.queryByText("CREATE DISCOVERY BOARD")).not.toBeInTheDocument();
   });
 
   it("shows summaries as a board option without board action controls", () => {
@@ -229,6 +319,7 @@ describe("AppTopbar", () => {
         videoDurationFilterOptions={[]}
         startBoardSummaryBatch={() => undefined}
         isBoardSummaryBatchRunning={false}
+        openVideoDiscovery={() => undefined}
         playAllVideos={() => undefined}
         copyAllShownBoardLinks={async () => undefined}
         copiedLinkVideoId={null}
@@ -297,6 +388,7 @@ describe("AppTopbar", () => {
         videoDurationFilterOptions={[]}
         startBoardSummaryBatch={() => undefined}
         isBoardSummaryBatchRunning={false}
+        openVideoDiscovery={() => undefined}
         playAllVideos={() => undefined}
         copyAllShownBoardLinks={async () => undefined}
         copiedLinkVideoId={null}
@@ -371,6 +463,7 @@ describe("AppTopbar", () => {
         videoDurationFilterOptions={[]}
         startBoardSummaryBatch={() => undefined}
         isBoardSummaryBatchRunning={false}
+        openVideoDiscovery={() => undefined}
         playAllVideos={() => undefined}
         copyAllShownBoardLinks={async () => undefined}
         copiedLinkVideoId={null}
@@ -438,6 +531,7 @@ describe("AppTopbar", () => {
         videoDurationFilterOptions={[]}
         startBoardSummaryBatch={() => undefined}
         isBoardSummaryBatchRunning={false}
+        openVideoDiscovery={() => undefined}
         playAllVideos={() => undefined}
         copyAllShownBoardLinks={async () => undefined}
         copiedLinkVideoId={null}

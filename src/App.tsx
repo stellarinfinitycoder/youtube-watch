@@ -12,9 +12,10 @@ import {
   Space,
   Typography
 } from "antd";
-import type { FetchState } from "./types/youtube";
+import type { FetchState, SimilarVideoSeed } from "./types/youtube";
 import {
   buildChannelAvatarProxyUrl,
+  discoverSimilarVideos,
   fetchPlaylistDiscoveryPage,
   fetchSummaryByVideoInput,
   fetchTranscriptByVideoInput,
@@ -115,6 +116,10 @@ import {
   type StoredSummaryDisplayEntry
 } from "./domain/summariesBoard";
 import {
+  buildDiscoveryChannelCandidates,
+  collectExistingChannelIds
+} from "./domain/videoDiscovery";
+import {
   DEFAULT_SUMMARY_PROMPT,
   getDefaultSummaryFormat,
   hashText,
@@ -142,11 +147,19 @@ const CHANGE_STAMP = "180326090731";
 const TOP_BAR_LOGO_SRC = import.meta.env.PROD ? "/svg/logo-prod.svg" : "/svg/logo-dev.svg";
 const SAVED_LIST_PLACEHOLDER_ICON = "/svg/placeholder-list.svg";
 const CHANNEL_PLACEHOLDER_ICON = "/svg/placeholder-channel.svg";
+const DISCOVERY_SEED_PROMPT = [
+  "Create exactly 3 distinct YouTube search keyword seeds from these video titles.",
+  "Return one seed per line.",
+  "Each seed must be maximum 120 characters.",
+  "Use concise keywords, no numbering, no bullets, no quotes, no explanation."
+].join(" ");
+const DISCOVERY_SEED_FIELD_COUNT = 3;
 const BUILD_INFO_LABEL = CHANGE_STAMP;
 const LEGACY_HANDLE_STORAGE_KEY = "youtube-watch:handles:v1";
 const LEGACY_COLUMNS_STORAGE_KEY = "youtube-watch:columns:v2";
 const LEGACY_WATCHED_STORAGE_KEY = "youtube-watch:watched:v1";
 const LEGACY_PLAYBACK_RATE_STORAGE_KEY = "youtube-watch:playback-rate:v1";
+const DISCOVERY_IGNORE_STORAGE_KEY = "youtube-watch:discovery-ignore:v1";
 const BOARDS_PERSIST_DEBOUNCE_MS = 400;
 type VideoStatsPatch = {
   viewCount?: number | null;
@@ -156,6 +169,7 @@ type VideoStatsPatch = {
 };
 
 type VideoFilter = "all" | "new" | "watched";
+type BoardSource = "discovery";
 type PlaylistScope = "all" | "channel";
 const SAVED_SORT_MODE_OPTIONS: Array<{ value: SavedSortMode; label: string }> = [
   { value: "time_asc", label: "TIME ↑" },
@@ -257,6 +271,7 @@ type BoardState = {
   id: string;
   name: string;
   kind: BoardKind;
+  source?: BoardSource;
   columns: ColumnState[];
   boardSummaryFormatId: string;
   boardSummaryAggregateFormatId: string;
@@ -273,6 +288,7 @@ type PersistedBoardState = {
   id: string;
   name: string;
   kind?: BoardKind;
+  source?: BoardSource;
   columns: PersistedColumnState[];
   boardSummaryFormatId?: string;
   boardSummaryAggregateFormatId?: string;
@@ -290,6 +306,7 @@ type BackupPayload = {
   exportedAt: string;
   boards: PersistedBoardState[];
   activeBoardId: string;
+  discoveryIgnoredChannelIds?: string[];
 };
 
 type PersistedBoardRuntimeState = Record<
@@ -606,6 +623,45 @@ function sanitizeNumericMap(raw: unknown): Record<string, number> {
   );
 }
 
+function sanitizeStringList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return Array.from(
+    new Set(
+      raw
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter(Boolean)
+    )
+  );
+}
+
+function readStoredDiscoveryIgnoredChannelIds(): string[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(DISCOVERY_IGNORE_STORAGE_KEY);
+    return raw ? sanitizeStringList(JSON.parse(raw) as unknown) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredDiscoveryIgnoredChannelIds(channelIds: string[]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      DISCOVERY_IGNORE_STORAGE_KEY,
+      JSON.stringify(sanitizeStringList(channelIds))
+    );
+  } catch {
+    // Ignore persistence failures; discovery still works for the current session.
+  }
+}
+
 function normalizePersistedVideo(video: VideoItem): VideoItem {
   return {
     videoId: video.videoId,
@@ -799,6 +855,7 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
     videoDurationFilter?: unknown;
     videoWindowDays?: unknown;
     defaultPlaybackRate?: unknown;
+    discoveryIgnoredChannelIds?: unknown;
   };
 
   if (
@@ -821,7 +878,8 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
       version: 2,
       exportedAt: candidate.exportedAt,
       boards,
-      activeBoardId
+      activeBoardId,
+      discoveryIgnoredChannelIds: sanitizeStringList(candidate.discoveryIgnoredChannelIds)
     };
   }
 
@@ -864,7 +922,8 @@ function sanitizeBackupPayload(raw: unknown): BackupPayload | null {
       version: 2,
       exportedAt: candidate.exportedAt,
       boards: [board],
-      activeBoardId: board.id
+      activeBoardId: board.id,
+      discoveryIgnoredChannelIds: []
     };
   }
 
@@ -1080,6 +1139,47 @@ function getNextBoardName(boards: BoardState[]): string {
   return `BOARD ${index}`;
 }
 
+function getNextDiscoveryBoardName(boards: BoardState[]): string {
+  let index = 1;
+  while (boards.some((board) => board.name === `DISCOVERY ${index}`)) {
+    index += 1;
+  }
+  return `DISCOVERY ${index}`;
+}
+
+function isDiscoveryBoard(board: Pick<BoardState, "kind" | "name" | "source">): boolean {
+  return board.kind === "channels" && (board.source === "discovery" || /^DISCOVERY \d+$/i.test(board.name));
+}
+
+function normalizeDiscoverySeedText(value: string): string {
+  return value
+    .replace(/^\s*(?:[-*•]+|\d+[.)])\s*/u, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .trim()
+    .slice(0, 120)
+    .trim();
+}
+
+function parseDiscoverySeedTexts(value: string, limit = 3): string[] {
+  const seeds: string[] = [];
+  const seen = new Set<string>();
+  value.split(/\r?\n/).forEach((line) => {
+    if (seeds.length >= limit) {
+      return;
+    }
+    const seed = normalizeDiscoverySeedText(line);
+    const key = seed.toLowerCase();
+    if (seed.length < 3 || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    seeds.push(seed);
+  });
+  return seeds;
+}
+
 function toPersistedColumns(columns: ColumnState[]): PersistedColumnState[] {
   return columns.map((column) => {
     const persisted: PersistedColumnState = {
@@ -1133,6 +1233,9 @@ function toPersistedBoards(boards: BoardState[]): PersistedBoardState[] {
       defaultPlaybackRate: board.defaultPlaybackRate
     };
 
+    if (board.source) {
+      persisted.source = board.source;
+    }
     if (board.boardSummaryFormatId.trim().length > 0) {
       persisted.boardSummaryFormatId = board.boardSummaryFormatId.trim();
     }
@@ -1159,6 +1262,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     id?: unknown;
     name?: unknown;
     kind?: unknown;
+    source?: unknown;
     columns?: unknown;
     boardSummaryFormatId?: unknown;
     boardSummaryAggregateFormatId?: unknown;
@@ -1188,6 +1292,7 @@ function sanitizePersistedBoard(raw: unknown): PersistedBoardState | null {
     id: candidate.id,
     name: candidate.name,
     kind,
+    source: candidate.source === "discovery" ? "discovery" : undefined,
     columns,
     boardSummaryFormatId:
       typeof candidate.boardSummaryFormatId === "string" ? candidate.boardSummaryFormatId : "",
@@ -1243,6 +1348,7 @@ function fromPersistedBoard(board: PersistedBoardState): BoardState {
   return createBoardState(board.name, {
     id: board.id,
     kind: board.kind === "saved" ? "saved" : "channels",
+    source: board.source,
     columns: restoredColumns,
     boardSummaryFormatId: board.boardSummaryFormatId ?? "",
     boardSummaryAggregateFormatId: board.boardSummaryAggregateFormatId ?? "",
@@ -1692,6 +1798,14 @@ function App() {
   const [boardSummaryAggregateState, setBoardSummaryAggregateState] =
     useState<BoardSummaryAggregateState | null>(null);
   const [isBoardSummaryAggregateCopied, setIsBoardSummaryAggregateCopied] = useState(false);
+  const [discoveryBoardError, setDiscoveryBoardError] = useState<string | null>(null);
+  const [pendingDiscoverySeeds, setPendingDiscoverySeeds] = useState<SimilarVideoSeed[]>([]);
+  const [discoverySeedInputs, setDiscoverySeedInputs] = useState<string[]>([]);
+  const [isDiscoverySeedGenerating, setIsDiscoverySeedGenerating] = useState(false);
+  const [isDiscoveryBoardCreating, setIsDiscoveryBoardCreating] = useState(false);
+  const [discoveryIgnoredChannelIds, setDiscoveryIgnoredChannelIds] = useState<string[]>(
+    () => readStoredDiscoveryIgnoredChannelIds()
+  );
   const [summaryVideoCacheEntries, setSummaryVideoCacheEntries] = useState<
     Array<{ videoId: string; latestCachedAt: number }>
   >([]);
@@ -2281,6 +2395,10 @@ function App() {
   }, [isBulkModalOpen]);
 
   useEffect(() => {
+    writeStoredDiscoveryIgnoredChannelIds(discoveryIgnoredChannelIds);
+  }, [discoveryIgnoredChannelIds]);
+
+  useEffect(() => {
     if (!editingChannelColumnId) {
       return;
     }
@@ -2543,6 +2661,11 @@ function App() {
     setColumn(boardId, columnId, (prev) => ({ ...prev, loading: true, error: null }));
 
     try {
+      const boardState = boards.find((board) => board.id === boardId);
+      const currentColumn = boardState?.columns.find((column) => column.id === columnId);
+      if (!currentColumn) {
+        throw new Error("Column not found.");
+      }
       let normalized = "";
       let resolvedFromInput: Awaited<
         ReturnType<typeof resolveChannelByInputWithThumbnail>
@@ -2550,13 +2673,16 @@ function App() {
       try {
         normalized = normalizeHandle(handle);
       } catch {
-        resolvedFromInput = await resolveChannelByInputWithThumbnail(handle);
-        normalized = resolvedFromInput.normalizedHandle;
-      }
-      const boardState = boards.find((board) => board.id === boardId);
-      const currentColumn = boardState?.columns.find((column) => column.id === columnId);
-      if (!currentColumn) {
-        throw new Error("Column not found.");
+        const canUseExistingChannelMetadata =
+          currentColumn.channelId &&
+          currentColumn.uploadsPlaylistId &&
+          currentColumn.handleInput.trim() === handle.trim();
+        if (canUseExistingChannelMetadata) {
+          normalized = currentColumn.currentHandle || currentColumn.handleInput;
+        } else {
+          resolvedFromInput = await resolveChannelByInputWithThumbnail(handle);
+          normalized = resolvedFromInput.normalizedHandle;
+        }
       }
       const brokenKey = `${boardId}:${columnId}`;
       const shouldForceRefreshMetadata =
@@ -2786,6 +2912,14 @@ function App() {
     if (isSavedBoardActive && columns.length <= 1) {
       setDeletingColumnId(null);
       return;
+    }
+    const deletedChannelId = activeBoard?.columns
+      .find((column) => column.id === deletingColumnId)
+      ?.channelId.trim();
+    if (activeBoard && isDiscoveryBoard(activeBoard) && deletedChannelId) {
+      setDiscoveryIgnoredChannelIds((previous) =>
+        previous.includes(deletedChannelId) ? previous : [...previous, deletedChannelId]
+      );
     }
     removeColumnById(deletingColumnId);
     setDeletingColumnId(null);
@@ -4533,7 +4667,8 @@ function App() {
       version: 2,
       exportedAt: new Date().toISOString(),
       boards: toPersistedBoards(boards),
-      activeBoardId
+      activeBoardId,
+      discoveryIgnoredChannelIds
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -4569,6 +4704,9 @@ function App() {
         );
         setBoards(importedBoards);
         setActiveBoardId(backup.activeBoardId);
+        setDiscoveryIgnoredChannelIds(
+          sanitizeStringList(backup.discoveryIgnoredChannelIds)
+        );
       } catch {
         window.alert("Backup file could not be imported.");
       } finally {
@@ -4702,6 +4840,173 @@ function App() {
     }
     setSavingVideo(video);
     setSaveTargetColumnId(savedBoard.columns[0].id);
+  };
+
+  const createDiscoveryBoardFromSearch = async (seeds: SimilarVideoSeed[]): Promise<void> => {
+    if (!activeBoard || activeBoard.kind !== "channels") {
+      return;
+    }
+    if (seeds.length === 0) {
+      setDiscoveryBoardError("Failed to generate a usable discovery seed.");
+      return;
+    }
+    setDiscoveryBoardError(null);
+    setIsDiscoveryBoardCreating(true);
+
+    startLogoSpin();
+    try {
+      const followedChannelIds = collectExistingChannelIds(
+        boards
+          .filter((board) => board.kind === "channels")
+          .flatMap((board) => board.columns)
+      );
+      const result = await discoverSimilarVideos({
+        seeds,
+        existingChannelIds: followedChannelIds,
+        maxSeeds: 3,
+        resultsPerSeed: 50
+      });
+      recordEstimatedQuotaUsage(result.estimatedQuotaUnits);
+      const discoveredChannels = buildDiscoveryChannelCandidates(
+        result.videos,
+        followedChannelIds,
+        10,
+        discoveryIgnoredChannelIds
+      );
+      if (discoveredChannels.length === 0) {
+        setDiscoveryBoardError("No new channels found.");
+        return;
+      }
+      const createdColumns = discoveredChannels.map(({ video }) =>
+        createColumnState({
+          handleInput: video.channelHandle || video.channelTitle || video.channelUrl,
+          currentHandle: video.channelHandle,
+          channelId: video.channelId,
+          uploadsPlaylistId: video.uploadsPlaylistId,
+          channelThumbnailUrl: video.channelThumbnailUrl,
+          lastGoodChannelThumbnailUrl: video.channelThumbnailUrl,
+          videos: [video],
+          lastFetchAt: new Date().toLocaleString()
+        })
+      );
+      const discoveryBoard = createBoardState(
+        getNextDiscoveryBoardName(boards.filter((board) => board.kind !== "saved")),
+        {
+          source: "discovery",
+          kind: "channels",
+          columns: createdColumns,
+          columnScopeFilter: [COLUMN_SCOPE_ALL]
+        },
+        0
+      );
+      clearFetchAllVisibilityState();
+      setBoards((previous) => [...previous, discoveryBoard]);
+      setActiveBoardId(discoveryBoard.id);
+      setPendingBulkFetch((previous) => [
+        ...previous,
+        ...createdColumns.map((column) => ({
+          boardId: discoveryBoard.id,
+          id: column.id,
+          handle: column.handleInput
+        }))
+      ]);
+    } catch (error) {
+      recordEstimatedQuotaUsage(0);
+      setDiscoveryBoardError(error instanceof Error ? error.message : "Failed to discover videos.");
+    } finally {
+      setIsDiscoveryBoardCreating(false);
+      stopLogoSpin();
+    }
+  };
+
+  const generateDiscoverySeedFromShownVideos = async (): Promise<void> => {
+    if (!activeBoard || activeBoard.kind !== "channels") {
+      return;
+    }
+    setDiscoveryBoardError(null);
+    const titleText = shownVideosInBoardOrder
+      .map(({ video }) => video.title.trim())
+      .filter(Boolean)
+      .join("\n");
+    if (!titleText) {
+      setDiscoveryBoardError("Fetch board videos first so discovery has something to search from.");
+      return;
+    }
+
+    setIsDiscoverySeedGenerating(true);
+    startLogoSpin();
+    try {
+      const payload = await fetchSummaryByVideoInput({
+        videoId: `discovery-seed:${activeBoard.id}:${Date.now()}`,
+        transcriptText: titleText,
+        mode: "short",
+        prompt: DISCOVERY_SEED_PROMPT
+      });
+      const seedQueries = parseDiscoverySeedTexts(payload.summary);
+      if (seedQueries.length === 0) {
+        setDiscoveryBoardError("Failed to generate a usable discovery seed.");
+        return;
+      }
+      const nextInputs = Array.from(
+        { length: DISCOVERY_SEED_FIELD_COUNT },
+        (_, index) => seedQueries[index] ?? ""
+      );
+      setDiscoverySeedInputs(nextInputs);
+    } catch (error) {
+      setDiscoveryBoardError(
+        error instanceof Error ? error.message : "Failed to generate discovery seed."
+      );
+    } finally {
+      setIsDiscoverySeedGenerating(false);
+      stopLogoSpin();
+    }
+  };
+
+  const openVideoDiscovery = (): void => {
+    if (!activeBoard || activeBoard.kind !== "channels") {
+      return;
+    }
+    setDiscoveryBoardError(null);
+    setPendingDiscoverySeeds(
+      Array.from(
+        { length: DISCOVERY_SEED_FIELD_COUNT },
+        () => ({
+          query: "",
+          source: "manual",
+          sourceTitle: "Shown video titles"
+        }) satisfies SimilarVideoSeed
+      )
+    );
+    setDiscoverySeedInputs(Array.from({ length: DISCOVERY_SEED_FIELD_COUNT }, () => ""));
+  };
+
+  const closeDiscoverySeedModal = (): void => {
+    if (isDiscoveryBoardCreating || isDiscoverySeedGenerating) {
+      return;
+    }
+    setPendingDiscoverySeeds([]);
+    setDiscoverySeedInputs([]);
+  };
+
+  const confirmDiscoverySeed = (): void => {
+    if (isDiscoveryBoardCreating || isDiscoverySeedGenerating) {
+      return;
+    }
+    const seeds = discoverySeedInputs
+      .map(normalizeDiscoverySeedText)
+      .filter((query) => query.length >= 3)
+      .filter((query, index, queries) => queries.findIndex((item) => item.toLowerCase() === query.toLowerCase()) === index)
+      .map((query) => ({
+        query,
+        source: "manual",
+        sourceTitle: "Shown video titles"
+      }) satisfies SimilarVideoSeed);
+    if (seeds.length === 0) {
+      return;
+    }
+    setPendingDiscoverySeeds([]);
+    setDiscoverySeedInputs([]);
+    void createDiscoveryBoardFromSearch(seeds);
   };
 
   const deleteSavedVideo = (): void => {
@@ -5838,6 +6143,7 @@ function App() {
             videoDurationFilterOptions={VIDEO_DURATION_FILTER_OPTIONS}
             startBoardSummaryBatch={startBoardSummaryBatch}
             isBoardSummaryBatchRunning={isBoardSummaryBatchRunning}
+            openVideoDiscovery={openVideoDiscovery}
             playAllVideos={playAllVideos}
             copyAllShownBoardLinks={copyAllShownBoardLinks}
             copiedLinkVideoId={copiedLinkVideoId}
@@ -5851,13 +6157,23 @@ function App() {
             canOpenMaintenanceBoardDurationBackfill={activeBoardDurationBackfillIds.length > 0}
             canOpenMaintenanceRefreshBoardAvatars={activeBoardAvatarRefreshIds.length > 0}
             shownVideosTotal={effectiveShownVideosTotal}
-            areBoardActionsDisabled={isSummariesBoardActive}
+            areBoardActionsDisabled={isSummariesBoardActive || isDiscoveryBoardCreating}
             scrollToEdge={scrollToEdge}
             scrollColumns={scrollColumns}
           />
 
           {boardPersistenceError ? (
             <Alert type="warning" showIcon={false} message={boardPersistenceError} />
+          ) : null}
+
+          {discoveryBoardError ? (
+            <Alert
+              type="warning"
+              showIcon={false}
+              message={discoveryBoardError}
+              closable
+              onClose={() => setDiscoveryBoardError(null)}
+            />
           ) : null}
 
           <Modal
@@ -6313,6 +6629,83 @@ function App() {
             ? `Delete list ${deletingColumn?.handleInput || ""}?`
             : `Delete channel${deletingChannelNameDisplay ? ` ${deletingChannelNameDisplay}` : ""}?`}
         </Text>
+      </Modal>
+
+      <Modal
+        title="CREATE DISCOVERY BOARD"
+        open={pendingDiscoverySeeds.length > 0}
+        onCancel={closeDiscoverySeedModal}
+        footer={
+          <div className="discovery-seed-modal-footer">
+            <Button
+              aria-label="Generate discovery seeds with LLM"
+              loading={isDiscoverySeedGenerating}
+              disabled={isDiscoverySeedGenerating || isDiscoveryBoardCreating}
+              onClick={() => {
+                void generateDiscoverySeedFromShownVideos();
+              }}
+            >
+              L
+            </Button>
+            <Space size={8}>
+              <Button
+                disabled={isDiscoverySeedGenerating || isDiscoveryBoardCreating}
+                onClick={closeDiscoverySeedModal}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="primary"
+                loading={isDiscoveryBoardCreating}
+                disabled={
+                  isDiscoverySeedGenerating ||
+                  !discoverySeedInputs.some(
+                    (input) => normalizeDiscoverySeedText(input).length >= 3
+                  )
+                }
+                onClick={confirmDiscoverySeed}
+              >
+                Create Board
+              </Button>
+            </Space>
+          </div>
+        }
+        width={420}
+      >
+        <Space direction="vertical" size={8} style={{ width: "100%" }}>
+          {Array.from(
+            { length: DISCOVERY_SEED_FIELD_COUNT },
+            (_, index) => discoverySeedInputs[index] ?? ""
+          ).map((seedInput, index) => (
+            <Input
+              key={index}
+              value={seedInput}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const nextValue = event.target.value;
+                setDiscoverySeedInputs((previous) =>
+                  Array.from(
+                    { length: DISCOVERY_SEED_FIELD_COUNT },
+                    (_, itemIndex) =>
+                      itemIndex === index ? nextValue : previous[itemIndex] ?? ""
+                  )
+                );
+              }}
+              onPressEnter={(event) => {
+                event.preventDefault();
+                confirmDiscoverySeed();
+              }}
+              placeholder={`Search seed ${index + 1}`}
+              aria-label={`Discovery search seed ${index + 1}`}
+              maxLength={120}
+              status={
+                seedInput.length > 0 && normalizeDiscoverySeedText(seedInput).length < 3
+                  ? "error"
+                  : undefined
+              }
+              autoFocus={index === 0}
+            />
+          ))}
+        </Space>
       </Modal>
 
       <Modal

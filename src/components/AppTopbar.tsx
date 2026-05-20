@@ -50,6 +50,7 @@ type AppTopbarProps = {
   videoDurationFilterOptions: Array<{ value: string; label: string }>;
   startBoardSummaryBatch: () => void;
   isBoardSummaryBatchRunning: boolean;
+  openVideoDiscovery: () => void;
   playAllVideos: () => void;
   copyAllShownBoardLinks: () => Promise<void>;
   copiedLinkVideoId: string | null;
@@ -107,6 +108,7 @@ function AppTopbarComponent({
   videoDurationFilterOptions,
   startBoardSummaryBatch,
   isBoardSummaryBatchRunning,
+  openVideoDiscovery,
   playAllVideos,
   copyAllShownBoardLinks,
   copiedLinkVideoId,
@@ -388,6 +390,17 @@ function AppTopbarComponent({
               ) : (
                 <span className="btn-icon btn-icon-check" aria-hidden />
               )}
+            </Button>
+          ) : null}
+          {!isSavedBoardActive && !areBoardActionsDisabled ? (
+            <Button
+              htmlType="button"
+              onClick={openVideoDiscovery}
+              aria-label="Create discovery board"
+              className="nav-btn top-discovery-btn"
+              data-testid="topbar-discover-videos"
+            >
+              D
             </Button>
           ) : null}
         </div>

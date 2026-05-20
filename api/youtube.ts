@@ -1,4 +1,5 @@
 import {
+  discoverSimilarVideos,
   fetchLatestVideos,
   fetchUploadsPlaylistPage,
   fetchVideoStatsByVideoIds,
@@ -8,6 +9,7 @@ import {
   resolveChannelByHandleWithThumbnail,
   resolveChannelByInputWithThumbnail
 } from "./_lib/youtube.js";
+import type { SimilarVideoSeed } from "./_lib/youtube.js";
 import { fetchYouTubeTranscript } from "./_lib/transcript.js";
 
 const ALLOWED_AVATAR_HOST_SUFFIXES = [
@@ -76,6 +78,38 @@ function parseIncludeDuration(req: any): boolean {
     value === "true" ||
     (Array.isArray(value) && value.some((item) => item === true || item === "true"));
   return normalize(bodyValue) || normalize(queryValue);
+}
+
+function parseSimilarVideoSeeds(value: unknown): SimilarVideoSeed[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item): SimilarVideoSeed | null => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+      const candidate = item as Record<string, unknown>;
+      const query = typeof candidate.query === "string" ? candidate.query.trim() : "";
+      const source =
+        candidate.source === "channel" || candidate.source === "manual"
+          ? candidate.source
+          : "video";
+      const sourceTitle =
+        typeof candidate.sourceTitle === "string" ? candidate.sourceTitle.trim() : "";
+      if (!query) {
+        return null;
+      }
+      return { query, source, sourceTitle };
+    })
+    .filter((item): item is SimilarVideoSeed => item !== null);
+}
+
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 }
 
 function isAllowedAvatarUrl(raw: string): boolean {
@@ -236,6 +270,28 @@ async function handleViewCounts(req: any, res: any): Promise<void> {
   }
 }
 
+async function handleDiscoverSimilarVideos(req: any, res: any): Promise<void> {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  try {
+    const body = parseBody(req);
+    const data = await discoverSimilarVideos({
+      seeds: parseSimilarVideoSeeds(body.seeds),
+      existingChannelIds: parseStringArray(body.existingChannelIds),
+      maxSeeds: Number(body.maxSeeds ?? 5),
+      resultsPerSeed: Number(body.resultsPerSeed ?? 10)
+    });
+    res.status(200).json(data);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to discover similar videos.";
+    res.status(400).json({ error: message });
+  }
+}
+
 async function handleChannelAvatar(req: any, res: any): Promise<void> {
   if (req.method !== "GET") {
     res.status(405).json({ error: "Method not allowed" });
@@ -325,6 +381,10 @@ export default async function handler(req: any, res: any): Promise<void> {
   }
   if (route === "view-counts") {
     await handleViewCounts(req, res);
+    return;
+  }
+  if (route === "discover-similar-videos") {
+    await handleDiscoverSimilarVideos(req, res);
     return;
   }
   if (route === "channel-avatar") {

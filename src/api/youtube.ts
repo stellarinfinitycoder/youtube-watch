@@ -1,4 +1,8 @@
-import type { VideoItem } from "../types/youtube";
+import type {
+  SimilarVideoDiscoveryRequest,
+  SimilarVideoDiscoveryResult,
+  VideoItem
+} from "../types/youtube";
 import { normalizeHandle } from "../utils/handle";
 
 const DEFAULT_LIMIT = 25;
@@ -76,7 +80,7 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
     }
     if (response.status === 404 && input.startsWith("/api/") && !backendError) {
       throw new Error(
-        "API route unavailable. Deploy on Vercel or run with `vercel dev` for local API routes."
+        "API route unavailable. Run `npm run dev:api` for local YouTube API routes, or use the deployed Vercel app."
       );
     }
     throw new Error(backendError ?? `Request failed (${response.status})`);
@@ -190,6 +194,24 @@ export async function fetchVideoStatsByVideoIds(
       cache: "no-store"
     }
   );
+}
+
+export async function discoverSimilarVideos(
+  input: SimilarVideoDiscoveryRequest
+): Promise<SimilarVideoDiscoveryResult> {
+  return fetchJson<SimilarVideoDiscoveryResult>("/api/youtube/discover-similar-videos", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      seeds: input.seeds,
+      existingChannelIds: [...new Set(input.existingChannelIds.filter(Boolean))],
+      maxSeeds: input.maxSeeds,
+      resultsPerSeed: input.resultsPerSeed
+    }),
+    cache: "no-store"
+  });
 }
 
 export async function fetchTranscriptByVideoInput(

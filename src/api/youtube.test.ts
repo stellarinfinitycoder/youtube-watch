@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildChannelAvatarProxyUrl,
+  discoverSimilarVideos,
   fetchLatestVideos,
   fetchViewCountsByVideoIds,
   getLatestVideosByHandle,
@@ -109,13 +110,131 @@ describe("youtube api client", () => {
     );
   });
 
+  it("posts board seeds for similar video discovery", async () => {
+    const spy = vi.fn().mockResolvedValueOnce(
+      makeResponse({
+        videos: [
+          {
+            videoId: "video-1",
+            title: "Similar video",
+            publishedAt: "2026-05-01T00:00:00Z",
+            thumbnailUrl: "https://img.test/video.jpg",
+            channelTitle: "Similar Channel",
+            videoUrl: "https://www.youtube.com/watch?v=video-1",
+            viewCount: 123,
+            channelId: "channel-2",
+            channelThumbnailUrl: "https://img.test/channel.jpg",
+            uploadsPlaylistId: "uploads-2",
+            channelHandle: "@similar",
+            channelUrl: "https://www.youtube.com/@similar",
+            matchReason: "Matched board video",
+            matchedSeed: "react performance",
+            score: 42,
+            alreadyOnBoard: false
+          }
+        ],
+        searchedSeeds: [
+          {
+            query: "react performance",
+            source: "video",
+            sourceTitle: "React performance patterns"
+          }
+        ],
+        estimatedQuotaUnits: 102
+      })
+    );
+    global.fetch = spy as typeof fetch;
+
+    const result = await discoverSimilarVideos({
+      seeds: [
+        {
+          query: "react performance",
+          source: "video",
+          sourceTitle: "React performance patterns"
+        }
+      ],
+      existingChannelIds: ["channel-1", "channel-1"],
+      maxSeeds: 1,
+      resultsPerSeed: 10
+    });
+
+    expect(result.videos[0].channelId).toBe("channel-2");
+    expect(spy).toHaveBeenCalledWith(
+      "/api/youtube/discover-similar-videos",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          seeds: [
+            {
+              query: "react performance",
+              source: "video",
+              sourceTitle: "React performance patterns"
+            }
+          ],
+          existingChannelIds: ["channel-1"],
+          maxSeeds: 1,
+          resultsPerSeed: 10
+        })
+      })
+    );
+  });
+
+  it("posts edited manual seeds for similar video discovery", async () => {
+    const spy = vi.fn().mockResolvedValueOnce(
+      makeResponse({
+        videos: [],
+        searchedSeeds: [
+          {
+            query: "edited ai channels",
+            source: "manual",
+            sourceTitle: "Active Seed Video about agents"
+          }
+        ],
+        estimatedQuotaUnits: 100
+      })
+    );
+    global.fetch = spy as typeof fetch;
+
+    await discoverSimilarVideos({
+      seeds: [
+        {
+          query: "edited ai channels",
+          source: "manual",
+          sourceTitle: "Active Seed Video about agents"
+        }
+      ],
+      existingChannelIds: [],
+      maxSeeds: 1,
+      resultsPerSeed: 25
+    });
+
+    expect(spy).toHaveBeenCalledWith(
+      "/api/youtube/discover-similar-videos",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          seeds: [
+            {
+              query: "edited ai channels",
+              source: "manual",
+              sourceTitle: "Active Seed Video about agents"
+            }
+          ],
+          existingChannelIds: [],
+          maxSeeds: 1,
+          resultsPerSeed: 25
+        })
+      })
+    );
+  });
+
   it("throws api route unavailable error for missing local api", async () => {
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce(makeResponse({}, false, 404)) as typeof fetch;
 
     await expect(getLatestVideosByHandle("@test")).rejects.toThrow(
-      "API route unavailable"
+      "npm run dev:api"
     );
   });
 

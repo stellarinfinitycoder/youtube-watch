@@ -8,11 +8,12 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:api": "vercel dev",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "tsc -p tsconfig.app.json --noEmit",
     "test": "vitest run",
-    "test:unit": "vitest run src/utils/handle.test.ts src/api/youtube.test.ts src/api/summarize-api.test.ts src/domain/boardAssets.test.ts",
+    "test:unit": "vitest run src/utils/handle.test.ts src/api/youtube.test.ts src/api/youtube-server.test.ts src/api/summarize-api.test.ts src/domain/boardAssets.test.ts src/domain/videoDiscovery.test.ts src/components/AppTopbar.test.tsx src/App.discoveryBoard.test.tsx",
     "test:watch": "vitest",
     "test:smoke": "playwright test",
     "verify": "npm run lint && npm run test:unit && npm run test:smoke"
@@ -25,7 +26,7 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "vercel": "^51.1.0"
+    "vercel": "^54.1.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",
