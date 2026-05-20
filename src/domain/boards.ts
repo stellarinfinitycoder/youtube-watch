@@ -65,12 +65,43 @@ export function moveBoardColumnById<
 >(
   board: TBoard,
   columnId: string,
-  direction: "left" | "right"
+  direction: "left" | "right",
+  visibleColumnIds?: readonly string[]
 ): TBoard {
   const fromIndex = board.columns.findIndex((column) => column.id === columnId);
   if (fromIndex < 0) {
     return board;
   }
+
+  if (visibleColumnIds) {
+    const columnIds = new Set(board.columns.map((column) => column.id));
+    const orderedVisibleColumnIds = [
+      ...new Set(visibleColumnIds.filter((visibleColumnId) => columnIds.has(visibleColumnId)))
+    ];
+    const visibleFromIndex = orderedVisibleColumnIds.indexOf(columnId);
+    if (visibleFromIndex < 0) {
+      return board;
+    }
+    const visibleToIndex =
+      direction === "left" ? visibleFromIndex - 1 : visibleFromIndex + 1;
+    const targetColumnId = orderedVisibleColumnIds[visibleToIndex];
+    if (!targetColumnId) {
+      return board;
+    }
+    const targetIndex = board.columns.findIndex((column) => column.id === targetColumnId);
+    if (targetIndex < 0) {
+      return board;
+    }
+    const nextColumns = [...board.columns];
+    const [moved] = nextColumns.splice(fromIndex, 1);
+    const nextTargetIndex = nextColumns.findIndex((column) => column.id === targetColumnId);
+    nextColumns.splice(direction === "left" ? nextTargetIndex : nextTargetIndex + 1, 0, moved);
+    return {
+      ...board,
+      columns: nextColumns
+    };
+  }
+
   const toIndex = direction === "left" ? fromIndex - 1 : fromIndex + 1;
   if (toIndex < 0 || toIndex >= board.columns.length) {
     return board;

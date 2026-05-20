@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "lint": "tsc -p tsconfig.app.json --noEmit",
     "test": "vitest run",
-    "test:unit": "vitest run src/utils/handle.test.ts src/api/youtube.test.ts src/api/youtube-server.test.ts src/api/summarize-api.test.ts src/domain/boardAssets.test.ts src/domain/videoDiscovery.test.ts src/components/AppTopbar.test.tsx src/App.discoveryBoard.test.tsx",
+    "test:unit": "vitest run src/utils/handle.test.ts src/api/youtube.test.ts src/api/youtube-server.test.ts src/api/summarize-api.test.ts src/domain/boards.test.ts src/domain/boardAssets.test.ts src/domain/videoDiscovery.test.ts src/components/AppTopbar.test.tsx src/App.discoveryBoard.test.tsx",
     "test:watch": "vitest",
     "test:smoke": "playwright test",
     "verify": "npm run lint && npm run test:unit && npm run test:smoke"

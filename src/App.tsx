@@ -2902,7 +2902,11 @@ function App() {
     if (!activeBoard) {
       return;
     }
-    setBoard(activeBoard.id, (board) => moveBoardColumnById(board, columnIdToMove, direction));
+    const visibleColumnIds =
+      activeBoard.kind === "saved" ? undefined : visibleColumns.map((column) => column.id);
+    setBoard(activeBoard.id, (board) =>
+      moveBoardColumnById(board, columnIdToMove, direction, visibleColumnIds)
+    );
   };
 
   const confirmDeleteColumn = (): void => {
