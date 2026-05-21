@@ -4583,7 +4583,6 @@ function App() {
     }
 
     setIsDiscoverySeedGenerating(true);
-    startLogoSpin();
     try {
       const payload = await fetchSummaryByVideoInput({
         videoId: `discovery-seed:${activeBoard.id}:${Date.now()}`,
@@ -4607,7 +4606,6 @@ function App() {
       );
     } finally {
       setIsDiscoverySeedGenerating(false);
-      stopLogoSpin();
     }
   };
 
@@ -6289,13 +6287,16 @@ function App() {
             <Button
               aria-label="Generate discovery seeds with LLM"
               className="nav-btn discovery-seed-llm-btn"
-              loading={isDiscoverySeedGenerating}
+              aria-busy={isDiscoverySeedGenerating}
               disabled={isDiscoverySeedGenerating || isDiscoveryBoardCreating}
               onClick={() => {
                 void generateDiscoverySeedFromShownVideos();
               }}
             >
-              <span className="btn-icon btn-icon-llm" aria-hidden />
+              <span
+                className={`btn-icon btn-icon-llm ${isDiscoverySeedGenerating ? "is-spinning" : ""}`}
+                aria-hidden
+              />
             </Button>
             <Space size={8}>
               <Button

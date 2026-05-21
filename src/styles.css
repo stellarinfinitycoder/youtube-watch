@@ -1976,6 +1976,12 @@ button.column-video-count:active:not(:disabled) {
   padding: 0;
 }
 
+.discovery-seed-llm-btn.ant-btn .btn-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
 .video-player-modal .speed-btn.ant-btn.ant-btn-primary {
   background: var(--amber) !important;
   color: #18110a !important;

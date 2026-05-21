@@ -292,6 +292,46 @@ describe("App discovery board", () => {
     expect(discoverSpy).not.toHaveBeenCalled();
   });
 
+  it("spins only the LLM button while generating seeds", async () => {
+    let resolveSummary:
+      | ((value: { videoId: string; model: string; summary: string; keyPoints: string[] }) => void)
+      | null = null;
+    vi.spyOn(youtubeApi, "fetchSummaryByVideoInput").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSummary = resolve;
+        })
+    );
+    mockDiscoverySuccess();
+    seedStoredBoards();
+
+    render(<App />);
+    await openDiscoverySeedModal();
+
+    const logo = screen.getByTestId("topbar-logo");
+    const llmSeedButton = screen.getByRole("button", { name: "Generate discovery seeds with LLM" });
+    fireEvent.click(llmSeedButton);
+
+    await waitFor(() => {
+      expect(llmSeedButton).toHaveAttribute("aria-busy", "true");
+      expect(llmSeedButton.querySelector(".btn-icon-llm")).toHaveClass("is-spinning");
+    });
+    expect(logo).not.toHaveClass("is-spinning");
+
+    resolveSummary?.({
+      videoId: "discovery-seed:board-active:1",
+      model: "openai/gpt-4o-mini",
+      summary: "llm ai discovery seed",
+      keyPoints: []
+    });
+
+    await waitFor(() => {
+      expect(llmSeedButton).toHaveAttribute("aria-busy", "false");
+      expect(llmSeedButton.querySelector(".btn-icon-llm")).not.toHaveClass("is-spinning");
+    });
+    expect(logo).not.toHaveClass("is-spinning");
+  });
+
   it("creates a discovery board from edited search seeds", async () => {
     const { discoverSpy, playlistSpy } = mockDiscoverySuccess();
     seedStoredBoards();
