@@ -6288,13 +6288,14 @@ function App() {
           <div className="discovery-seed-modal-footer">
             <Button
               aria-label="Generate discovery seeds with LLM"
+              className="nav-btn discovery-seed-llm-btn"
               loading={isDiscoverySeedGenerating}
               disabled={isDiscoverySeedGenerating || isDiscoveryBoardCreating}
               onClick={() => {
                 void generateDiscoverySeedFromShownVideos();
               }}
             >
-              L
+              <span className="btn-icon btn-icon-llm" aria-hidden />
             </Button>
             <Space size={8}>
               <Button
@@ -6314,7 +6315,7 @@ function App() {
                 }
                 onClick={confirmDiscoverySeed}
               >
-                Create Board
+                CREATE
               </Button>
             </Space>
           </div>

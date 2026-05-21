@@ -194,7 +194,7 @@ describe("AppTopbar", () => {
     expect(toggleAppTheme).toHaveBeenCalledTimes(1);
   });
 
-  it("creates a discovery board from the topbar D button and omits the settings link", () => {
+  it("creates a discovery board from the topbar discovery button and omits the settings link", () => {
     const openVideoDiscovery = vi.fn();
 
     render(
@@ -258,7 +258,8 @@ describe("AppTopbar", () => {
     );
 
     const discoveryButton = screen.getByRole("button", { name: "Create discovery board" });
-    expect(discoveryButton).toHaveTextContent("D");
+    expect(discoveryButton).toContainElement(discoveryButton.querySelector(".btn-icon-discover"));
+    expect(discoveryButton).not.toHaveTextContent("D");
     expect(discoveryButton).toHaveClass("top-discovery-btn");
 
     act(() => {

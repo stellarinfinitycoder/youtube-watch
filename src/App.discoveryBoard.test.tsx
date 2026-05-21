@@ -250,8 +250,10 @@ describe("App discovery board", () => {
     expect(screen.getByLabelText("Discovery search seed 1")).toHaveValue("");
     expect(screen.getByLabelText("Discovery search seed 2")).toHaveValue("");
     expect(screen.getByLabelText("Discovery search seed 3")).toHaveValue("");
-    expect(screen.getByRole("button", { name: "Generate discovery seeds with LLM" })).toHaveTextContent("L");
-    expect(screen.getByRole("button", { name: "Create Board" })).toBeDisabled();
+    const llmSeedButton = screen.getByRole("button", { name: "Generate discovery seeds with LLM" });
+    expect(llmSeedButton).toContainElement(llmSeedButton.querySelector(".btn-icon-llm"));
+    expect(llmSeedButton).not.toHaveTextContent("L");
+    expect(screen.getByRole("button", { name: "CREATE" })).toBeDisabled();
     expect(summarySpy).not.toHaveBeenCalled();
     expect(discoverSpy).not.toHaveBeenCalled();
   });
@@ -306,7 +308,7 @@ describe("App discovery board", () => {
     fireEvent.change(screen.getByLabelText("Discovery search seed 3"), {
       target: { value: "" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create Board" }));
+    fireEvent.click(screen.getByRole("button", { name: "CREATE" }));
 
     await waitFor(() => {
       expect(screen.getByLabelText("Channel 1 handle")).toHaveValue("@newone");
@@ -363,7 +365,7 @@ describe("App discovery board", () => {
       target: { value: "" }
     });
 
-    expect(screen.getByRole("button", { name: "Create Board" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "CREATE" })).toBeDisabled();
     expect(discoverSpy).not.toHaveBeenCalled();
   });
 
@@ -379,7 +381,7 @@ describe("App discovery board", () => {
     expect(await screen.findByDisplayValue("Duplicate Seed")).toBeInTheDocument();
     expect(screen.getByLabelText("Discovery search seed 2")).toHaveValue("");
     expect(screen.getByLabelText("Discovery search seed 3")).toHaveValue("");
-    fireEvent.click(screen.getByRole("button", { name: "Create Board" }));
+    fireEvent.click(screen.getByRole("button", { name: "CREATE" }));
 
     await waitFor(() => {
       expect(discoverSpy).toHaveBeenCalledWith(
@@ -411,7 +413,7 @@ describe("App discovery board", () => {
     fireEvent.change(screen.getByLabelText("Discovery search seed 1"), {
       target: { value: "manual discovery seed" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create Board" }));
+    fireEvent.click(screen.getByRole("button", { name: "CREATE" }));
 
     await waitFor(() => {
       expect(screen.getByLabelText("Channel 1 handle")).toHaveValue("@newtwo");
@@ -428,7 +430,7 @@ describe("App discovery board", () => {
     fireEvent.change(screen.getByLabelText("Discovery search seed 1"), {
       target: { value: "manual discovery seed" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create Board" }));
+    fireEvent.click(screen.getByRole("button", { name: "CREATE" }));
 
     await waitFor(() => {
       expect(screen.getByLabelText("Channel 1 handle")).toHaveValue("@newone");

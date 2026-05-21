@@ -400,7 +400,7 @@ function AppTopbarComponent({
               className="nav-btn top-discovery-btn"
               data-testid="topbar-discover-videos"
             >
-              D
+              <span className="btn-icon btn-icon-discover" aria-hidden />
             </Button>
           ) : null}
         </div>

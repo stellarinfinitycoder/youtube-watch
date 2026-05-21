@@ -590,9 +590,6 @@ body {
 
 .columns-nav .top-discovery-btn.ant-btn {
   order: 14;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0;
 }
 
 .columns-nav [aria-label="Bulk add channels"] {
@@ -1171,6 +1168,16 @@ button.column-video-count:active:not(:disabled) {
 .btn-icon-fetch {
   -webkit-mask: url("/svg/btn-fetch.svg") center / contain no-repeat;
   mask: url("/svg/btn-fetch.svg") center / contain no-repeat;
+}
+
+.btn-icon-discover {
+  -webkit-mask: url("/svg/btn-discover.svg") center / contain no-repeat;
+  mask: url("/svg/btn-discover.svg") center / contain no-repeat;
+}
+
+.btn-icon-llm {
+  -webkit-mask: url("/svg/btn-llm.svg") center / contain no-repeat;
+  mask: url("/svg/btn-llm.svg") center / contain no-repeat;
 }
 
 .btn-icon-remove-all {
@@ -1960,6 +1967,13 @@ button.column-video-count:active:not(:disabled) {
 
 .discovery-seed-modal-footer .ant-space {
   margin-left: auto;
+}
+
+.discovery-seed-llm-btn.ant-btn {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
 }
 
 .video-player-modal .speed-btn.ant-btn.ant-btn-primary {
