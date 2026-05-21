@@ -4502,13 +4502,27 @@ function App() {
     setDiscoveryBoardError(null);
     setIsDiscoveryBoardCreating(true);
 
+    const followedChannelIds = collectExistingChannelIds(
+      boards
+        .filter((board) => board.kind === "channels")
+        .flatMap((board) => board.columns)
+    );
+    const discoveryBoard = createBoardState(
+      getNextDiscoveryBoardName(boards.filter((board) => board.kind !== "saved")),
+      {
+        source: "discovery",
+        kind: "channels",
+        columns: [],
+        columnScopeFilter: [COLUMN_SCOPE_ALL]
+      },
+      0
+    );
+    clearFetchAllVisibilityState();
+    setBoards((previous) => [...previous, discoveryBoard]);
+    setActiveBoardId(discoveryBoard.id);
+
     startLogoSpin();
     try {
-      const followedChannelIds = collectExistingChannelIds(
-        boards
-          .filter((board) => board.kind === "channels")
-          .flatMap((board) => board.columns)
-      );
       const result = await discoverSimilarVideos({
         seeds,
         existingChannelIds: followedChannelIds,
@@ -4538,19 +4552,13 @@ function App() {
           lastFetchAt: new Date().toLocaleString()
         })
       );
-      const discoveryBoard = createBoardState(
-        getNextDiscoveryBoardName(boards.filter((board) => board.kind !== "saved")),
-        {
-          source: "discovery",
-          kind: "channels",
+      setBoards((previous) =>
+        updateBoardById(previous, discoveryBoard.id, (board) => ({
+          ...board,
           columns: createdColumns,
           columnScopeFilter: [COLUMN_SCOPE_ALL]
-        },
-        0
+        }))
       );
-      clearFetchAllVisibilityState();
-      setBoards((previous) => [...previous, discoveryBoard]);
-      setActiveBoardId(discoveryBoard.id);
       setPendingBulkFetch((previous) => [
         ...previous,
         ...createdColumns.map((column) => ({
@@ -5805,7 +5813,7 @@ function App() {
             canOpenMaintenanceRefreshBoardAvatars={activeBoardAvatarRefreshIds.length > 0}
             shownVideosTotal={effectiveShownVideosTotal}
             hasVisibleBoardColumns={visibleColumns.length > 0}
-            areBoardActionsDisabled={isSummariesBoardActive || isDiscoveryBoardCreating}
+            areBoardActionsDisabled={isSummariesBoardActive}
             scrollToEdge={scrollToEdge}
             scrollColumns={scrollColumns}
           />

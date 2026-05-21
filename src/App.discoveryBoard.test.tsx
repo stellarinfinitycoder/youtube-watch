@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import * as youtubeApi from "./api/youtube";
@@ -109,11 +109,8 @@ function mockSeedGeneration(
   });
 }
 
-function mockDiscoverySuccess(): {
-  discoverSpy: ReturnType<typeof vi.spyOn>;
-  playlistSpy: ReturnType<typeof vi.spyOn>;
-} {
-  const discoverSpy = vi.spyOn(youtubeApi, "discoverSimilarVideos").mockResolvedValue({
+function makeDiscoverySuccessResult() {
+  return {
     videos: [
       {
         videoId: "existing-active-video",
@@ -196,7 +193,16 @@ function mockDiscoverySuccess(): {
       }
     ],
     estimatedQuotaUnits: 102
-  });
+  };
+}
+
+function mockDiscoverySuccess(): {
+  discoverSpy: ReturnType<typeof vi.spyOn>;
+  playlistSpy: ReturnType<typeof vi.spyOn>;
+} {
+  const discoverSpy = vi.spyOn(youtubeApi, "discoverSimilarVideos").mockResolvedValue(
+    makeDiscoverySuccessResult()
+  );
   const playlistSpy = vi.spyOn(youtubeApi, "fetchPlaylistDiscoveryPage").mockResolvedValue({
     videos: [],
     nextPageToken: null
@@ -374,6 +380,55 @@ describe("App discovery board", () => {
     await waitFor(() => {
       expect(playlistSpy).toHaveBeenCalledWith("uploads-new-one", "", 50);
       expect(playlistSpy).toHaveBeenCalledWith("uploads-new-two", "", 50);
+    });
+  });
+
+  it("switches to the discovery board before discovered channels populate", async () => {
+    let resolveDiscover:
+      | ((value: Awaited<ReturnType<typeof youtubeApi.discoverSimilarVideos>>) => void)
+      | null = null;
+    const discoverSpy = vi.spyOn(youtubeApi, "discoverSimilarVideos").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDiscover = resolve;
+        })
+    );
+    const playlistSpy = vi.spyOn(youtubeApi, "fetchPlaylistDiscoveryPage").mockResolvedValue({
+      videos: [],
+      nextPageToken: null
+    });
+    vi.spyOn(youtubeApi, "fetchVideoStatsByVideoIds").mockResolvedValue({});
+    seedStoredBoards();
+
+    render(<App />);
+    await openDiscoverySeedModal();
+
+    fireEvent.change(screen.getByLabelText("Discovery search seed 1"), {
+      target: { value: "edited ai channels" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "CREATE" }));
+
+    await waitFor(() => {
+      expect(screen.queryByDisplayValue("@active")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Fetch column 1" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Add column" })).toBeInTheDocument();
+      expect(screen.getByText("DISCOVERY 1")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "Summarize all shown videos" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Play all videos" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Copy all shown links on board" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Mark all shown videos watched" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create discovery board" })).toBeDisabled();
+    expect(discoverSpy).toHaveBeenCalledTimes(1);
+    expect(playlistSpy).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveDiscover?.(makeDiscoverySuccessResult());
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Channel 1 handle")).toHaveValue("@newone");
+      expect(screen.getByLabelText("Channel 2 handle")).toHaveValue("@newtwo");
     });
   });
 
