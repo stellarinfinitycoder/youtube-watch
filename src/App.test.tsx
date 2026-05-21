@@ -111,6 +111,18 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Add column" })).toBeInTheDocument();
   });
 
+  it("creates new boards without an empty channel column", async () => {
+    render(<App />);
+
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Board selector" }));
+    fireEvent.click(await screen.findByText("NEW BOARD"));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Fetch column 1" })).not.toBeInTheDocument()
+    );
+    expect(screen.getByRole("button", { name: "Add column" })).toBeInTheDocument();
+  });
+
   it("switches boards without fetching YouTube data and preloads destination assets", async () => {
     const resolveInputSpy = vi.spyOn(youtubeApi, "resolveChannelByInputWithThumbnail");
     const resolveHandleSpy = vi.spyOn(youtubeApi, "resolveChannelByHandleWithThumbnail");

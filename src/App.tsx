@@ -4153,7 +4153,7 @@ function App() {
     const board = createBoardState(
       getNextBoardName(boards.filter((item) => item.kind !== "saved")),
       { kind: "channels" },
-      1
+      0
     );
     setBoards((previous) => [...previous, board]);
     setActiveBoardId(board.id);
@@ -5804,6 +5804,7 @@ function App() {
             canOpenMaintenanceBoardDurationBackfill={activeBoardDurationBackfillIds.length > 0}
             canOpenMaintenanceRefreshBoardAvatars={activeBoardAvatarRefreshIds.length > 0}
             shownVideosTotal={effectiveShownVideosTotal}
+            hasVisibleBoardColumns={visibleColumns.length > 0}
             areBoardActionsDisabled={isSummariesBoardActive || isDiscoveryBoardCreating}
             scrollToEdge={scrollToEdge}
             scrollColumns={scrollColumns}

@@ -64,6 +64,7 @@ type AppTopbarProps = {
   canOpenMaintenanceBoardDurationBackfill: boolean;
   canOpenMaintenanceRefreshBoardAvatars: boolean;
   shownVideosTotal: number;
+  hasVisibleBoardColumns?: boolean;
   areBoardActionsDisabled: boolean;
   scrollToEdge: (direction: "start" | "end") => void;
   scrollColumns: (direction: "left" | "right") => void;
@@ -122,6 +123,7 @@ function AppTopbarComponent({
   canOpenMaintenanceBoardDurationBackfill,
   canOpenMaintenanceRefreshBoardAvatars,
   shownVideosTotal,
+  hasVisibleBoardColumns = true,
   areBoardActionsDisabled,
   scrollToEdge,
   scrollColumns
@@ -129,6 +131,7 @@ function AppTopbarComponent({
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
   const channelBoardCount = displayedBoards.filter((board) => board.kind === "channels").length;
   const themeToggleLabel = appTheme === "lite" ? "SWITCH TO DARK" : "SWITCH TO LITE";
+  const areShownVideoActionsDisabled = !hasVisibleBoardColumns || shownVideosTotal === 0;
   const maintenanceMenuItems: MenuProps["items"] = [
     { key: "toggle-theme", label: themeToggleLabel },
     { key: "backup", label: "BACKUP" },
@@ -358,6 +361,7 @@ function AppTopbarComponent({
                 onClick={playAllVideos}
                 aria-label="Play all videos"
                 className="nav-btn"
+                disabled={areShownVideoActionsDisabled}
                 data-testid="topbar-play-all"
               >
                 <span className="btn-icon btn-icon-play" aria-hidden />
@@ -398,6 +402,7 @@ function AppTopbarComponent({
               onClick={openVideoDiscovery}
               aria-label="Create discovery board"
               className="nav-btn top-discovery-btn"
+              disabled={areShownVideoActionsDisabled}
               data-testid="topbar-discover-videos"
             >
               <span className="btn-icon btn-icon-discover" aria-hidden />
