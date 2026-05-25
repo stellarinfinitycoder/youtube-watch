@@ -3582,6 +3582,13 @@ button.column-video-count:active:not(:disabled) {
   transform: none;
 }
 
+[data-theme="lite"] .board-option-move-btn:disabled {
+  background: var(--control-bg) !important;
+  color: var(--disabled-text) !important;
+  border-color: var(--amber-soft) !important;
+  opacity: 1;
+}
+
 [data-theme="lite"] .ant-btn-primary,
 [data-theme="lite"] .summary-prompt-action-btn.ant-btn-primary,
 [data-theme="lite"] .delete-confirm-ok.ant-btn-primary:not(.ant-btn-dangerous) {
