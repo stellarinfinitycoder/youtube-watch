@@ -205,6 +205,124 @@ describe("BoardSummaryBatchModal", () => {
     expect(onMarkAllShownWatched).toHaveBeenCalledTimes(1);
   });
 
+  it("copies a row summary as Slack-ready plain text", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+
+    render(
+      <BoardSummaryBatchModal
+        open
+        onCancel={() => undefined}
+        summaryFormats={[{ id: "summary-default", name: "SUMMARY", prompt: "Prompt", model: "", isDefault: true, createdAt: 1, updatedAt: 1 }]}
+        selectedSummaryFormatId="summary-default"
+        isPreparing={false}
+        isCopied={false}
+        items={[baseItem]}
+        onCopyAll={async () => undefined}
+        onCopyAllSlack={async () => undefined}
+        onSummarizeShown={async () => undefined}
+        isSummarizingShown={false}
+        onMarkAllShownWatched={() => undefined}
+        videoFilter="new"
+        shownVideosTotal={1}
+        onSummaryFormatChange={() => undefined}
+        activeBoardId="board-1"
+        isSavedBoardActive={false}
+        copiedLinkVideoId={null}
+        saveDestinationColumnsLength={1}
+        savedBoardColumnsLength={1}
+        filteredVideosByColumnId={new Map([["column-1", [baseItem.video]]])}
+        isVideoMarkedWatched={() => false}
+        videoStatsBackfillInFlight={[]}
+        videoMetaFeedbackById={{}}
+        formatVideoMeta={() => "Meta"}
+        backfillVideoStats={async () => undefined}
+        getVideoThumbnailSrc={(video) => video.thumbnailUrl}
+        onHandleVideoThumbnailError={() => undefined}
+        onOpenTranscript={async () => undefined}
+        onCopyVideoLink={async () => undefined}
+        onOpenMoveSavedVideoModal={() => undefined}
+        onSetDeletingSavedVideo={() => undefined}
+        onMoveSavedVideoInManualOrder={() => undefined}
+        onOpenSaveVideoModal={() => undefined}
+        onToggleWatched={() => undefined}
+        onOpenVideo={() => undefined}
+      />
+    );
+
+    const copySlackButton = screen.getByRole("button", {
+      name: "Copy Slack-ready summary for Example video"
+    });
+    expect(copySlackButton.querySelector(".btn-icon-slack")).toHaveClass("anticon-slack");
+    expect(
+      screen
+        .getByRole("button", { name: "Copy Slack-ready board summaries" })
+        .querySelector(".btn-icon-slack")
+    ).toHaveClass("anticon-slack");
+    fireEvent.click(copySlackButton);
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        "Example video\n\nSummary text\n\n- Point one\n\nhttps://www.youtube.com/watch?v=video-1"
+      );
+    });
+  });
+
+  it("disables Slack-ready copy for loading and error rows", () => {
+    render(
+      <BoardSummaryBatchModal
+        open
+        onCancel={() => undefined}
+        summaryFormats={[{ id: "summary-default", name: "SUMMARY", prompt: "Prompt", model: "", isDefault: true, createdAt: 1, updatedAt: 1 }]}
+        selectedSummaryFormatId="summary-default"
+        isPreparing={false}
+        isCopied={false}
+        items={[
+          { ...baseItem, videoId: "loading", status: "loading", summary: "", keyPoints: [] },
+          { ...baseItem, videoId: "error", status: "error", summary: "", keyPoints: [], error: "Failed" }
+        ]}
+        onCopyAll={async () => undefined}
+        onCopyAllSlack={async () => undefined}
+        onSummarizeShown={async () => undefined}
+        isSummarizingShown={false}
+        onMarkAllShownWatched={() => undefined}
+        videoFilter="new"
+        shownVideosTotal={2}
+        onSummaryFormatChange={() => undefined}
+        activeBoardId="board-1"
+        isSavedBoardActive={false}
+        copiedLinkVideoId={null}
+        saveDestinationColumnsLength={1}
+        savedBoardColumnsLength={1}
+        filteredVideosByColumnId={new Map([["column-1", [baseItem.video]]])}
+        isVideoMarkedWatched={() => false}
+        videoStatsBackfillInFlight={[]}
+        videoMetaFeedbackById={{}}
+        formatVideoMeta={() => "Meta"}
+        backfillVideoStats={async () => undefined}
+        getVideoThumbnailSrc={(video) => video.thumbnailUrl}
+        onHandleVideoThumbnailError={() => undefined}
+        onOpenTranscript={async () => undefined}
+        onCopyVideoLink={async () => undefined}
+        onOpenMoveSavedVideoModal={() => undefined}
+        onSetDeletingSavedVideo={() => undefined}
+        onMoveSavedVideoInManualOrder={() => undefined}
+        onOpenSaveVideoModal={() => undefined}
+        onToggleWatched={() => undefined}
+        onOpenVideo={() => undefined}
+      />
+    );
+
+    expect(screen.getAllByRole("button", { name: "Copy Slack-ready summary for Example video" })).toEqual([
+      expect.objectContaining({ disabled: true }),
+      expect.objectContaining({ disabled: true })
+    ]);
+    expect(screen.getByRole("button", { name: "Copy Slack-ready board summaries" })).toBeDisabled();
+  });
+
   it("renders generated summary markdown instead of raw markdown text", async () => {
     const markdownItem: BoardSummaryBatchItem = {
       ...baseItem,

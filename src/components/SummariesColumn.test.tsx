@@ -73,7 +73,7 @@ describe("SummariesColumn", () => {
 
     expect(within(screen.getByLabelText("Stored summaries")).getByText("Summarized Video")).toBeInTheDocument();
     expect(screen.getByText("TLDR")).toBeInTheDocument();
-    const summaryMeta = screen.getByText("GPT-4O-MINI | 28.04");
+    const summaryMeta = screen.getByText("GPT-4O-MINI | 27.04");
     expect(summaryMeta).toBeInTheDocument();
     expect(summaryMeta).toHaveClass("video-meta");
     expect(await screen.findByText("Cached summary text")).toBeInTheDocument();
@@ -85,8 +85,14 @@ describe("SummariesColumn", () => {
     const copySummaryButton = screen.getByRole("button", {
       name: "Copy TLDR - GPT-4O-MINI - 2026-04-28"
     });
+    const copySlackSummaryButton = screen.getByRole("button", {
+      name: "Copy Slack-ready TLDR - GPT-4O-MINI - 2026-04-28"
+    });
     const copyAllButton = screen.getByRole("button", {
       name: "Copy all summaries for Summarized Video"
+    });
+    const copyAllSlackButton = screen.getByRole("button", {
+      name: "Copy Slack-ready summaries for Summarized Video"
     });
     const deleteAllButton = screen.getByRole("button", {
       name: "Delete all summaries for Summarized Video"
@@ -97,6 +103,10 @@ describe("SummariesColumn", () => {
     expect(deleteAllButton.querySelector(".btn-icon-delete")).not.toBeNull();
     expect(copySummaryButton).toHaveClass("board-summary-row-copy-btn");
     expect(copySummaryButton.querySelector(".btn-icon-copy")).not.toBeNull();
+    expect(copySlackSummaryButton).toHaveClass("board-summary-row-copy-btn");
+    expect(copySlackSummaryButton.querySelector(".btn-icon-slack")).toHaveClass("anticon-slack");
+    expect(copyAllSlackButton).toHaveClass("board-summary-row-copy-btn");
+    expect(copyAllSlackButton.querySelector(".btn-icon-slack")).toHaveClass("anticon-slack");
     expect(deleteSummaryButton).toHaveClass("remove-column-btn");
     expect(deleteSummaryButton.querySelector(".btn-icon-delete")).not.toBeNull();
     const selectedTile = screen
@@ -291,7 +301,7 @@ describe("SummariesColumn", () => {
     });
     await user.click(copyButton);
 
-    expect(writeText).toHaveBeenCalledWith("## TLDR\nGPT-4O-MINI | 28.04\n\nCached summary text");
+    expect(writeText).toHaveBeenCalledWith("## TLDR\nGPT-4O-MINI | 27.04\n\nCached summary text");
     expect(copyButton).toHaveClass("is-copied");
     expect(copyButton.querySelector(".btn-icon-check")).not.toBeNull();
   });
@@ -355,9 +365,134 @@ describe("SummariesColumn", () => {
     await user.click(copyAllButton);
 
     expect(writeText).toHaveBeenCalledWith(
-      "## TLDR\nGPT-4O-MINI | 28.04\n\nCached summary text\n\n---\n\n## KEYPOINTS\nGPT-4O-MINI | 28.04\n\nSecond summary text"
+      "## TLDR\nGPT-4O-MINI | 27.04\n\nCached summary text\n\n---\n\n## KEYPOINTS\nGPT-4O-MINI | 27.04\n\nSecond summary text"
     );
     expect(copyAllButton).toHaveClass("is-copied");
     expect(copyAllButton.querySelector(".btn-icon-check")).not.toBeNull();
+  });
+
+  it("copies a stored summary as Slack-ready plain text", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+
+    render(
+      <SummariesColumn
+        activeBoardId="__summaries_board__"
+        videos={[summaryVideo]}
+        selectedVideoId="video-1"
+        selectedSummaryEntries={[
+          {
+            id: "summary-1",
+            label: "TLDR - GPT-4O-MINI - 2026-04-28",
+            summary: "Cached summary text",
+            keyPoints: [],
+            model: "openai/gpt-4o-mini",
+            cachedAt: Date.parse("2026-04-28T10:00:00Z"),
+            promptHash: "summary-1",
+            summaryFormatId: "tldr"
+          }
+        ]}
+        selectedSummaryLoading={false}
+        selectedSummaryError={null}
+        copiedLinkVideoId={null}
+        saveDestinationColumnsLength={1}
+        videoStatsBackfillInFlight={[]}
+        videoMetaFeedbackById={{}}
+        formatVideoMeta={() => "10.04 | -- | 100"}
+        backfillVideoStats={async () => undefined}
+        getVideoThumbnailSrc={(video) => video.thumbnailUrl}
+        handleVideoThumbnailError={() => undefined}
+        openTranscript={async () => undefined}
+        copyVideoLink={async () => undefined}
+        openSaveVideoModal={() => undefined}
+        toggleWatched={() => undefined}
+        openVideo={() => undefined}
+        deleteStoredSummary={async () => undefined}
+        deleteAllStoredSummaries={async () => undefined}
+      />
+    );
+
+    const copySlackButton = screen.getByRole("button", {
+      name: "Copy Slack-ready TLDR - GPT-4O-MINI - 2026-04-28"
+    });
+    await user.click(copySlackButton);
+
+    expect(writeText).toHaveBeenCalledWith(
+      "Summarized Video\n\nCached summary text\n\nhttps://www.youtube.com/watch?v=video-1"
+    );
+    expect(copySlackButton).toHaveClass("is-copied");
+  });
+
+  it("copies all selected stored summaries as Slack-ready plain text", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+
+    render(
+      <SummariesColumn
+        activeBoardId="__summaries_board__"
+        videos={[summaryVideo]}
+        selectedVideoId="video-1"
+        selectedSummaryEntries={[
+          {
+            id: "summary-1",
+            label: "TLDR - GPT-4O-MINI - 2026-04-28",
+            summary: "Cached summary text",
+            keyPoints: [],
+            model: "openai/gpt-4o-mini",
+            cachedAt: Date.parse("2026-04-28T10:00:00Z"),
+            promptHash: "summary-1",
+            summaryFormatId: "tldr"
+          },
+          {
+            id: "summary-2",
+            label: "KEYPOINTS - GPT-4O-MINI - 2026-04-28",
+            summary: "Second summary text",
+            keyPoints: [],
+            model: "openai/gpt-4o-mini",
+            cachedAt: Date.parse("2026-04-28T11:00:00Z"),
+            promptHash: "summary-2",
+            summaryFormatId: "keypoints"
+          }
+        ]}
+        selectedSummaryLoading={false}
+        selectedSummaryError={null}
+        copiedLinkVideoId={null}
+        saveDestinationColumnsLength={1}
+        videoStatsBackfillInFlight={[]}
+        videoMetaFeedbackById={{}}
+        formatVideoMeta={() => "10.04 | -- | 100"}
+        backfillVideoStats={async () => undefined}
+        getVideoThumbnailSrc={(video) => video.thumbnailUrl}
+        handleVideoThumbnailError={() => undefined}
+        openTranscript={async () => undefined}
+        copyVideoLink={async () => undefined}
+        openSaveVideoModal={() => undefined}
+        toggleWatched={() => undefined}
+        openVideo={() => undefined}
+        deleteStoredSummary={async () => undefined}
+        deleteAllStoredSummaries={async () => undefined}
+      />
+    );
+
+    const copyAllSlackButton = screen.getByRole("button", {
+      name: "Copy Slack-ready summaries for Summarized Video"
+    });
+    await user.click(copyAllSlackButton);
+
+    expect(writeText).toHaveBeenCalledWith(
+      [
+        "Summarized Video\n\nCached summary text\n\nhttps://www.youtube.com/watch?v=video-1",
+        "Summarized Video\n\nSecond summary text\n\nhttps://www.youtube.com/watch?v=video-1"
+      ].join("\n\n---\n\n")
+    );
+    expect(copyAllSlackButton).toHaveClass("is-copied");
   });
 });

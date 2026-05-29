@@ -1,5 +1,7 @@
 import { Button, Checkbox, Input, Modal, Select, Space, Typography } from "antd";
-import { Suspense, lazy, memo } from "react";
+import { SlackOutlined } from "@ant-design/icons";
+import { Suspense, lazy, memo, useEffect, useRef, useState } from "react";
+import { formatSlackSummaryCopyPayload, type SlackSummaryCopyPayload } from "../domain/slackCopy";
 import type { VideoItem } from "../types/youtube";
 import { VideoTile } from "./VideoTile";
 import type { ColumnStateLike, InlineMetaFeedback } from "./boardColumnsShared";
@@ -144,6 +146,83 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
   const hasSummaryContent = plainSummaryText.length > 0;
   const isSummaryModeSelectorUsable =
     transcriptViewMode === "summary" && !isSummaryPromptEditMode && hasSummaryContent;
+  const [isSlackSummaryCopied, setIsSlackSummaryCopied] = useState(false);
+  const slackCopyFeedbackTimeoutRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (slackCopyFeedbackTimeoutRef.current) {
+        window.clearTimeout(slackCopyFeedbackTimeoutRef.current);
+      }
+    },
+    []
+  );
+
+  const copyPlainTextToClipboard = async (text: string): Promise<void> => {
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard API unavailable.");
+      }
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "true");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+  };
+
+  const copySlackPayloadToClipboard = async (payload: SlackSummaryCopyPayload): Promise<void> => {
+    if (!payload.text) {
+      return;
+    }
+    try {
+      if (
+        payload.html &&
+        navigator.clipboard &&
+        typeof navigator.clipboard.write === "function" &&
+        typeof ClipboardItem !== "undefined"
+      ) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([payload.text], { type: "text/plain" }),
+            "text/html": new Blob([payload.html], { type: "text/html" })
+          })
+        ]);
+      } else {
+        await copyPlainTextToClipboard(payload.text);
+      }
+    } catch {
+      await copyPlainTextToClipboard(payload.text);
+    }
+  };
+
+  const copySummaryForSlack = async (): Promise<void> => {
+    const payload = formatSlackSummaryCopyPayload({
+      title: transcriptVideo.title,
+      summary: plainSummaryText,
+      videoUrl: transcriptVideo.videoUrl
+    });
+    if (!payload.text) {
+      return;
+    }
+
+    await copySlackPayloadToClipboard(payload);
+    setIsSlackSummaryCopied(true);
+    if (slackCopyFeedbackTimeoutRef.current) {
+      window.clearTimeout(slackCopyFeedbackTimeoutRef.current);
+    }
+    slackCopyFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setIsSlackSummaryCopied(false);
+      slackCopyFeedbackTimeoutRef.current = null;
+    }, 1000);
+  };
 
   return (
     <Modal
@@ -346,6 +425,29 @@ function TranscriptSummaryModalComponent(props: TranscriptSummaryModalProps) {
                   <span className="btn-icon btn-icon-check" aria-hidden />
                 ) : (
                   <span className="btn-icon btn-icon-copy" aria-hidden />
+                )}
+              </Button>
+              <Button
+                htmlType="button"
+                className={`column-move-btn transcript-copy-btn ${
+                  isSlackSummaryCopied ? "is-copied" : ""
+                }`}
+                aria-label="Copy Slack-ready summary"
+                onClick={() => void copySummaryForSlack()}
+                disabled={
+                  isSummaryPromptEditMode ||
+                  transcriptViewMode !== "summary" ||
+                  summaryLoading ||
+                  summaryHydrating ||
+                  transcriptHydrating ||
+                  !!summaryError ||
+                  plainSummaryText.length === 0
+                }
+              >
+                {isSlackSummaryCopied ? (
+                  <span className="btn-icon btn-icon-check" aria-hidden />
+                ) : (
+                  <SlackOutlined className="btn-icon btn-icon-slack" aria-hidden />
                 )}
               </Button>
             </div>

@@ -1,6 +1,12 @@
 import { Button, Empty, List, Typography } from "antd";
+import { SlackOutlined } from "@ant-design/icons";
 import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from "react";
 import type { StoredSummaryDisplayEntry, SummariesBoardVideo } from "../domain/summariesBoard";
+import {
+  formatSlackSummaryCopyPayload,
+  formatSlackSummaryDigestCopyPayload,
+  type SlackSummaryCopyPayload
+} from "../domain/slackCopy";
 import type { VideoItem } from "../types/youtube";
 import type { InlineMetaFeedback } from "./boardColumnsShared";
 import { VideoTile } from "./VideoTile";
@@ -123,16 +129,79 @@ function SummariesColumnComponent({
   deleteAllStoredSummaries
 }: SummariesColumnProps) {
   const [copiedSummaryPromptHash, setCopiedSummaryPromptHash] = useState<string | null>(null);
+  const [copiedSlackSummaryPromptHash, setCopiedSlackSummaryPromptHash] = useState<string | null>(
+    null
+  );
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
+  const slackCopyFeedbackTimeoutRef = useRef<number | null>(null);
 
   useEffect(
     () => () => {
       if (copyFeedbackTimeoutRef.current) {
         window.clearTimeout(copyFeedbackTimeoutRef.current);
       }
+      if (slackCopyFeedbackTimeoutRef.current) {
+        window.clearTimeout(slackCopyFeedbackTimeoutRef.current);
+      }
     },
     []
   );
+
+  const copyPlainTextToClipboard = async (text: string): Promise<void> => {
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard API unavailable.");
+      }
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "true");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+  };
+
+  const copySlackPayloadToClipboard = async (payload: SlackSummaryCopyPayload): Promise<void> => {
+    if (!payload.text) {
+      return;
+    }
+    try {
+      if (
+        payload.html &&
+        navigator.clipboard &&
+        typeof navigator.clipboard.write === "function" &&
+        typeof ClipboardItem !== "undefined"
+      ) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([payload.text], { type: "text/plain" }),
+            "text/html": new Blob([payload.html], { type: "text/html" })
+          })
+        ]);
+      } else {
+        await copyPlainTextToClipboard(payload.text);
+      }
+    } catch {
+      await copyPlainTextToClipboard(payload.text);
+    }
+  };
+
+  const showSlackCopyFeedback = (value: string): void => {
+    setCopiedSlackSummaryPromptHash(value);
+    if (slackCopyFeedbackTimeoutRef.current) {
+      window.clearTimeout(slackCopyFeedbackTimeoutRef.current);
+    }
+    slackCopyFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setCopiedSlackSummaryPromptHash(null);
+      slackCopyFeedbackTimeoutRef.current = null;
+    }, SUMMARY_COPY_FEEDBACK_MS);
+  };
 
   const copyStoredSummary = async (entry: StoredSummaryDisplayEntry): Promise<void> => {
     const text = formatStoredSummaryCopyText(entry);
@@ -180,6 +249,23 @@ function SummariesColumnComponent({
     }, SUMMARY_COPY_FEEDBACK_MS);
   };
 
+  const copyStoredSummaryForSlack = async (entry: StoredSummaryDisplayEntry): Promise<void> => {
+    if (!selectedSummaryVideo) {
+      return;
+    }
+    const payload = formatSlackSummaryCopyPayload({
+      title: selectedSummaryVideo.title,
+      summary: entry.summary,
+      videoUrl: selectedSummaryVideo.videoUrl
+    });
+    if (!payload.text) {
+      return;
+    }
+
+    await copySlackPayloadToClipboard(payload);
+    showSlackCopyFeedback(entry.promptHash);
+  };
+
   const copyAllStoredSummaries = async (): Promise<void> => {
     const text = formatStoredSummariesCopyText(selectedSummaryEntries);
     const html = formatStoredSummariesCopyHtml(selectedSummaryEntries);
@@ -224,6 +310,25 @@ function SummariesColumnComponent({
       setCopiedSummaryPromptHash(null);
       copyFeedbackTimeoutRef.current = null;
     }, SUMMARY_COPY_FEEDBACK_MS);
+  };
+
+  const copyAllStoredSummariesForSlack = async (): Promise<void> => {
+    if (!selectedSummaryVideo) {
+      return;
+    }
+    const payload = formatSlackSummaryDigestCopyPayload(
+      selectedSummaryEntries.map((entry) => ({
+        title: selectedSummaryVideo.title,
+        summary: entry.summary,
+        videoUrl: selectedSummaryVideo.videoUrl
+      }))
+    );
+    if (!payload.text) {
+      return;
+    }
+
+    await copySlackPayloadToClipboard(payload);
+    showSlackCopyFeedback("__all__");
   };
 
   const videoItems = useMemo(
@@ -327,6 +432,21 @@ function SummariesColumnComponent({
                   </Button>
                   <Button
                     htmlType="button"
+                    className={`column-move-btn transcript-copy-btn board-summary-copy-btn board-summary-row-copy-btn ${
+                      copiedSlackSummaryPromptHash === "__all__" ? "is-copied" : ""
+                    }`}
+                    aria-label={`Copy Slack-ready summaries for ${selectedSummaryVideo.title}`}
+                    disabled={selectedSummaryLoading || selectedSummaryEntries.length === 0}
+                    onClick={() => void copyAllStoredSummariesForSlack()}
+                  >
+                    {copiedSlackSummaryPromptHash === "__all__" ? (
+                      <span className="btn-icon btn-icon-check" aria-hidden />
+                    ) : (
+                      <SlackOutlined className="btn-icon btn-icon-slack" aria-hidden />
+                    )}
+                  </Button>
+                  <Button
+                    htmlType="button"
                     className="remove-column-btn"
                     aria-label={`Delete all summaries for ${selectedSummaryVideo.title}`}
                     disabled={selectedSummaryLoading || selectedSummaryEntries.length === 0}
@@ -369,6 +489,21 @@ function SummariesColumnComponent({
                                 <span className="btn-icon btn-icon-check" aria-hidden />
                               ) : (
                                 <span className="btn-icon btn-icon-copy" aria-hidden />
+                              )}
+                            </Button>
+                            <Button
+                              htmlType="button"
+                              className={`column-move-btn transcript-copy-btn board-summary-copy-btn board-summary-row-copy-btn ${
+                                copiedSlackSummaryPromptHash === entry.promptHash ? "is-copied" : ""
+                              }`}
+                              aria-label={`Copy Slack-ready ${entry.label}`}
+                              disabled={summaryText.length === 0}
+                              onClick={() => void copyStoredSummaryForSlack(entry)}
+                            >
+                              {copiedSlackSummaryPromptHash === entry.promptHash ? (
+                                <span className="btn-icon btn-icon-check" aria-hidden />
+                              ) : (
+                                <SlackOutlined className="btn-icon btn-icon-slack" aria-hidden />
                               )}
                             </Button>
                             <Button

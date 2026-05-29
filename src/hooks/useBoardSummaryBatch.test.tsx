@@ -326,4 +326,55 @@ describe("useBoardSummaryBatch", () => {
     expect(fetchTranscriptMock).not.toHaveBeenCalled();
     expect(fetchSummaryMock).not.toHaveBeenCalled();
   });
+
+  it("copies completed board summaries as Slack-ready plain text", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+    await writeCachedSummary("video-1", hashText(defaultPromptCacheKey), {
+      summary: "First cached summary",
+      keyPoints: [],
+      model: "openai/gpt-4o-mini",
+      transcriptHash: "first-transcript-hash",
+      promptHash: hashText(defaultPromptCacheKey),
+      cachedAt: 10
+    });
+    await writeCachedSummary("video-2", hashText(defaultPromptCacheKey), {
+      summary: "Second cached summary",
+      keyPoints: ["Second point"],
+      model: "openai/gpt-4o-mini",
+      transcriptHash: "second-transcript-hash",
+      promptHash: hashText(defaultPromptCacheKey),
+      cachedAt: 11
+    });
+
+    const { result } = renderBoardSummaryBatchHook({
+      targets: [
+        { video, column },
+        { video: secondVideo, column }
+      ]
+    });
+
+    act(() => {
+      result.current.startBoardSummaryBatch();
+    });
+
+    await waitFor(() => {
+      expect(result.current.boardSummaryBatchProgress).toEqual({ completed: 2, total: 2 });
+    });
+
+    await act(async () => {
+      await result.current.copyBoardSummaryBatchToSlackClipboard();
+    });
+
+    expect(writeText).toHaveBeenCalledWith(
+      [
+        "Example Video\n\nFirst cached summary\n\nhttps://www.youtube.com/watch?v=video-1",
+        "Second Video\n\nSecond cached summary\n\n- Second point\n\nhttps://www.youtube.com/watch?v=video-2"
+      ].join("\n\n---\n\n")
+    );
+    expect(result.current.isBoardSummaryBatchSlackCopied).toBe(true);
+  });
 });

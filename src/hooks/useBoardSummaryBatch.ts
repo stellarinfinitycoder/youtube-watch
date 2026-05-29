@@ -13,6 +13,10 @@ import {
 } from "../storage/transcriptsStorage";
 import type { BoardSummaryBatchItem } from "../components/BoardSummaryBatchModal";
 import {
+  formatSlackSummaryDigestCopyPayload,
+  type SlackSummaryCopyPayload
+} from "../domain/slackCopy";
+import {
   hashText,
   readCachedSummaryForTranscript,
   writeCachedSummaryForTranscript,
@@ -76,6 +80,7 @@ export function useBoardSummaryBatch<TBoard extends BoardSummaryBatchBoard>({
 }: UseBoardSummaryBatchOptions<TBoard>) {
   const boardSummaryBatchRunIdRef = useRef(0);
   const boardSummaryCopyFeedbackTimeoutRef = useRef<number | null>(null);
+  const boardSummarySlackCopyFeedbackTimeoutRef = useRef<number | null>(null);
 
   const [isBoardSummaryBatchRunning, setIsBoardSummaryBatchRunning] = useState(false);
   const [boardSummaryBatchProgress, setBoardSummaryBatchProgress] =
@@ -87,8 +92,21 @@ export function useBoardSummaryBatch<TBoard extends BoardSummaryBatchBoard>({
   const [isBoardSummaryBatchModalOpen, setIsBoardSummaryBatchModalOpen] = useState(false);
   const [isBoardSummaryBatchPreparing, setIsBoardSummaryBatchPreparing] = useState(false);
   const [isBoardSummaryBatchCopied, setIsBoardSummaryBatchCopied] = useState(false);
+  const [isBoardSummaryBatchSlackCopied, setIsBoardSummaryBatchSlackCopied] = useState(false);
   const [pendingBoardSummaryBatch, setPendingBoardSummaryBatch] =
     useState<PendingBoardSummaryBatch | null>(null);
+
+  useEffect(
+    () => () => {
+      if (boardSummaryCopyFeedbackTimeoutRef.current) {
+        window.clearTimeout(boardSummaryCopyFeedbackTimeoutRef.current);
+      }
+      if (boardSummarySlackCopyFeedbackTimeoutRef.current) {
+        window.clearTimeout(boardSummarySlackCopyFeedbackTimeoutRef.current);
+      }
+    },
+    []
+  );
 
   const launchBoardSummaryBatch = (format: SummaryFormat): void => {
     if (shownVideosInBoardOrder.length === 0) {
@@ -420,6 +438,85 @@ export function useBoardSummaryBatch<TBoard extends BoardSummaryBatchBoard>({
     }, 1000);
   };
 
+  const copyPlainTextToClipboard = async (text: string): Promise<void> => {
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard API unavailable.");
+      }
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "true");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+  };
+
+  const copySlackPayloadToClipboard = async (payload: SlackSummaryCopyPayload): Promise<void> => {
+    if (!payload.text) {
+      return;
+    }
+    try {
+      if (
+        payload.html &&
+        navigator.clipboard &&
+        typeof navigator.clipboard.write === "function" &&
+        typeof ClipboardItem !== "undefined"
+      ) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([payload.text], { type: "text/plain" }),
+            "text/html": new Blob([payload.html], { type: "text/html" })
+          })
+        ]);
+      } else {
+        await copyPlainTextToClipboard(payload.text);
+      }
+    } catch {
+      await copyPlainTextToClipboard(payload.text);
+    }
+  };
+
+  const copyBoardSummaryBatchToSlackClipboard = async (): Promise<void> => {
+    const payload = formatSlackSummaryDigestCopyPayload(
+      boardSummaryBatchItems
+        .filter((item) => item.status === "done" && !item.error)
+        .map((item) => {
+          const keyPoints = item.keyPoints
+            .map((point) => point.trim())
+            .filter((point) => point.length > 0);
+          const summary = [item.summary.trim(), keyPoints.map((point) => `- ${point}`).join("\n")]
+            .filter(Boolean)
+            .join("\n\n");
+          return {
+            title: item.video.title,
+            summary,
+            videoUrl: item.video.videoUrl
+          };
+        })
+    );
+
+    if (!payload.text) {
+      return;
+    }
+
+    await copySlackPayloadToClipboard(payload);
+    setIsBoardSummaryBatchSlackCopied(true);
+    if (boardSummarySlackCopyFeedbackTimeoutRef.current) {
+      window.clearTimeout(boardSummarySlackCopyFeedbackTimeoutRef.current);
+    }
+    boardSummarySlackCopyFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setIsBoardSummaryBatchSlackCopied(false);
+      boardSummarySlackCopyFeedbackTimeoutRef.current = null;
+    }, 1000);
+  };
+
   const removeBoardSummaryBatchItems = (videoIds: string[]): void => {
     const videoIdSet = new Set(videoIds);
     setBoardSummaryBatchItems((previous) =>
@@ -434,9 +531,11 @@ export function useBoardSummaryBatch<TBoard extends BoardSummaryBatchBoard>({
     isBoardSummaryBatchModalOpen,
     isBoardSummaryBatchPreparing,
     isBoardSummaryBatchCopied,
+    isBoardSummaryBatchSlackCopied,
     startBoardSummaryBatch,
     changeBoardSummaryFormat,
     copyBoardSummaryBatchToClipboard,
+    copyBoardSummaryBatchToSlackClipboard,
     setIsBoardSummaryBatchModalOpen,
     removeBoardSummaryBatchItems
   };

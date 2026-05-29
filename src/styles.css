@@ -1102,6 +1102,25 @@ button.column-video-count:active:not(:disabled) {
   background: currentColor;
 }
 
+.btn-icon-slack {
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  color: currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.column-actions-right .ant-btn .btn-icon.btn-icon-slack {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
+}
+
 .btn-icon.is-spinning {
   animation: btn-icon-spin 700ms linear infinite;
 }

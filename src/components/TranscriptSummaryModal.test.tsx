@@ -352,9 +352,88 @@ describe("TranscriptSummaryModal", () => {
       Array.from(controls?.children ?? []).map((child) =>
         child instanceof HTMLElement ? child.getAttribute("aria-label") : null
       )
-    ).toEqual(["Transcript view mode", "Regenerate summary", "Copy summary"]);
+    ).toEqual([
+      "Transcript view mode",
+      "Regenerate summary",
+      "Copy summary",
+      "Copy Slack-ready summary"
+    ]);
     expect(await screen.findByRole("heading", { name: "Cached summary body" })).toBeInTheDocument();
     expect(screen.getByRole("listitem")).toHaveTextContent("Model formatted point");
+  });
+
+  it("copies the current summary as Slack-ready plain text", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+
+    render(
+      <TranscriptSummaryModal
+        transcriptVideo={{
+          videoId: "video-1",
+          title: "Example video",
+          publishedAt: "2026-04-10T10:00:00Z",
+          thumbnailUrl: "https://img.test/video-1.jpg",
+          channelTitle: "Example Channel",
+          videoUrl: "https://www.youtube.com/watch?v=video-1",
+          viewCount: 100
+        }}
+        summaryHydrating={false}
+        transcriptHydrating={false}
+        transcriptLoading={false}
+        transcriptText=""
+        transcriptError={null}
+        transcriptViewMode="summary"
+        isTranscriptCopied={false}
+        summaryLoading={false}
+        summaryText="Plain summary"
+        summaryKeyPoints={[]}
+        summaryError={null}
+        summaryModel=""
+        summaryFormats={[summaryFormat]}
+        summaryModelPresets={[]}
+        storedSummaryOptions={[]}
+        activeStoredSummaryOptionId={null}
+        activeSummaryFormat={summaryFormat}
+        isSummaryPromptEditMode={false}
+        editingSummaryFormatId={summaryFormat.id}
+        summaryFormatNameDraft={summaryFormat.name}
+        summaryPromptDraft={summaryFormat.prompt}
+        summaryFormatModelDraft={summaryFormat.model}
+        isNewSummaryModelDraftMode={false}
+        summaryFormatDefaultDraft
+        isSummaryBusy={false}
+        onCancel={() => undefined}
+        setSummaryFormatNameDraft={() => undefined}
+        setSummaryPromptDraft={() => undefined}
+        setSummaryFormatModelDraft={() => undefined}
+        setIsNewSummaryModelDraftMode={() => undefined}
+        setSummaryFormatDefaultDraft={() => undefined}
+        setActiveSummaryFormatId={() => undefined}
+        setIsSummaryPromptEditMode={() => undefined}
+        cancelSummaryFormatEditing={() => undefined}
+        handleTranscriptViewModeChange={async () => undefined}
+        copyTranscriptText={async () => undefined}
+        regenerateSummary={async () => undefined}
+        openSummaryFormatEditor={() => undefined}
+        moveSummaryFormat={() => undefined}
+        removeSummaryModelPreset={() => undefined}
+        saveSummaryPromptAndClose={async () => undefined}
+        deleteSummaryFormatAndClose={() => undefined}
+      />
+    );
+
+    const copySlackButton = screen.getByRole("button", { name: "Copy Slack-ready summary" });
+    expect(copySlackButton.querySelector(".btn-icon-slack")).toHaveClass("anticon-slack");
+    await user.click(copySlackButton);
+
+    expect(writeText).toHaveBeenCalledWith(
+      "Example video\n\nPlain summary\n\nhttps://www.youtube.com/watch?v=video-1"
+    );
+    expect(copySlackButton).toHaveClass("is-copied");
   });
 
   it("renders stored summary options in the mode dropdown", async () => {

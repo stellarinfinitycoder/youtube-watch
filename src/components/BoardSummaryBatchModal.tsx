@@ -1,5 +1,7 @@
 import { Button, Empty, Modal, Select, Typography } from "antd";
+import { SlackOutlined } from "@ant-design/icons";
 import { Suspense, lazy, memo, useEffect, useState } from "react";
+import { formatSlackSummaryCopyPayload, type SlackSummaryCopyPayload } from "../domain/slackCopy";
 import type { VideoItem } from "../types/youtube";
 import { VideoTile } from "./VideoTile";
 import type { ColumnStateLike, InlineMetaFeedback } from "./boardColumnsShared";
@@ -120,8 +122,10 @@ type BoardSummaryBatchModalProps = {
   isCopied: boolean;
   items: BoardSummaryBatchItem[];
   onCopyAll: () => Promise<void>;
+  onCopyAllSlack?: () => Promise<void>;
   onSummarizeShown: (items: BoardSummaryBatchItem[]) => Promise<void>;
   isSummarizingShown: boolean;
+  isSlackCopied?: boolean;
   onMarkAllShownWatched: () => void;
   videoFilter: "all" | "new" | "watched";
   shownVideosTotal: number;
@@ -162,8 +166,10 @@ function BoardSummaryBatchModalComponent({
   isCopied,
   items,
   onCopyAll,
+  onCopyAllSlack,
   onSummarizeShown,
   isSummarizingShown,
+  isSlackCopied = false,
   onMarkAllShownWatched,
   videoFilter,
   shownVideosTotal,
@@ -192,6 +198,7 @@ function BoardSummaryBatchModalComponent({
 }: BoardSummaryBatchModalProps) {
   const [visibleCount, setVisibleCount] = useState(BOARD_SUMMARY_BATCH_PAGE_SIZE);
   const [copiedVideoId, setCopiedVideoId] = useState<string | null>(null);
+  const [slackCopiedVideoId, setSlackCopiedVideoId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -199,6 +206,7 @@ function BoardSummaryBatchModalComponent({
     }
     setVisibleCount(BOARD_SUMMARY_BATCH_PAGE_SIZE);
     setCopiedVideoId(null);
+    setSlackCopiedVideoId(null);
   }, [open]);
 
   useEffect(() => {
@@ -211,6 +219,16 @@ function BoardSummaryBatchModalComponent({
     return () => window.clearTimeout(timeoutId);
   }, [copiedVideoId]);
 
+  useEffect(() => {
+    if (!slackCopiedVideoId) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setSlackCopiedVideoId(null);
+    }, 1000);
+    return () => window.clearTimeout(timeoutId);
+  }, [slackCopiedVideoId]);
+
   const visibleItems = items.slice(0, visibleCount);
   const hasMoreItems = visibleCount < items.length;
   const isEmpty = !isPreparing && items.length === 0;
@@ -222,6 +240,12 @@ function BoardSummaryBatchModalComponent({
   const selectedSummaryFormat =
     summaryFormats.find((format) => format.id === selectedSummaryFormatId) ?? summaryFormats[0];
   const selectedModel = (selectedSummaryFormat?.model ?? "").trim();
+  const hasSlackCopyableItems = items.some(
+    (item) =>
+      item.status === "done" &&
+      !item.error &&
+      (item.summary.trim().length > 0 || item.keyPoints.some((point) => point.trim().length > 0))
+  );
 
   const copySummaryRow = async (item: BoardSummaryBatchItem): Promise<void> => {
     const text = formatBoardSummaryRowCopyText(item);
@@ -260,6 +284,74 @@ function BoardSummaryBatchModalComponent({
     }
 
     setCopiedVideoId(item.videoId);
+  };
+
+  const copyPlainTextToClipboard = async (text: string): Promise<void> => {
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard API unavailable.");
+      }
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "true");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+  };
+
+  const copySlackPayloadToClipboard = async (payload: SlackSummaryCopyPayload): Promise<void> => {
+    if (!payload.text) {
+      return;
+    }
+    try {
+      if (
+        payload.html &&
+        navigator.clipboard &&
+        typeof navigator.clipboard.write === "function" &&
+        typeof ClipboardItem !== "undefined"
+      ) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([payload.text], { type: "text/plain" }),
+            "text/html": new Blob([payload.html], { type: "text/html" })
+          })
+        ]);
+      } else {
+        await copyPlainTextToClipboard(payload.text);
+      }
+    } catch {
+      await copyPlainTextToClipboard(payload.text);
+    }
+  };
+
+  const copySummaryRowForSlack = async (item: BoardSummaryBatchItem): Promise<void> => {
+    if (item.status !== "done" || item.error) {
+      return;
+    }
+    const keyPoints = item.keyPoints
+      .map((point) => point.trim())
+      .filter((point) => point.length > 0);
+    const summary = [item.summary.trim(), keyPoints.map((point) => `- ${point}`).join("\n")]
+      .filter(Boolean)
+      .join("\n\n");
+    const payload = formatSlackSummaryCopyPayload({
+      title: item.video.title,
+      summary,
+      videoUrl: item.video.videoUrl
+    });
+    if (!payload.text) {
+      return;
+    }
+
+    await copySlackPayloadToClipboard(payload);
+    setSlackCopiedVideoId(item.videoId);
   };
 
   return (
@@ -305,6 +397,21 @@ function BoardSummaryBatchModalComponent({
                   <span className="btn-icon btn-icon-check" aria-hidden />
                 ) : (
                   <span className="btn-icon btn-icon-copy" aria-hidden />
+                )}
+              </Button>
+              <Button
+                htmlType="button"
+                className={`column-move-btn transcript-copy-btn board-summary-copy-btn ${
+                  isSlackCopied ? "is-copied" : ""
+                }`}
+                aria-label="Copy Slack-ready board summaries"
+                onClick={() => void onCopyAllSlack?.()}
+                disabled={!onCopyAllSlack || !hasSlackCopyableItems}
+              >
+                {isSlackCopied ? (
+                  <span className="btn-icon btn-icon-check" aria-hidden />
+                ) : (
+                  <SlackOutlined className="btn-icon btn-icon-slack" aria-hidden />
                 )}
               </Button>
               <Button
@@ -378,6 +485,26 @@ function BoardSummaryBatchModalComponent({
                             <span className="btn-icon btn-icon-check" aria-hidden />
                           ) : (
                             <span className="btn-icon btn-icon-copy" aria-hidden />
+                          )}
+                        </Button>
+                        <Button
+                          htmlType="button"
+                          className={`column-move-btn transcript-copy-btn board-summary-copy-btn board-summary-row-copy-btn ${
+                            slackCopiedVideoId === item.videoId ? "is-copied" : ""
+                          }`}
+                          aria-label={`Copy Slack-ready summary for ${item.video.title}`}
+                          disabled={
+                            item.status !== "done" ||
+                            !!item.error ||
+                            (item.summary.trim().length === 0 &&
+                              !item.keyPoints.some((point) => point.trim().length > 0))
+                          }
+                          onClick={() => void copySummaryRowForSlack(item)}
+                        >
+                          {slackCopiedVideoId === item.videoId ? (
+                            <span className="btn-icon btn-icon-check" aria-hidden />
+                          ) : (
+                            <SlackOutlined className="btn-icon btn-icon-slack" aria-hidden />
                           )}
                         </Button>
                       </div>

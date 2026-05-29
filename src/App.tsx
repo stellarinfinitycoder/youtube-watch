@@ -2517,9 +2517,11 @@ function App() {
     isBoardSummaryBatchModalOpen,
     isBoardSummaryBatchPreparing,
     isBoardSummaryBatchCopied,
+    isBoardSummaryBatchSlackCopied,
     startBoardSummaryBatch,
     changeBoardSummaryFormat,
     copyBoardSummaryBatchToClipboard,
+    copyBoardSummaryBatchToSlackClipboard,
     setIsBoardSummaryBatchModalOpen,
     removeBoardSummaryBatchItems
   } = useBoardSummaryBatch({
@@ -5974,8 +5976,10 @@ function App() {
         selectedSummaryFormatId={boardSummarySelectedFormat.id}
         isPreparing={isBoardSummaryBatchPreparing}
         isCopied={isBoardSummaryBatchCopied}
+        isSlackCopied={isBoardSummaryBatchSlackCopied}
         items={boardSummaryBatchItems}
         onCopyAll={copyBoardSummaryBatchToClipboard}
+        onCopyAllSlack={copyBoardSummaryBatchToSlackClipboard}
         onSummarizeShown={summarizeShownBoardSummaries}
         isSummarizingShown={boardSummaryAggregateState?.loading === true}
         onMarkAllShownWatched={openBulkWatchBoardAction}
