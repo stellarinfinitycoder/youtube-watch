@@ -473,40 +473,42 @@ function BoardSummaryBatchModalComponent({
                         <h3 className="board-summary-batch-title transcript-modal-header-title">
                           {item.video.title.toUpperCase()}
                         </h3>
-                        <Button
-                          htmlType="button"
-                          className={`column-move-btn transcript-copy-btn board-summary-copy-btn board-summary-row-copy-btn ${
-                            copiedVideoId === item.videoId ? "is-copied" : ""
-                          }`}
-                          aria-label={`Copy summary for ${item.video.title}`}
-                          onClick={() => void copySummaryRow(item)}
-                        >
-                          {copiedVideoId === item.videoId ? (
-                            <span className="btn-icon btn-icon-check" aria-hidden />
-                          ) : (
-                            <span className="btn-icon btn-icon-copy" aria-hidden />
-                          )}
-                        </Button>
-                        <Button
-                          htmlType="button"
-                          className={`column-move-btn transcript-copy-btn board-summary-copy-btn board-summary-row-copy-btn ${
-                            slackCopiedVideoId === item.videoId ? "is-copied" : ""
-                          }`}
-                          aria-label={`Copy Slack-ready summary for ${item.video.title}`}
-                          disabled={
-                            item.status !== "done" ||
-                            !!item.error ||
-                            (item.summary.trim().length === 0 &&
-                              !item.keyPoints.some((point) => point.trim().length > 0))
-                          }
-                          onClick={() => void copySummaryRowForSlack(item)}
-                        >
-                          {slackCopiedVideoId === item.videoId ? (
-                            <span className="btn-icon btn-icon-check" aria-hidden />
-                          ) : (
-                            <SlackOutlined className="btn-icon btn-icon-slack" aria-hidden />
-                          )}
-                        </Button>
+                        <div className="board-summary-row-toolbar">
+                          <Button
+                            htmlType="button"
+                            className={`column-move-btn transcript-copy-btn board-summary-copy-btn board-summary-row-copy-btn ${
+                              copiedVideoId === item.videoId ? "is-copied" : ""
+                            }`}
+                            aria-label={`Copy summary for ${item.video.title}`}
+                            onClick={() => void copySummaryRow(item)}
+                          >
+                            {copiedVideoId === item.videoId ? (
+                              <span className="btn-icon btn-icon-check" aria-hidden />
+                            ) : (
+                              <span className="btn-icon btn-icon-copy" aria-hidden />
+                            )}
+                          </Button>
+                          <Button
+                            htmlType="button"
+                            className={`column-move-btn transcript-copy-btn board-summary-copy-btn board-summary-row-copy-btn ${
+                              slackCopiedVideoId === item.videoId ? "is-copied" : ""
+                            }`}
+                            aria-label={`Copy Slack-ready summary for ${item.video.title}`}
+                            disabled={
+                              item.status !== "done" ||
+                              !!item.error ||
+                              (item.summary.trim().length === 0 &&
+                                !item.keyPoints.some((point) => point.trim().length > 0))
+                            }
+                            onClick={() => void copySummaryRowForSlack(item)}
+                          >
+                            {slackCopiedVideoId === item.videoId ? (
+                              <span className="btn-icon btn-icon-check" aria-hidden />
+                            ) : (
+                              <SlackOutlined className="btn-icon btn-icon-slack" aria-hidden />
+                            )}
+                          </Button>
+                        </div>
                       </div>
                       <div className="board-summary-row-content">
                         <div className="board-summary-video-cell">

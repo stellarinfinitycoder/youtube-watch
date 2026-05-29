@@ -2886,6 +2886,7 @@ button.column-video-count:active:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 6px;
   min-height: 28px;
   z-index: 1;
 }
